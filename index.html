@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Games</title>
+  <meta name="description" content="A small collection of offline-friendly games and tools.">
+  <meta name="theme-color" content="#10141f">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/favicon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Games">
+  <link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+  <header class="site-header">
+    <h1>Games</h1>
+    <p class="tagline">Offline-friendly games &amp; tools</p>
+  </header>
+
+  <div id="install-banner" class="install-banner" hidden>
+    <div class="install-banner-text">
+      <strong>Install this app</strong>
+      <span id="install-banner-detail">Add it to your home screen for quick, full-screen, offline use.</span>
+    </div>
+    <div class="install-banner-actions">
+      <button id="install-button" class="btn btn-primary" hidden>Install</button>
+      <button id="install-dismiss" class="btn btn-ghost" aria-label="Dismiss install prompt">Not now</button>
+    </div>
+  </div>
+
+  <div id="ios-install-help" class="ios-install-help" hidden>
+    <p>To install on iPhone/iPad:</p>
+    <ol>
+      <li>Tap the <strong>Share</strong> button <span class="ios-glyph" aria-hidden="true">&#x2BAD;</span> in Safari</li>
+      <li>Scroll down and tap <strong>Add to Home Screen</strong></li>
+      <li>Tap <strong>Add</strong></li>
+    </ol>
+  </div>
+
+  <main>
+    <ul id="game-list" class="game-list"></ul>
+  </main>
+
+  <footer class="site-footer">
+    <span id="offline-ready" hidden>Ready for offline use</span>
+  </footer>
+
+  <script src="js/games.js"></script>
+  <script src="js/install.js"></script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('sw.js').then(reg => {
+          if (reg.active) {
+            document.getElementById('offline-ready').hidden = false;
+          }
+        }).catch(err => console.warn('SW registration failed:', err));
+      });
+    }
+  </script>
+</body>
+</html>
