@@ -184,6 +184,42 @@ test.describe('app shell', () => {
     expect(after.filter(n => n.startsWith('games-pwa-'))).toHaveLength(1);
   });
 
+  test('the footer reports the serving version', async ({ page }) => {
+    await freshPage(page, '/');
+    await serviceWorkerReady(page);
+    await page.reload();
+
+    const label = page.locator('#app-version');
+    await expect(label).toBeVisible();
+
+    // It must match the worker actually in control, not a hardcoded string.
+    const swVersion = (await (await page.request.get('/sw.js')).text())
+      .match(/CACHE_VERSION\s*=\s*['"]([^'"]+)['"]/)[1];
+    await expect(label).toHaveText(swVersion);
+  });
+
+  test('the version label survives offline', async ({ page, context }) => {
+    await freshPage(page, '/');
+    await serviceWorkerReady(page);
+
+    await context.setOffline(true);
+    try {
+      await page.goto('/');
+      await expect(page.locator('#app-version')).not.toBeEmpty();
+    } finally {
+      await context.setOffline(false);
+    }
+  });
+
+  test('no version is claimed before a worker controls the page', async ({ browser }) => {
+    // A stale hardcoded version would be worse than none at all.
+    const context = await browser.newContext({ serviceWorkers: 'block' });
+    const page = await context.newPage();
+    await page.goto('/');
+    await expect(page.locator('#app-version')).toBeHidden();
+    await context.close();
+  });
+
   test('cache version is bumped when precached files change', async ({ page }) => {
     // Guards the rule in CLAUDE.md: a stale CACHE_VERSION strands clients
     // on old files. This only checks the constant is present and non-empty.

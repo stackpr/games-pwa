@@ -8,7 +8,7 @@
  * cannot be reused. Pages request these files without a query string, so
  * the fetch handler matches with ignoreSearch; see below.
  */
-const CACHE_VERSION = 'v4';
+const CACHE_VERSION = 'v5';
 const CACHE_NAME = `games-pwa-${CACHE_VERSION}`;
 
 const PRECACHE_URLS = [
@@ -18,6 +18,7 @@ const PRECACHE_URLS = [
   'css/app.css',
   'js/games.js',
   'js/install.js',
+  'js/version.js',
   'icons/favicon.svg',
   'icons/icon-192.png',
   'icons/icon-512.png',
@@ -57,6 +58,13 @@ self.addEventListener('activate', event => {
       ))
       .then(() => self.clients.claim())
   );
+});
+
+// Lets a page ask which version is serving it (shown in the footer).
+self.addEventListener('message', event => {
+  if (event.data && event.data.type === 'version' && event.ports[0]) {
+    event.ports[0].postMessage(CACHE_VERSION);
+  }
 });
 
 // Cache-first for same-origin GET requests, falling back to the network.

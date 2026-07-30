@@ -46,10 +46,12 @@
 
   <footer class="site-footer">
     <span id="offline-ready" hidden>Ready for offline use</span>
+    <span id="app-version" class="app-version" hidden></span>
   </footer>
 
   <script src="js/games.js"></script>
   <script src="js/install.js"></script>
+  <script src="js/version.js"></script>
   <script>
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {
