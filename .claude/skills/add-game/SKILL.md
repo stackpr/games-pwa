@@ -19,6 +19,8 @@ already names the game; pick a short kebab-case `<slug>`.
    - Register the service worker with `navigator.serviceWorker.register('../../sw.js')`
    - Mobile-first: big touch targets, `touch-action: manipulation`,
      `100dvh` layouts, safe-area insets
+   - Any images the game needs are SVG (inline where simple) — PNG is
+     reserved for the install icons in `icons/`; see Images in CLAUDE.md
 
 2. **Register it** in `js/games.js`: add `{ name, description, emoji, path: 'games/<slug>/' }`
    to the `GAMES` array.

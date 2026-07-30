@@ -26,7 +26,7 @@ sw.js                       Service worker (precache app shell, cache-first)
 css/app.css                 Shared styles for the home page
 js/games.js                 Game registry + home-page list rendering
 js/install.js               "Install this app" prompt logic
-icons/                      PNG/SVG icons (see scratchpad-free generation note below)
+icons/                      App icons (see Images below)
 games/<slug>/index.html     One folder per game; each page is self-contained
 ```
 
@@ -42,6 +42,22 @@ Use the `add-game` skill, or by hand:
    precached file, or clients keep the stale copy.
 5. Namespace persisted state: `localStorage` keys look like
    `games.<slug>.v1` and store a single JSON object.
+
+## Images
+
+- **SVG is the default format** for every image in the site: game art, UI
+  graphics, favicon (`icons/favicon.svg`). One scalable, themeable file —
+  no density variants. Prefer inline SVG or CSS over image files at all
+  when the graphic is simple.
+- **PNG is allowed only for install surfaces**, where SVG is not reliably
+  supported: `icons/apple-touch-icon.png` (180px — iOS requires PNG and
+  ignores SVG here) and the manifest icons `icon-192.png`, `icon-512.png`,
+  `icon-maskable-512.png` (Android/Chromium install + splash screens).
+  Do not add raster images anywhere else.
+- The PNGs are script-generated with Pillow from the same two-column
+  scoreboard mark as the SVG. If the mark or palette changes, change the
+  SVG first, then regenerate the PNGs by scripting Pillow again — never
+  hand-edit them.
 
 ## Install-prompt strategy (js/install.js)
 
@@ -70,6 +86,3 @@ Application → "Update on reload", or bump `CACHE_VERSION`.
 GitHub Pages serves the `gh-pages` branch. Feature work happens on
 `claude/*` branches; merging to `gh-pages` deploys. Keep `CNAME`
 (`games.payne.run`) at the repo root on the deployed branch.
-
-Icons were generated with Pillow (two-column scoreboard mark); regenerate by
-scripting Pillow again if the palette changes — don't hand-edit the PNGs.
