@@ -1,0 +1,19 @@
+# GitHub Pages build settings.
+#
+# The site is plain static files — no Jekyll templating, no front matter —
+# so this config exists only to keep repo-only files out of the published
+# site. Everything not excluded here is copied to the domain root as-is.
+#
+# Jekyll already skips names starting with "_" or "." (so _tests/ and
+# .claude/ would be dropped regardless); they are listed anyway so the
+# rule is visible rather than implied.
+exclude:
+  - _tests/          # Playwright suite — repo-only, never published
+  - .claude/         # Claude Code skills and settings
+  - CLAUDE.md        # project instructions for contributors/agents
+  - README.md
+# Per-game docs live at games/<slug>/_README.md. The leading underscore
+# keeps them out of the build, so they need no entry here.
+#
+# Add any new repo-only Markdown to the list above; docs that should ship
+# with the site belong under a normal path instead.

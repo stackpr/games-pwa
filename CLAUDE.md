@@ -23,12 +23,22 @@ https://games.payne.run (GitHub Pages, custom domain — do not delete `CNAME`).
 index.html                  Home: install prompt + list of games
 manifest.webmanifest        PWA manifest (relative start_url/scope)
 sw.js                       Service worker (precache app shell, cache-first)
+_config.yml                 Pages build: keeps repo-only files unpublished
 css/app.css                 Shared styles for the home page
 js/games.js                 Game registry + home-page list rendering
 js/install.js               "Install this app" prompt logic
 icons/                      App icons (see Images below)
 games/<slug>/index.html     One folder per game; each page is self-contained
+games/<slug>/_README.md     Why the game exists and how it works (unpublished)
+_tests/                     Playwright suite (unpublished; see _tests/README.md)
 ```
+
+Anything at a normal path is published to games.payne.run. Names starting
+with `_` or `.` are skipped by the Jekyll build that GitHub Pages runs,
+which is what keeps `_tests/` and every `games/<slug>/_README.md` out of
+the deployed site. Do **not** add a `.nojekyll` file — it disables the
+build and with it every exclusion. Repo-only files that lack an underscore
+(`CLAUDE.md`, `README.md`) are listed in `_config.yml` instead.
 
 ## Adding a game or tool
 
@@ -36,12 +46,28 @@ Use the `add-game` skill, or by hand:
 
 1. Create `games/<slug>/index.html` (+ its JS). Keep each game
    self-contained; link back to `../../` in a top bar.
-2. Add an entry to `GAMES` in `js/games.js`.
-3. Add the new files to `PRECACHE_URLS` in `sw.js`.
-4. **Bump `CACHE_VERSION` in `sw.js`** — required for any change to a
+2. Write `games/<slug>/_README.md` (required — see Documenting a game).
+3. Add an entry to `GAMES` in `js/games.js`.
+4. Add the new files to `PRECACHE_URLS` in `sw.js` — code and assets only,
+   never `_README.md`.
+5. **Bump `CACHE_VERSION` in `sw.js`** — required for any change to a
    precached file, or clients keep the stale copy.
-5. Namespace persisted state: `localStorage` keys look like
+6. Namespace persisted state: `localStorage` keys look like
    `games.<slug>.v1` and store a single JSON object.
+7. Add `_tests/specs/<slug>.spec.js` and run the suite.
+
+## Documenting a game
+
+Every game has a `games/<slug>/_README.md` covering its intended logic and
+use case: what the game is for, the rules and edge cases (what happens at
+zero, what is undoable), any layout decisions worth knowing, and the shape
+of its persisted state. Write for someone changing the game a year from
+now.
+
+That file is the home for prose, because **the JS ships to phones**. Keep
+comments in game code short and local — a line explaining a non-obvious
+decision is welcome, a paragraph of design rationale belongs in
+`_README.md`. Reach for `// see _README.md` rather than restating it.
 
 ## Images
 
@@ -76,10 +102,17 @@ All client-side; no server APIs:
 
 ```
 python3 -m http.server 8080     # from repo root; SW requires http(s), file:// won't work
+cd _tests && npm install && npm test    # Playwright suite (starts its own server)
 ```
 
 Service workers cache aggressively — when testing changes, use DevTools →
 Application → "Update on reload", or bump `CACHE_VERSION`.
+
+`_tests/` holds the Playwright suite: shell (manifest, icons, service
+worker, offline, install prompt), one spec per game, and `publishing.spec.js`
+guarding what reaches the deployed site. Run it before merging to
+`gh-pages`. The `@playwright/test` version is pinned so it matches the
+preinstalled browser build — bump it and the browser together.
 
 ## Deploying
 
