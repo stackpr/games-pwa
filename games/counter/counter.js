@@ -1,5 +1,4 @@
-// Rudimentary counter: one number, up and down. Proof of concept for the
-// PWA shell (offline, install, persistence), so it stays deliberately small.
+// Counter: one number, up and down. See _README.md.
 (function () {
   const STORAGE_KEY = 'games.counter.v1';
 

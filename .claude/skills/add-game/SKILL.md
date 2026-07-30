@@ -22,17 +22,30 @@ already names the game; pick a short kebab-case `<slug>`.
    - Any images the game needs are SVG (inline where simple) — PNG is
      reserved for the install icons in `icons/`; see Images in CLAUDE.md
 
-2. **Register it** in `js/games.js`: add `{ name, description, emoji, path: 'games/<slug>/' }`
+2. **Document it** in `games/<slug>/_README.md` (required). Cover the use
+   case, the rules and edge cases, layout decisions, and the shape of the
+   persisted state. The leading underscore keeps it off the published site.
+   Prose belongs here, not in the JS — game code ships to phones, so keep
+   its comments short and point at `_README.md` for the reasoning.
+
+3. **Register it** in `js/games.js`: add `{ name, description, emoji, path: 'games/<slug>/' }`
    to the `GAMES` array.
 
-3. **Cache it** in `sw.js`: add the new files to `PRECACHE_URLS` **and bump
-   `CACHE_VERSION`** (this is mandatory — stale caches otherwise).
+4. **Cache it** in `sw.js`: add the new files to `PRECACHE_URLS` **and bump
+   `CACHE_VERSION`** (this is mandatory — stale caches otherwise). Precache
+   code and assets only — never `_README.md`.
 
-4. **Persist state** (if the game has any) in `localStorage` under
+5. **Persist state** (if the game has any) in `localStorage` under
    `games.<slug>.v1` as one JSON object. Validate on load (see
    `scorekeeper.js` `load()` for the pattern). Use IndexedDB only for
    large/structured data.
 
-5. **Verify**: `python3 -m http.server 8080` from the repo root, load the
-   home page, confirm the new tile appears and the game works, and confirm
-   no requests leave the origin (no CDNs — hard constraint).
+6. **Test it**: add `_tests/specs/<slug>.spec.js` covering the game's own
+   rules plus the two things every game owes the shell — state that
+   survives a reload under its namespaced key, and no requests leaving the
+   origin. Copy the shape of `specs/counter.spec.js`. The shell and
+   publishing specs pick the game up automatically.
+
+7. **Verify**: `cd _tests && npm test` (it starts its own server). For a
+   manual look, `python3 -m http.server 8080` from the repo root, confirm
+   the new tile appears and the game works offline.

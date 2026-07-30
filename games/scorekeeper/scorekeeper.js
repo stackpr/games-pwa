@@ -1,9 +1,4 @@
-// Two-team scorekeeper. State persists in localStorage so scores survive
-// reloads, offline use, and app restarts.
-//
-// Rapid taps are grouped: successive changes to the same team in the same
-// direction, less than GROUP_MS apart, collapse into one history entry and
-// one Undo step, so a burst of five taps reads as "+5" and undoes as "+5".
+// Two-team scorekeeper. See _README.md for behaviour and rationale.
 (function () {
   const STORAGE_KEY = 'games.scorekeeper.v1';
   const MAX_HISTORY = 200;
@@ -25,12 +20,10 @@
   };
 
   let state = load();
-  // undoStack holds snapshots taken at the start of each group, so undoing
-  // reverts the whole group rather than a single tap.
+  // Snapshots taken at the start of each group; in-memory only.
   let undoStack = [];
-  // Only a group opened in this session can be extended. Restored history
-  // has no matching undo snapshot, so a tap after a reload (or after Undo)
-  // must start a new group instead of silently joining the previous one.
+  // Restored history has no snapshot, so only a group opened in this
+  // session may be extended.
   let groupOpen = false;
 
   function load() {
@@ -96,8 +89,7 @@
     if (undoStack.length > MAX_HISTORY) undoStack.shift();
   }
 
-  // A tap continues the previous group when it hits the same team, in the
-  // same direction, within the grouping window.
+  // Same team, same direction, within the sliding window.
   function continuesGroup(team, delta, now) {
     if (!groupOpen) return false;
     const last = state.events[state.events.length - 1];
@@ -111,8 +103,7 @@
     const current = state[team];
     const next = Math.max(0, current + delta);
     const applied = next - current;
-    // Nothing changed (e.g. -1 at zero), so record nothing.
-    if (applied === 0) return;
+    if (applied === 0) return; // clamped at zero: record nothing
 
     const now = Date.now();
     if (continuesGroup(team, applied, now)) {
