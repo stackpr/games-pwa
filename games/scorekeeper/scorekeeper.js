@@ -1,12 +1,19 @@
 // Two-team scorekeeper. State persists in localStorage so scores survive
 // reloads, offline use, and app restarts.
+//
+// Rapid taps are grouped: successive changes to the same team in the same
+// direction, less than GROUP_MS apart, collapse into one history entry and
+// one Undo step, so a burst of five taps reads as "+5" and undoes as "+5".
 (function () {
   const STORAGE_KEY = 'games.scorekeeper.v1';
   const MAX_HISTORY = 200;
+  const GROUP_MS = 1000;
 
   const el = {
     scoreA: document.getElementById('score-a'),
     scoreB: document.getElementById('score-b'),
+    histA: document.getElementById('hist-a'),
+    histB: document.getElementById('hist-b'),
     nameA: document.getElementById('name-a'),
     nameB: document.getElementById('name-b'),
     tapA: document.getElementById('tap-a'),
@@ -18,8 +25,13 @@
   };
 
   let state = load();
-  // history holds [scoreA, scoreB] snapshots for Undo
-  let history = [];
+  // undoStack holds snapshots taken at the start of each group, so undoing
+  // reverts the whole group rather than a single tap.
+  let undoStack = [];
+  // Only a group opened in this session can be extended. Restored history
+  // has no matching undo snapshot, so a tap after a reload (or after Undo)
+  // must start a new group instead of silently joining the previous one.
+  let groupOpen = false;
 
   function load() {
     try {
@@ -30,13 +42,22 @@
           a: Number.isInteger(parsed.a) ? parsed.a : 0,
           b: Number.isInteger(parsed.b) ? parsed.b : 0,
           nameA: typeof parsed.nameA === 'string' ? parsed.nameA : 'Team 1',
-          nameB: typeof parsed.nameB === 'string' ? parsed.nameB : 'Team 2'
+          nameB: typeof parsed.nameB === 'string' ? parsed.nameB : 'Team 2',
+          events: loadEvents(parsed.events)
         };
       }
     } catch (err) {
       console.warn('Could not load saved scores:', err);
     }
-    return { a: 0, b: 0, nameA: 'Team 1', nameB: 'Team 2' };
+    return { a: 0, b: 0, nameA: 'Team 1', nameB: 'Team 2', events: [] };
+  }
+
+  function loadEvents(events) {
+    if (!Array.isArray(events)) return [];
+    return events
+      .filter(e => e && (e.team === 'a' || e.team === 'b') && Number.isInteger(e.delta) && e.delta !== 0)
+      .map(e => ({ team: e.team, delta: e.delta, t: Number.isFinite(e.t) ? e.t : 0 }))
+      .slice(-MAX_HISTORY);
   }
 
   function save() {
@@ -47,20 +68,65 @@
     }
   }
 
+  function formatEvent(delta) {
+    return delta > 0 ? `+${delta}` : String(delta);
+  }
+
+  function renderHistory(team, node) {
+    node.textContent = state.events
+      .filter(e => e.team === team)
+      .map(e => formatEvent(e.delta))
+      .join(', ');
+  }
+
   function render() {
     el.scoreA.textContent = state.a;
     el.scoreB.textContent = state.b;
-    el.undo.disabled = history.length === 0;
+    renderHistory('a', el.histA);
+    renderHistory('b', el.histB);
+    el.undo.disabled = undoStack.length === 0;
   }
 
-  function pushHistory() {
-    history.push([state.a, state.b]);
-    if (history.length > MAX_HISTORY) history.shift();
+  function pushUndo() {
+    undoStack.push({
+      a: state.a,
+      b: state.b,
+      events: state.events.map(e => ({ ...e }))
+    });
+    if (undoStack.length > MAX_HISTORY) undoStack.shift();
+  }
+
+  // A tap continues the previous group when it hits the same team, in the
+  // same direction, within the grouping window.
+  function continuesGroup(team, delta, now) {
+    if (!groupOpen) return false;
+    const last = state.events[state.events.length - 1];
+    if (!last) return false;
+    return last.team === team
+      && Math.sign(last.delta) === Math.sign(delta)
+      && now - last.t < GROUP_MS;
   }
 
   function bump(team, delta) {
-    pushHistory();
-    state[team] = Math.max(0, state[team] + delta);
+    const current = state[team];
+    const next = Math.max(0, current + delta);
+    const applied = next - current;
+    // Nothing changed (e.g. -1 at zero), so record nothing.
+    if (applied === 0) return;
+
+    const now = Date.now();
+    if (continuesGroup(team, applied, now)) {
+      const last = state.events[state.events.length - 1];
+      last.delta += applied;
+      last.t = now;
+    } else {
+      pushUndo();
+      state.events.push({ team, delta: applied, t: now });
+      if (state.events.length > MAX_HISTORY) state.events.shift();
+    }
+    groupOpen = true;
+
+    state[team] = next;
     save();
     render();
   }
@@ -71,19 +137,24 @@
   el.minusB.addEventListener('click', () => bump('b', -1));
 
   el.undo.addEventListener('click', () => {
-    const prev = history.pop();
+    const prev = undoStack.pop();
     if (!prev) return;
-    [state.a, state.b] = prev;
+    state.a = prev.a;
+    state.b = prev.b;
+    state.events = prev.events;
+    groupOpen = false;
     save();
     render();
   });
 
   el.reset.addEventListener('click', () => {
-    if (state.a === 0 && state.b === 0) return;
+    if (state.a === 0 && state.b === 0 && state.events.length === 0) return;
     if (!confirm('Reset both scores to 0?')) return;
-    pushHistory();
+    pushUndo();
     state.a = 0;
     state.b = 0;
+    state.events = [];
+    groupOpen = false;
     save();
     render();
   });
