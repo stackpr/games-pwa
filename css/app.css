@@ -1,0 +1,140 @@
+:root {
+  --bg: #10141f;
+  --surface: #1a2030;
+  --surface-2: #232b40;
+  --text: #eef1f8;
+  --text-dim: #9aa4bd;
+  --accent: #4f8cff;
+  --accent-2: #ff6b57;
+  --radius: 14px;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+
+/* author display rules (e.g. flex) must not defeat the hidden attribute */
+[hidden] { display: none !important; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  min-height: 100dvh;
+  padding: env(safe-area-inset-top) env(safe-area-inset-right)
+           env(safe-area-inset-bottom) env(safe-area-inset-left);
+}
+
+.site-header {
+  padding: 2rem 1.25rem 1rem;
+  text-align: center;
+}
+
+.site-header h1 {
+  margin: 0;
+  font-size: 2rem;
+  letter-spacing: 0.02em;
+}
+
+.tagline {
+  margin: 0.25rem 0 0;
+  color: var(--text-dim);
+}
+
+/* Install banner */
+.install-banner {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: center;
+  justify-content: space-between;
+  margin: 0 auto 1rem;
+  max-width: 640px;
+  padding: 0.9rem 1.1rem;
+  background: var(--surface);
+  border: 1px solid var(--surface-2);
+  border-radius: var(--radius);
+}
+
+.install-banner-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.install-banner-text span { color: var(--text-dim); font-size: 0.9rem; }
+
+.install-banner-actions { display: flex; gap: 0.5rem; }
+
+.ios-install-help {
+  margin: 0 auto 1rem;
+  max-width: 640px;
+  padding: 0.9rem 1.1rem;
+  background: var(--surface);
+  border: 1px solid var(--surface-2);
+  border-radius: var(--radius);
+  color: var(--text-dim);
+  font-size: 0.95rem;
+}
+
+.ios-install-help p { margin: 0 0 0.4rem; color: var(--text); }
+.ios-install-help ol { margin: 0; padding-left: 1.4rem; }
+.ios-glyph { color: var(--accent); }
+
+/* Buttons */
+.btn {
+  border: none;
+  border-radius: 10px;
+  padding: 0.55rem 1.1rem;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  color: var(--text);
+  background: var(--surface-2);
+  touch-action: manipulation;
+}
+
+.btn-primary { background: var(--accent); color: #fff; }
+.btn-ghost { background: transparent; color: var(--text-dim); }
+.btn:active { filter: brightness(1.2); }
+
+/* Game list */
+main { max-width: 640px; margin: 0 auto; padding: 0 1.25rem; }
+
+.game-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.75rem;
+}
+
+.game-list a {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1rem 1.1rem;
+  background: var(--surface);
+  border: 1px solid var(--surface-2);
+  border-radius: var(--radius);
+  color: var(--text);
+  text-decoration: none;
+}
+
+.game-list a:active { background: var(--surface-2); }
+
+.game-emoji { font-size: 1.8rem; }
+
+.game-name { font-weight: 700; }
+.game-desc { color: var(--text-dim); font-size: 0.9rem; margin-top: 0.1rem; }
+
+.site-footer {
+  text-align: center;
+  padding: 1.5rem;
+  color: var(--text-dim);
+  font-size: 0.85rem;
+}

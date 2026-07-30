@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Scorekeeper</title>
+  <meta name="theme-color" content="#10141f">
+  <link rel="manifest" href="../../manifest.webmanifest">
+  <link rel="icon" href="../../icons/favicon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="../../icons/apple-touch-icon.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <style>
+    :root {
+      --bg: #10141f;
+      --text: #eef1f8;
+      --text-dim: #9aa4bd;
+      --team-a: #2f6fdb;
+      --team-b: #d84a35;
+      color-scheme: dark;
+    }
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    html, body { margin: 0; padding: 0; height: 100%; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      display: flex;
+      flex-direction: column;
+      height: 100dvh;
+      overflow: hidden;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: calc(0.5rem + env(safe-area-inset-top)) 0.75rem 0.5rem;
+    }
+    .topbar a {
+      color: var(--text-dim);
+      text-decoration: none;
+      font-size: 0.95rem;
+    }
+    .topbar-actions { display: flex; gap: 0.5rem; }
+    .chip {
+      border: 1px solid #2b3450;
+      background: #1a2030;
+      color: var(--text);
+      border-radius: 999px;
+      padding: 0.35rem 0.9rem;
+      font-size: 0.9rem;
+      cursor: pointer;
+      touch-action: manipulation;
+    }
+    .chip:disabled { opacity: 0.4; }
+
+    .board {
+      flex: 1;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 6px;
+      padding: 0 6px calc(6px + env(safe-area-inset-bottom));
+      min-height: 0;
+    }
+    .team {
+      display: flex;
+      flex-direction: column;
+      border-radius: 18px;
+      overflow: hidden;
+      min-height: 0;
+    }
+    .team-a { background: var(--team-a); }
+    .team-b { background: var(--team-b); }
+
+    .team-name {
+      width: 100%;
+      border: none;
+      background: rgba(0,0,0,0.18);
+      color: #fff;
+      font: inherit;
+      font-size: 1.1rem;
+      font-weight: 700;
+      text-align: center;
+      padding: 0.65rem 0.5rem;
+      outline: none;
+    }
+    .team-name:focus { background: rgba(0,0,0,0.35); }
+
+    .tap-area {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      border: none;
+      background: transparent;
+      color: #fff;
+      min-height: 0;
+      touch-action: manipulation;
+    }
+    .score {
+      font-size: clamp(4rem, 22vw, 11rem);
+      font-weight: 800;
+      font-variant-numeric: tabular-nums;
+      line-height: 1;
+    }
+    .tap-area:active .score { transform: scale(1.06); }
+    .tap-hint {
+      color: rgba(255,255,255,0.65);
+      font-size: 0.8rem;
+      text-align: center;
+      padding-bottom: 0.35rem;
+    }
+    .minus {
+      border: none;
+      background: rgba(0,0,0,0.22);
+      color: #fff;
+      font-size: 1.6rem;
+      font-weight: 700;
+      padding: 0.55rem;
+      cursor: pointer;
+      touch-action: manipulation;
+    }
+    .minus:active { background: rgba(0,0,0,0.4); }
+  </style>
+</head>
+<body>
+  <div class="topbar">
+    <a href="../../">&larr; Games</a>
+    <div class="topbar-actions">
+      <button id="undo" class="chip" disabled>Undo</button>
+      <button id="reset" class="chip">Reset</button>
+    </div>
+  </div>
+
+  <main class="board">
+    <section class="team team-a">
+      <input id="name-a" class="team-name" value="Team 1" maxlength="20" aria-label="Team 1 name">
+      <button id="tap-a" class="tap-area" aria-label="Add a point for team 1">
+        <span id="score-a" class="score">0</span>
+      </button>
+      <div class="tap-hint">tap to score</div>
+      <button id="minus-a" class="minus" aria-label="Subtract a point from team 1">&minus;1</button>
+    </section>
+
+    <section class="team team-b">
+      <input id="name-b" class="team-name" value="Team 2" maxlength="20" aria-label="Team 2 name">
+      <button id="tap-b" class="tap-area" aria-label="Add a point for team 2">
+        <span id="score-b" class="score">0</span>
+      </button>
+      <div class="tap-hint">tap to score</div>
+      <button id="minus-b" class="minus" aria-label="Subtract a point from team 2">&minus;1</button>
+    </section>
+  </main>
+
+  <script src="scorekeeper.js"></script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('../../sw.js').catch(() => {});
+    }
+  </script>
+</body>
+</html>
