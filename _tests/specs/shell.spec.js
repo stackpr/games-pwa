@@ -115,6 +115,75 @@ test.describe('app shell', () => {
     }
   });
 
+  test('precached entries carry the version query string', async ({ page }) => {
+    await freshPage(page, '/');
+    await serviceWorkerReady(page);
+
+    const { version, keys } = await page.evaluate(async () => {
+      const names = await caches.keys();
+      const name = names.find(n => n.startsWith('games-pwa-'));
+      const cache = await caches.open(name);
+      const reqs = await cache.keys();
+      return { version: name.replace('games-pwa-', ''), keys: reqs.map(r => r.url) };
+    });
+
+    expect(keys.length).toBeGreaterThan(0);
+    // Every precached URL is fetched as a URL no cache has seen before, so
+    // a stale copy at a CDN edge cannot satisfy it.
+    for (const url of keys) {
+      expect(url, `${url} should be version-busted`).toContain(`v=${version}`);
+    }
+  });
+
+  test('pages are served from cache despite the version query string', async ({ page, context }) => {
+    // Pages request "css/app.css"; the cache holds "css/app.css?v=v4".
+    await freshPage(page, '/');
+    await serviceWorkerReady(page);
+
+    await context.setOffline(true);
+    try {
+      await page.goto('/');
+      // A stylesheet and a script both resolve, so ignoreSearch is working
+      // for subresources and not just navigations.
+      const loaded = await page.evaluate(() => ({
+        css: !!document.styleSheets.length,
+        js: typeof GAMES !== 'undefined',
+      }));
+      expect(loaded.css).toBe(true);
+      expect(loaded.js).toBe(true);
+    } finally {
+      await context.setOffline(false);
+    }
+  });
+
+  test('a new version re-downloads everything and drops the old cache', async ({ page }) => {
+    await freshPage(page, '/');
+    await serviceWorkerReady(page);
+
+    const before = await page.evaluate(() => caches.keys());
+    expect(before.filter(n => n.startsWith('games-pwa-'))).toHaveLength(1);
+
+    // Simulate the next deploy: a cache from an older version must not
+    // survive activation of the current one.
+    await page.evaluate(async () => {
+      const stale = await caches.open('games-pwa-v0-stale');
+      await stale.put('/js/games.js?v=v0-stale', new Response('/* old */'));
+    });
+    expect(await page.evaluate(() => caches.keys())).toContain('games-pwa-v0-stale');
+
+    // Re-register: activation prunes every cache that is not the current one.
+    await page.evaluate(async () => {
+      const regs = await navigator.serviceWorker.getRegistrations();
+      await Promise.all(regs.map(r => r.unregister()));
+    });
+    await page.reload();
+    await serviceWorkerReady(page);
+
+    const after = await page.evaluate(() => caches.keys());
+    expect(after).not.toContain('games-pwa-v0-stale');
+    expect(after.filter(n => n.startsWith('games-pwa-'))).toHaveLength(1);
+  });
+
   test('cache version is bumped when precached files change', async ({ page }) => {
     // Guards the rule in CLAUDE.md: a stale CACHE_VERSION strands clients
     // on old files. This only checks the constant is present and non-empty.
