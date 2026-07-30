@@ -108,6 +108,25 @@ cd _tests && npm install && npm test    # Playwright suite (starts its own serve
 Service workers cache aggressively — when testing changes, use DevTools →
 Application → "Update on reload", or bump `CACHE_VERSION`.
 
+## Cache busting
+
+`CACHE_VERSION` in `sw.js` is the single knob. Each worker precaches every
+URL with `?v=<CACHE_VERSION>` appended, so a new version fetches URLs that
+no HTTP cache or CDN edge has ever seen — a stale copy cannot be reused.
+Pages request those files without a query string, which is why the fetch
+handler matches with `ignoreSearch: true`. Two consequences:
+
+- **Bump `CACHE_VERSION` for any change to a precached file.** Nothing else
+  needs a version suffix; do not hand-append `?v=` in HTML.
+- **Games must not use query strings to vary content**, since `ignoreSearch`
+  makes `?level=2` and `?level=3` the same cache entry.
+
+`sw.js` itself cannot be busted this way — the browser refetches it on
+every navigation (bypassing its own HTTP cache), but a CDN in front of
+Pages may hold an old copy until its TTL expires. If deploys are slow to
+appear, that is the layer to purge; a cache rule that bypasses `/sw.js`
+removes the delay permanently.
+
 `_tests/` holds the Playwright suite: shell (manifest, icons, service
 worker, offline, install prompt), one spec per game, and `publishing.spec.js`
 guarding what reaches the deployed site. Run it before merging to
