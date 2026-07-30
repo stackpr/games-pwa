@@ -3,7 +3,7 @@
  * Bump CACHE_VERSION whenever any precached file changes, or clients
  * will keep serving the old copy.
  */
-const CACHE_VERSION = 'v1';
+const CACHE_VERSION = 'v2';
 const CACHE_NAME = `games-pwa-${CACHE_VERSION}`;
 
 const PRECACHE_URLS = [
@@ -19,7 +19,9 @@ const PRECACHE_URLS = [
   'icons/icon-maskable-512.png',
   'icons/apple-touch-icon.png',
   'games/scorekeeper/index.html',
-  'games/scorekeeper/scorekeeper.js'
+  'games/scorekeeper/scorekeeper.js',
+  'games/counter/index.html',
+  'games/counter/counter.js'
 ];
 
 self.addEventListener('install', event => {

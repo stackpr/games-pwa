@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Counter</title>
+  <meta name="theme-color" content="#10141f">
+  <link rel="manifest" href="../../manifest.webmanifest">
+  <link rel="icon" href="../../icons/favicon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="../../icons/apple-touch-icon.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <style>
+    :root {
+      --bg: #10141f;
+      --text: #eef1f8;
+      --text-dim: #9aa4bd;
+      --up: #2f7d4f;
+      --down: #8c3a52;
+      --panel: #1a2030;
+      color-scheme: dark;
+    }
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    html, body { margin: 0; padding: 0; height: 100%; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      display: flex;
+      flex-direction: column;
+      height: 100dvh;
+      overflow: hidden;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: calc(0.5rem + env(safe-area-inset-top)) 0.75rem 0.5rem;
+      flex: none;
+    }
+    .topbar a {
+      color: var(--text-dim);
+      text-decoration: none;
+      font-size: 0.95rem;
+    }
+    .chip {
+      border: 1px solid #2b3450;
+      background: var(--panel);
+      color: var(--text);
+      border-radius: 999px;
+      padding: 0.35rem 0.9rem;
+      font-size: 0.9rem;
+      cursor: pointer;
+      touch-action: manipulation;
+    }
+
+    /* Portrait (default): up button, number, down button stacked vertically. */
+    .stage {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      padding: 0 6px calc(6px + env(safe-area-inset-bottom));
+      min-height: 0;
+    }
+    .value {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--panel);
+      border-radius: 18px;
+      min-height: 0;
+      min-width: 0;
+      font-size: clamp(4rem, 34vmin, 16rem);
+      font-weight: 800;
+      font-variant-numeric: tabular-nums;
+      line-height: 1;
+    }
+    .step {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: none;
+      border-radius: 18px;
+      color: #fff;
+      font-size: clamp(2.5rem, 16vmin, 7rem);
+      font-weight: 700;
+      line-height: 1;
+      cursor: pointer;
+      touch-action: manipulation;
+      min-height: 0;
+      min-width: 0;
+      padding: 0;
+    }
+    .step-up { background: var(--up); }
+    .step-down { background: var(--down); }
+    .step:active { filter: brightness(1.25); }
+    .arrow { display: block; width: clamp(2rem, 12vmin, 6rem); height: auto; }
+
+    /* Portrait: .controls is a passthrough so the buttons become direct
+       flex children of .stage, ordered up / number / down. */
+    @media (orientation: portrait) {
+      .controls { display: contents; }
+      .step-up { order: 1; }
+      .value { order: 2; }
+      .step-down { order: 3; }
+    }
+
+    /* Landscape: number fills the left, the two buttons stack on the right,
+       so the arrows keep pointing the way they act. */
+    @media (orientation: landscape) {
+      .stage { flex-direction: row; }
+      .value { order: 1; flex: 2; }
+      .controls {
+        order: 2;
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        min-height: 0;
+        min-width: 0;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="topbar">
+    <a href="../../">&larr; Games</a>
+    <button id="reset" class="chip">Reset</button>
+  </div>
+
+  <main class="stage">
+    <div class="controls">
+      <button id="up" class="step step-up" aria-label="Increment">
+        <svg class="arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+             stroke-width="3" stroke-linecap="round" stroke-linejoin="round"
+             aria-hidden="true">
+          <path d="M5 15l7-7 7 7"/>
+        </svg>
+      </button>
+      <button id="down" class="step step-down" aria-label="Decrement">
+        <svg class="arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+             stroke-width="3" stroke-linecap="round" stroke-linejoin="round"
+             aria-hidden="true">
+          <path d="M5 9l7 7 7-7"/>
+        </svg>
+      </button>
+    </div>
+    <output id="value" class="value" aria-live="polite">0</output>
+  </main>
+
+  <script src="counter.js"></script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('../../sw.js').catch(() => {});
+    }
+  </script>
+</body>
+</html>

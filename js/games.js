@@ -6,6 +6,12 @@ const GAMES = [
     description: 'Keep a running score for two teams',
     emoji: '\u{1F3C6}',
     path: 'games/scorekeeper/'
+  },
+  {
+    name: 'Counter',
+    description: 'A single number, up and down',
+    emoji: '\u{1F522}',
+    path: 'games/counter/'
   }
 ];
 
