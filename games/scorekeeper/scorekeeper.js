@@ -15,6 +15,8 @@
     tapB: document.getElementById('tap-b'),
     minusA: document.getElementById('minus-a'),
     minusB: document.getElementById('minus-b'),
+    plus5A: document.getElementById('plus5-a'),
+    plus5B: document.getElementById('plus5-b'),
     undo: document.getElementById('undo'),
     reset: document.getElementById('reset')
   };
@@ -126,6 +128,10 @@
   el.tapB.addEventListener('click', () => bump('b', +1));
   el.minusA.addEventListener('click', () => bump('a', -1));
   el.minusB.addEventListener('click', () => bump('b', -1));
+  // +5 goes through the same bump(), so it groups exactly as five taps do:
+  // a following +1 inside the window extends it to +6. See _README.md.
+  el.plus5A.addEventListener('click', () => bump('a', +5));
+  el.plus5B.addEventListener('click', () => bump('b', +5));
 
   el.undo.addEventListener('click', () => {
     const prev = undoStack.pop();

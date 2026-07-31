@@ -134,17 +134,28 @@
       text-align: center;
       padding-bottom: 0.35rem;
     }
-    .minus {
+    /* Two half-width targets sharing the strip along the bottom of a team's
+       column. The 2px gap is the team color showing through, which is what
+       separates them — no border needed. */
+    .adjust {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 2px;
+      flex: none;
+    }
+    .adjust-btn {
       border: none;
       background: rgba(0,0,0,0.22);
       color: #fff;
       font-size: 1.6rem;
       font-weight: 700;
-      padding: 0.55rem;
+      /* Taller than the single -1 strip it replaced: each half is now half
+         as wide, so it needs the height back to stay thumb-sized. */
+      padding: 1.15rem 0.55rem;
       cursor: pointer;
       touch-action: manipulation;
     }
-    .minus:active { background: rgba(0,0,0,0.4); }
+    .adjust-btn:active { background: rgba(0,0,0,0.4); }
   </style>
 </head>
 <body>
@@ -164,7 +175,10 @@
         <span id="score-a" class="score">0</span>
       </button>
       <div class="tap-hint">tap to score</div>
-      <button id="minus-a" class="minus" aria-label="Subtract a point from team 1">&minus;1</button>
+      <div class="adjust">
+        <button id="minus-a" class="adjust-btn" aria-label="Subtract a point from team 1">&minus;1</button>
+        <button id="plus5-a" class="adjust-btn" aria-label="Add five points to team 1">+5</button>
+      </div>
     </section>
 
     <section class="team team-b">
@@ -174,7 +188,10 @@
         <span id="score-b" class="score">0</span>
       </button>
       <div class="tap-hint">tap to score</div>
-      <button id="minus-b" class="minus" aria-label="Subtract a point from team 2">&minus;1</button>
+      <div class="adjust">
+        <button id="minus-b" class="adjust-btn" aria-label="Subtract a point from team 2">&minus;1</button>
+        <button id="plus5-b" class="adjust-btn" aria-label="Add five points to team 2">+5</button>
+      </div>
     </section>
   </main>
 
