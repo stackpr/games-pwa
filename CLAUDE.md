@@ -85,6 +85,42 @@ decision is welcome, a paragraph of design rationale belongs in
   SVG first, then regenerate the PNGs by scripting Pillow again — never
   hand-edit them.
 
+## Player colors
+
+Any game with sides uses the same two identities, so a color means the
+same thing everywhere on the site:
+
+| Token | Value | Meaning |
+| --- | --- | --- |
+| `--player-1` | `#2f6fdb` blue | Player 1 — always moves first |
+| `--player-2` | `#d84a35` red | Player 2 |
+| `--player-ink` | `#ffffff` | Text/detail on top of a player fill |
+
+They live in `css/players.css`, which every such game links with
+`<link rel="stylesheet" href="../../css/players.css">`. **Use the tokens;
+never re-declare the hex values in a game.** A game may alias them to its
+own vocabulary — the scorekeeper sets `--team-a: var(--player-1)` — but the
+value has one home. Changing a value there restyles every game at once,
+which is the point.
+
+Rules that come with this:
+
+- **Player 1 always goes first**, in every game. The turn is
+  `moves.length % 2`, never a stored flag that can drift out of sync.
+- **Never let color be the only signal.** The turn indicator names the
+  player in text (`Player 2 to move`), and where a game can carry a shape
+  as well it should — tic-tac-toe's X and O are readable with no color
+  vision at all. Connect Four's pieces can only differ by color, which is
+  exactly why its status line is wordy.
+- Games with no players — Counter — do not use these tokens. Its `--up` and
+  `--down` are semantic, not identities, and should stay separate.
+
+The turn indicator itself is a shared pattern rather than shared code:
+a colored disc plus a text label, `aria-live="polite"`, driven by
+`data-player="1|2|none"` and `data-state="playing|over"` on the container.
+Connect Four and tic-tac-toe carry identical markup and CSS for it. Copy it
+into a new game rather than inventing a third variant.
+
 ## Install-prompt strategy (js/install.js)
 
 All client-side; no server APIs:
@@ -102,11 +138,23 @@ All client-side; no server APIs:
 
 ```
 python3 -m http.server 8080     # from repo root; SW requires http(s), file:// won't work
-cd _tests && npm install && npm test    # Playwright suite (starts its own server)
+cd _tests && npm ci && npm test         # Playwright suite (starts its own server)
 ```
 
 Service workers cache aggressively — when testing changes, use DevTools →
 Application → "Update on reload", or bump `CACHE_VERSION`.
+
+`_tests/` holds the Playwright suite: shell (manifest, icons, service
+worker, offline, install prompt), one spec per game, and `publishing.spec.js`
+guarding what reaches the deployed site. Run it before merging to
+`gh-pages`.
+
+Use `npm ci`, never `npm install`, and never run `npx playwright install`.
+The `@playwright/test` version is pinned to match a browser build that is
+already provisioned; `npm ci` honours that pin and the browsers need no
+download. Upgrading means bumping the package and the browser together —
+doing either alone leaves a runner that cannot launch its browser. See
+`_tests/README.md`.
 
 ## Cache busting
 
@@ -122,19 +170,51 @@ handler matches with `ignoreSearch: true`. Two consequences:
   makes `?level=2` and `?level=3` the same cache entry.
 
 `sw.js` itself cannot be busted this way — the browser refetches it on
-every navigation (bypassing its own HTTP cache), but a CDN in front of
-Pages may hold an old copy until its TTL expires. If deploys are slow to
-appear, that is the layer to purge; a cache rule that bypasses `/sw.js`
-removes the delay permanently.
+every navigation (bypassing its own HTTP cache), but Cloudflare sits in
+front of Pages and may hold an old copy until its TTL expires. Measured on
+the live site: `/sw.js` is edge-cached with `cache-control: max-age=600`,
+and `/` comes back `cf-cache-status: DYNAMIC` (not edge-cached at all). So
+the CDN can delay a deploy by **at most ~10 minutes**, and never touches
+the home page. A cache rule bypassing `/sw.js` would remove even that;
+it has not been added.
 
-`_tests/` holds the Playwright suite: shell (manifest, icons, service
-worker, offline, install prompt), one spec per game, and `publishing.spec.js`
-guarding what reaches the deployed site. Run it before merging to
-`gh-pages`. The `@playwright/test` version is pinned so it matches the
-preinstalled browser build — bump it and the browser together.
+That ceiling matters for diagnosis: anything still stale after ten minutes
+is not the CDN. See Deploying.
 
 ## Deploying
 
-GitHub Pages serves the `gh-pages` branch. Feature work happens on
-`claude/*` branches; merging to `gh-pages` deploys. Keep `CNAME`
+GitHub Pages serves the `gh-pages` branch, which is also the default
+branch — there is no staging step, so merging to `gh-pages` publishes
+immediately. Feature work happens on `claude/*` branches. Keep `CNAME`
 (`games.payne.run`) at the repo root on the deployed branch.
+
+### A merged PR ends its branch's life
+
+Once a PR merges, that branch is spent. Start the next piece of work from
+a fresh base:
+
+```bash
+git fetch origin gh-pages
+git checkout -B <branch-name> origin/gh-pages
+```
+
+Pushing another commit to a branch whose PR already merged is the failure
+mode to avoid: the commit lands on GitHub, the branch looks updated, and
+nothing deploys, because no PR is open to carry it. That is exactly how the
+footer-version commit got stranded. **Push first, then say it is ready to
+merge** — never the reverse. If the branch still holds unmerged commits,
+rebase them onto the new base rather than discarding them.
+
+### When a change isn't live
+
+Work down this list; it is ordered by how often each one is the answer.
+
+1. **The commit never merged.** Check that the change is actually in
+   `origin/gh-pages` (`git log origin/gh-pages --oneline`), not just pushed
+   to a branch. Every deploy gap found so far has been this.
+2. **`CACHE_VERSION` wasn't bumped.** Installed clients keep serving the
+   old precache until the version changes. Compare the version the live
+   site reports in the home-page footer against `sw.js` on `gh-pages`.
+3. **Pages hasn't finished building.** Usually under a minute.
+4. **Cloudflare.** Only plausible within ~10 minutes of a deploy, and only
+   for `/sw.js` — see Cache busting for the measured numbers.

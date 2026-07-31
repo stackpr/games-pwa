@@ -21,6 +21,10 @@ already names the game; pick a short kebab-case `<slug>`.
      `100dvh` layouts, safe-area insets
    - Any images the game needs are SVG (inline where simple) — PNG is
      reserved for the install icons in `icons/`; see Images in CLAUDE.md
+   - If the game has **sides**, link `../../css/players.css` and use
+     `var(--player-1)` / `var(--player-2)` — never fresh hex values — and
+     copy the turn-indicator markup from `games/tic-tac-toe/`. Player 1
+     moves first. See Player colors in CLAUDE.md
 
 2. **Document it** in `games/<slug>/_README.md` (required). Cover the use
    case, the rules and edge cases, layout decisions, and the shape of the
@@ -28,8 +32,11 @@ already names the game; pick a short kebab-case `<slug>`.
    Prose belongs here, not in the JS — game code ships to phones, so keep
    its comments short and point at `_README.md` for the reasoning.
 
-3. **Register it** in `js/games.js`: add `{ name, description, emoji, path: 'games/<slug>/' }`
-   to the `GAMES` array.
+3. **Register it** in two places, both of which are easy to forget:
+   - `js/games.js` — add `{ name, description, emoji, path: 'games/<slug>/' }`
+     to the `GAMES` array. This is what renders the home-page tile.
+   - `README.md` — add a row to the "Games & tools" table. Nothing enforces
+     this one, so it silently goes stale; the table has drifted before.
 
 4. **Cache it** in `sw.js`: add the new files to `PRECACHE_URLS` **and bump
    `CACHE_VERSION`** (this is mandatory — stale caches otherwise). Precache
@@ -46,6 +53,15 @@ already names the game; pick a short kebab-case `<slug>`.
    origin. Copy the shape of `specs/counter.spec.js`. The shell and
    publishing specs pick the game up automatically.
 
-7. **Verify**: `cd _tests && npm test` (it starts its own server). For a
-   manual look, `python3 -m http.server 8080` from the repo root, confirm
-   the new tile appears and the game works offline.
+7. **Verify**: `cd _tests && npm ci && npm test` (it starts its own server).
+   Use `npm ci`, never `npm install`, and never run `npx playwright install`
+   — the runner is pinned to an already-provisioned browser; see
+   `_tests/README.md`. For a manual look, `python3 -m http.server 8080` from
+   the repo root, confirm the new tile appears and the game works offline.
+
+## Before it can deploy
+
+The suite must be green, and the work has to reach `gh-pages` to go live —
+a pushed branch alone deploys nothing. If the branch's PR has already
+merged, start a new branch from `origin/gh-pages` rather than adding
+commits to the merged one. See Deploying in CLAUDE.md.
