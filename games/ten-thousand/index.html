@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>10,000 (Dice)</title>
+  <meta name="theme-color" content="#10141f">
+  <link rel="manifest" href="../../manifest.webmanifest">
+  <link rel="icon" href="../../icons/favicon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="../../icons/apple-touch-icon.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="stylesheet" href="../../css/dice.css">
+  <style>
+    :root {
+      --bg: #10141f;
+      --text: #eef1f8;
+      --text-dim: #9aa4bd;
+      --panel: #1a2030;
+      --panel-hi: #2b3450;
+      --tray: #171d2c;
+      --die: #eef1f8;
+      --die-ink: #10141f;
+      /* Semantic, not player identities: this game has 2-6 seats, so the
+         two-token --player-1/--player-2 system does not apply. See Player
+         colors in CLAUDE.md, and this game's own notes. */
+      --keep: #f0b429;
+      --bust: #d84a35;
+      --chrome: 17rem;
+      color-scheme: dark;
+    }
+    @media (orientation: landscape) {
+      :root { --chrome: 15rem; }
+    }
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    html, body { margin: 0; padding: 0; height: 100%; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      display: flex;
+      flex-direction: column;
+      height: 100dvh;
+      overflow: hidden;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: calc(0.4rem + env(safe-area-inset-top)) 0.75rem 0.4rem;
+      flex: none;
+    }
+    .topbar a {
+      color: var(--text-dim);
+      text-decoration: none;
+      font-size: 0.95rem;
+    }
+    .chip {
+      border: 1px solid var(--panel-hi);
+      background: var(--panel);
+      color: var(--text);
+      border-radius: 999px;
+      padding: 0.35rem 0.9rem;
+      font-size: 0.9rem;
+      cursor: pointer;
+      touch-action: manipulation;
+    }
+
+    /* Scoreboard: seats three across, wrapping onto further rows, with the
+       settings button alongside and full height. Its column count is set
+       from the player count so 2 players still fill the row. */
+    .scoreboard {
+      display: flex;
+      align-items: stretch;
+      gap: 0.3rem;
+      padding: 0 0.5rem 0.4rem;
+      flex: none;
+    }
+    .seats {
+      flex: 1;
+      min-width: 0;
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 0.3rem;
+    }
+    .seat {
+      min-width: 0;
+      background: var(--panel);
+      border: 1px solid transparent;
+      border-radius: 12px;
+      padding: 0.3rem 0.2rem;
+      text-align: center;
+      line-height: 1.15;
+    }
+    .seat-name {
+      display: block;
+      font-size: 0.7rem;
+      color: var(--text-dim);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .seat-score {
+      display: block;
+      font-size: 1.05rem;
+      font-weight: 700;
+      font-variant-numeric: tabular-nums;
+    }
+    /* The active seat is marked by weight and a ring, never by hue — a
+       colour here would collide with the site's player identities. */
+    .seat[data-active] {
+      background: var(--panel-hi);
+      box-shadow: inset 0 0 0 2px rgba(255,255,255,0.55);
+    }
+    .seat[data-active] .seat-name { color: var(--text); }
+    .settings-btn {
+      flex: none;
+      width: 2.4rem;
+      background: var(--panel);
+      border: 1px solid var(--panel-hi);
+      border-radius: 12px;
+      color: var(--text-dim);
+      font-size: 1.2rem;
+      line-height: 1;
+      cursor: pointer;
+      touch-action: manipulation;
+    }
+    .settings-btn:active { background: var(--panel-hi); }
+
+    .settings {
+      flex: none;
+      margin: 0 0.5rem 0.4rem;
+      padding: 0.6rem 0.7rem;
+      background: var(--panel);
+      border: 1px solid var(--panel-hi);
+      border-radius: 12px;
+    }
+    .settings[hidden] { display: none; }
+    .settings-label {
+      display: block;
+      font-size: 0.8rem;
+      color: var(--text-dim);
+      margin-bottom: 0.4rem;
+    }
+    .count-row { display: flex; gap: 0.35rem; }
+    .count {
+      flex: 1;
+      background: var(--bg);
+      border: 1px solid var(--panel-hi);
+      border-radius: 8px;
+      color: var(--text);
+      font-size: 1rem;
+      font-weight: 700;
+      padding: 0.45rem 0;
+      cursor: pointer;
+      touch-action: manipulation;
+    }
+    .count[aria-pressed="true"] { background: var(--panel-hi); }
+    .settings-note {
+      margin: 0.45rem 0 0;
+      font-size: 0.72rem;
+      color: var(--text-dim);
+    }
+
+    .stage {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0 0.5rem;
+      min-height: 0;
+    }
+    /* Square, positioning and pips come from css/dice.css; this is only the
+       tray's size and skin. */
+    .tray {
+      width: 100%;
+      max-width: min(100%, calc(100dvh - var(--chrome)), 26rem);
+      background: var(--tray);
+      border: 1px solid var(--panel-hi);
+      border-radius: 16px;
+    }
+
+    .die { cursor: pointer; }
+    .die[data-state="idle"] { display: none; }
+    .die[data-state="set"] { opacity: 0.42; cursor: default; }
+    .die[data-state="kept"] {
+      box-shadow: 0 0 0 3px var(--keep), 0 3px 8px rgba(0,0,0,0.5);
+    }
+    body[data-phase="rolling"] .die,
+    body[data-phase="bust"] .die,
+    body[data-phase="over"] .die { cursor: default; }
+
+
+    .status {
+      flex: none;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
+      padding: 0.5rem 0.75rem 0.2rem;
+      font-size: 1.15rem;
+      font-weight: 700;
+      min-height: 2.2rem;
+      text-align: center;
+    }
+    body[data-phase="bust"] .status { color: var(--bust); font-size: 1.9rem; }
+    body[data-phase="over"] .status { color: var(--keep); font-size: 1.5rem; }
+
+    .controls {
+      flex: none;
+      display: flex;
+      gap: 0.5rem;
+      padding: 0.35rem 0.5rem calc(0.5rem + env(safe-area-inset-bottom));
+    }
+    .action {
+      flex: 1;
+      border: none;
+      border-radius: 14px;
+      background: var(--panel-hi);
+      color: var(--text);
+      font-size: 1.25rem;
+      font-weight: 700;
+      padding: 0.75rem 0.5rem;
+      cursor: pointer;
+      touch-action: manipulation;
+      display: none;
+    }
+    .action:disabled { opacity: 0.35; cursor: default; }
+    .action:not(:disabled):active { filter: brightness(1.25); }
+    #roll { background: #2f6f5a; }
+    #next { background: var(--bust); }
+
+    body[data-phase="idle"] #roll,
+    body[data-phase="rolling"] #roll,
+    body[data-phase="picking"] #roll,
+    body[data-phase="picking"] #stop,
+    body[data-phase="bust"] #next,
+    body[data-phase="over"] #next { display: block; }
+
+    @media (prefers-reduced-motion: reduce) {
+      .die { will-change: auto; }
+    }
+  </style>
+</head>
+<body data-phase="idle">
+  <div class="topbar">
+    <a href="../../">&larr; Games</a>
+    <button id="new-game" class="chip">New game</button>
+  </div>
+
+  <div class="scoreboard">
+    <div class="seats" id="seats"></div>
+    <button id="settings-btn" class="settings-btn" type="button"
+            aria-label="Settings: number of players" aria-expanded="false">&#10043;</button>
+  </div>
+
+  <div class="settings" id="settings" hidden>
+    <span class="settings-label">Number of players</span>
+    <div class="count-row" id="count-row"></div>
+    <p class="settings-note">Changing this starts a new game.</p>
+  </div>
+
+  <main class="stage">
+    <div class="tray dice-tray" id="tray"></div>
+  </main>
+
+  <div class="status" id="status" aria-live="polite">
+    <span id="status-text"></span>
+  </div>
+
+  <div class="controls">
+    <button id="roll" class="action">Roll!</button>
+    <button id="stop" class="action">Stop!</button>
+    <button id="next" class="action">Next Player!</button>
+  </div>
+
+  <script src="../../js/lib/store.js"></script>
+  <script src="../../js/lib/dice.js"></script>
+  <script src="ten-thousand.js"></script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('../../sw.js').catch(() => {});
+    }
+  </script>
+</body>
+</html>

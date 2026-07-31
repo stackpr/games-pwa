@@ -5,14 +5,34 @@ description: Scaffold a new game or tool in this PWA — creates the game folder
 
 # Add a game
 
-Add a new self-contained game/tool to the site. Ask nothing if the request
-already names the game; pick a short kebab-case `<slug>`.
+Add a new self-contained game/tool to the site. Pick a short kebab-case
+`<slug>`.
+
+## Before anything else: check the name
+
+**Never use a trademarked game name.** Rules are free to reimplement; names
+are not. Most well-known board and dice games are trademarked, so if the
+user asked for one by a brand name — or the obvious name for what they
+described is a brand name — **stop and ask which name to use** before
+creating a single file. Do not choose a replacement silently, and never
+write the trademarked name into a slug, a title, a storage key, a commit
+message or a PR, even temporarily; unpicking it later means rewriting
+pushed history.
+
+Prefer the traditional, descriptive or numeric name — `10,000 (Dice)` for
+the six-dice press-your-luck game, `Dice` for a plain roller. If unsure
+whether a name is a trademark, treat it as one and ask. See Naming a game
+in CLAUDE.md.
 
 ## Steps
 
 1. **Create `games/<slug>/index.html`** and `games/<slug>/<slug>.js`.
    Copy the structure of `games/scorekeeper/` as the template:
    - Own `<style>` block or file (games don't share `css/app.css`)
+   - Load `../../js/lib/store.js` and use `Store.load`/`Store.save` rather
+     than touching `localStorage` directly. If the game rolls dice, load
+     `../../js/lib/dice.js` + `../../css/dice.css` and build the tray with
+     `DiceTray.create`. See Shared code in CLAUDE.md
    - Top bar with `<a href="../../">&larr; Games</a>`
    - `<link rel="manifest" href="../../manifest.webmanifest">` and the same
      icon/meta tags as the scorekeeper page

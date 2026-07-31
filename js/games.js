@@ -24,6 +24,18 @@ const GAMES = [
     description: 'Three in a row, X against O',
     emoji: '\u{2B55}',
     path: 'games/tic-tac-toe/'
+  },
+  {
+    name: '10,000 (Dice)',
+    description: 'Press your luck with six dice',
+    emoji: '\u{1F3B2}',
+    path: 'games/ten-thousand/'
+  },
+  {
+    name: 'Dice',
+    description: 'Roll one to six dice, nothing else',
+    emoji: '\u{1F3AF}',
+    path: 'games/dice/'
   }
 ];
 

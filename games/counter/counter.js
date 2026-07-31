@@ -12,24 +12,12 @@
   let state = load();
 
   function load() {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        return { count: Number.isInteger(parsed.count) ? parsed.count : 0 };
-      }
-    } catch (err) {
-      console.warn('Could not load saved count:', err);
-    }
-    return { count: 0 };
+    const parsed = Store.load(STORAGE_KEY);
+    return { count: parsed && Number.isInteger(parsed.count) ? parsed.count : 0 };
   }
 
   function save() {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-    } catch (err) {
-      console.warn('Could not save count:', err);
-    }
+    Store.save(STORAGE_KEY, state);
   }
 
   function render() {
