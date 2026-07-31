@@ -82,11 +82,20 @@ square is ringed instead, matching the cell's own 10px radius. Ringing the
 X and O themselves was the alternative and it looked like a stroke weight
 bug rather than a highlight.
 
-The board is square, capped by width, by height (`100dvh - 11rem`) and by
-`30rem` so it does not become comically large on a desktop monitor. The
-turn indicator sits above it in the same position and the same markup as
-connect-four's, which is the point — the two games should feel like one
+The board is square, capped by width, by height (`100dvh - var(--chrome)`)
+and by `30rem` so it does not become comically large on a desktop monitor.
+The turn indicator sits above it in the same position and the same markup
+as connect-four's, which is the point — the two games should feel like one
 family.
+
+In portrait a `body::after` spacer splits the leftover space evenly above
+and below the board, centering the board and letting the status line center
+in the gap above it. Connect-four's `_README.md` documents the two silent
+traps in that arrangement — the portrait block has to sit after `.stage`
+and `.board` because a media query adds no specificity, and the board's
+`max-height` has to be `none` there or a self-referential percentage
+squashes it. Both apply identically here; a spec asserts the board *and*
+its cells stay square.
 
 ## Persisted state
 

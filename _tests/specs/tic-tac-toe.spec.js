@@ -281,6 +281,31 @@ test.describe('presentation', () => {
     expect(external).toEqual([]);
   });
 
+  test('the board stays square and the status centers above it', async ({ page }) => {
+    for (const size of [{ width: 390, height: 844 }, { width: 320, height: 568 }]) {
+      await page.setViewportSize(size);
+      const m = await page.evaluate(() => {
+        const bar = document.querySelector('.topbar').getBoundingClientRect();
+        const turn = document.getElementById('turn').getBoundingClientRect();
+        const board = document.getElementById('board').getBoundingClientRect();
+        const cell = document.querySelector('.cell').getBoundingClientRect();
+        return {
+          ratio: board.width / board.height,
+          cellRatio: cell.width / cell.height,
+          turnMid: (turn.top + turn.bottom) / 2,
+          bandMid: (bar.bottom + board.top) / 2,
+        };
+      });
+      const at = `${size.width}x${size.height}`;
+      // In portrait the stage is content-sized, so a percentage max-height on
+      // the board is self-referential and silently squashes it. See _README.md.
+      expect(m.ratio, `board stays square at ${at}`).toBeCloseTo(1, 2);
+      expect(m.cellRatio, `cells stay square at ${at}`).toBeCloseTo(1, 1);
+      expect(Math.abs(m.turnMid - m.bandMid),
+        `status centered in the band above the board at ${at}`).toBeLessThan(2);
+    }
+  });
+
   test('the board fits the viewport in portrait and landscape', async ({ page }) => {
     for (const size of [{ width: 390, height: 844 }, { width: 844, height: 390 }]) {
       await page.setViewportSize(size);

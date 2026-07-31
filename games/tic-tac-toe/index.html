@@ -23,7 +23,7 @@
       /* Vertical space the top bar and turn indicator need; the board sizes
          itself against what is left. Kept as a token so growing the turn
          text cannot quietly push the board off-screen. */
-      --chrome: 7.5rem;
+      --chrome: 11.5rem;
       color-scheme: dark;
     }
     @media (orientation: landscape) {
@@ -96,7 +96,7 @@
       border: 0;
     }
     /* Landscape is short, not narrow: size against height so the board keeps
-       the room it needs. */
+       the room it needs, and the status stays a fixed band. */
     @media (orientation: landscape) {
       .turn {
         font-size: clamp(1.05rem, 5vh, 1.7rem);
@@ -141,6 +141,23 @@
       width: 100%;
       max-width: min(100%, calc(100dvh - var(--chrome)), 30rem);
       max-height: 100%;
+    }
+    /* Portrait: the board is smaller than the space below the top bar, and
+       the leftover is split evenly above and below it by the ::after
+       spacer. That centers the board and leaves the status centered in the
+       gap above it, rather than parked against the top bar.
+
+       This block must stay AFTER .stage and .board. A media query adds no
+       specificity, so these overrides lose to the base rules on source
+       order alone — which shows up as a squashed board, not as an error. */
+    @media (orientation: portrait) {
+      .turn { flex: 1; padding-top: 0.6rem; }
+      .stage { flex: none; }
+      body::after { content: ''; flex: 1; }
+      /* The stage is content-sized here, so a percentage max-height on the
+         board would depend on the board's own height. That cycle resolves
+         to non-square cells; --chrome reserves the vertical space instead. */
+      .board { max-height: none; }
     }
     .cell {
       display: flex;
