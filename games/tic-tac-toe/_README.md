@@ -35,6 +35,24 @@ the squares are reachable by Tab as ordinary buttons.
 - A full board with no line is a draw.
 - The first matching line wins if a corrupt save somehow contains two.
 
+## The turn indicator
+
+Reads `Next: X` while playing and `X Wins!` once won — the mark, not the
+words, says whose turn it is, and it is the same SVG the next tap will
+place. See The turn indicator in CLAUDE.md for the shared rules.
+
+The one thing specific to this game: connect-four shows a plain colored
+disc there because a Connect Four piece has no shape to show, while here
+the indicator shows the real X or O. That makes the status line readable
+with no color vision at all, which is the same reason the marks are shapes
+on the board.
+
+Dropping "Player 1" from the visible line is what lets it run at
+`clamp(1.9rem, 9.5vw, 3.5rem)` without wrapping — `Player 1 (X) to move`
+wrapped to two lines on a 390px phone at that size and pushed the disc away
+from its text. The full sentence still exists for screen readers in the
+visually-hidden `#turn-label`.
+
 ## Marks and color
 
 X and O are inline SVG, stroked in the shared player colors — X in

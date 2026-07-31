@@ -45,6 +45,18 @@ board tells you where you can still play.
   separate wins, since play stops at the first, but if a corrupt save
   contained one the scan reports the first it finds and stops.
 
+## The turn indicator
+
+Reads `Next: ⬤` while playing and `⬤ Wins!` once won, in the piece's own
+color — the disc says whose turn it is, so the words only carry state. See
+The turn indicator in CLAUDE.md for the shared rules.
+
+A Connect Four piece has no shape to distinguish it, only color, so this
+indicator is the one place on the site where the visible signal really is
+color alone. That is why the visually-hidden `#turn-label` matters more
+here than in tic-tac-toe: it is the only thing naming the player for a
+screen reader.
+
 ## The drop animation
 
 The piece falls from above the board into its slot. The distance is not a

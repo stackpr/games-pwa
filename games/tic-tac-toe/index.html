@@ -20,7 +20,14 @@
       --frame: #243050;
       --hole: #0c1018;
       --gap: 3.2%;
+      /* Vertical space the top bar and turn indicator need; the board sizes
+         itself against what is left. Kept as a token so growing the turn
+         text cannot quietly push the board off-screen. */
+      --chrome: 7.5rem;
       color-scheme: dark;
+    }
+    @media (orientation: landscape) {
+      :root { --chrome: 6rem; }
     }
     * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
     html, body { margin: 0; padding: 0; height: 100%; }
@@ -65,23 +72,53 @@
       display: flex;
       align-items: center;
       justify-content: center;
-      gap: 0.55rem;
-      padding: 0 0.75rem 0.55rem;
+      gap: 0.4em;
+      padding: 0 0.75rem 0.6rem;
       flex: none;
-      font-size: 1.05rem;
-      font-weight: 600;
-      min-height: 2rem;
+      /* The mark identifies the player, so the words are only the state and
+         the line can run large. Portrait has the room above the board. */
+      font-size: clamp(1.9rem, 9.5vw, 3.5rem);
+      font-weight: 700;
+      line-height: 1.2;
+      text-align: center;
     }
+    /* The visible line reads "Next: X"; the full sentence naming the player
+       is kept for screen readers. */
+    .visually-hidden {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      margin: -1px;
+      padding: 0;
+      overflow: hidden;
+      clip-path: inset(50%);
+      white-space: nowrap;
+      border: 0;
+    }
+    /* Landscape is short, not narrow: size against height so the board keeps
+       the room it needs. */
+    @media (orientation: landscape) {
+      .turn {
+        font-size: clamp(1.05rem, 5vh, 1.7rem);
+        padding-bottom: 0.4rem;
+      }
+    }
+    /* Where connect-four shows a plain colored disc, this shows the mark the
+       player is about to place — so the indicator carries shape as well as
+       color, and the label stays as short as connect-four's. */
     .turn-disc {
-      width: 1.1rem;
-      height: 1.1rem;
-      border-radius: 50%;
+      width: 1.15em;
+      height: 1.15em;
       flex: none;
-      background: var(--player-1);
-      box-shadow: inset 0 0 0 2px rgba(0,0,0,0.25);
+      display: flex;
+      align-items: center;
+      justify-content: center;
     }
-    .turn[data-player="2"] .turn-disc { background: var(--player-2); }
+    .turn-disc .mark { width: 100%; height: 100%; stroke-width: 14; }
     .turn[data-player="none"] .turn-disc { display: none; }
+    /* Reads "Next: X" while playing and "X Wins!" once won, so the mark
+       always sits where the sentence wants it. */
+    .turn[data-state="playing"] .turn-text { order: -1; }
     .turn[data-state="over"] .turn-text { font-weight: 800; }
 
     .stage {
@@ -102,7 +139,7 @@
       border-radius: 16px;
       aspect-ratio: 1;
       width: 100%;
-      max-width: min(100%, 100dvh - 11rem, 30rem);
+      max-width: min(100%, calc(100dvh - var(--chrome)), 30rem);
       max-height: 100%;
     }
     .cell {
@@ -180,9 +217,10 @@
     </div>
   </div>
 
-  <div id="turn" class="turn" data-player="1" aria-live="polite">
-    <span id="turn-disc" class="turn-disc"></span>
-    <span id="turn-text" class="turn-text">Player 1 (X) to move</span>
+  <div id="turn" class="turn" data-player="1" data-state="playing" aria-live="polite">
+    <span id="turn-disc" class="turn-disc" aria-hidden="true"></span>
+    <span id="turn-text" class="turn-text" aria-hidden="true">Next:</span>
+    <span id="turn-label" class="visually-hidden">Player 1 (X) to move</span>
   </div>
 
   <main class="stage">

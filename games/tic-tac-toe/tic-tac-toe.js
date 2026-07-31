@@ -12,7 +12,9 @@
   const el = {
     board: document.getElementById('board'),
     turn: document.getElementById('turn'),
+    turnDisc: document.getElementById('turn-disc'),
     turnText: document.getElementById('turn-text'),
+    turnLabel: document.getElementById('turn-label'),
     undo: document.getElementById('undo'),
     reset: document.getElementById('reset')
   };
@@ -127,20 +129,29 @@
     renderTurn();
   }
 
+  // The mark itself says whose turn it is, so the words carry only the
+  // state. turnLabel keeps the full sentence for screen readers, which get
+  // nothing from an SVG glyph. See _README.md.
   function renderTurn() {
     if (view.winner) {
       el.turn.dataset.player = String(view.winner);
       el.turn.dataset.state = 'over';
-      el.turnText.textContent = `Player ${view.winner} (${MARKS[view.winner]}) wins`;
+      el.turnDisc.innerHTML = markSvg(view.winner);
+      el.turnText.textContent = 'Wins!';
+      el.turnLabel.textContent = `Player ${view.winner} (${MARKS[view.winner]}) wins`;
     } else if (view.full) {
       el.turn.dataset.player = 'none';
       el.turn.dataset.state = 'over';
-      el.turnText.textContent = 'Draw — nobody wins';
+      el.turnDisc.innerHTML = '';
+      el.turnText.textContent = 'Draw';
+      el.turnLabel.textContent = 'Draw — nobody wins';
     } else {
       const player = (moves.length % 2) + 1;
       el.turn.dataset.player = String(player);
       el.turn.dataset.state = 'playing';
-      el.turnText.textContent = `Player ${player} (${MARKS[player]}) to move`;
+      el.turnDisc.innerHTML = markSvg(player);
+      el.turnText.textContent = 'Next:';
+      el.turnLabel.textContent = `Player ${player} (${MARKS[player]}) to move`;
     }
   }
 

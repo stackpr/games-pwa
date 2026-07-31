@@ -6,6 +6,9 @@ const URL = '/games/connect-four/';
 const col = (page, c) => page.locator(`.col[data-col="${c}"]`);
 const turnText = page => page.locator('#turn-text');
 const turn = page => page.locator('#turn');
+// The visible line is only "Next:" / "Wins!" — the piece says who. This is
+// the screen-reader label that still names the player.
+const turnLabel = page => page.locator('#turn-label');
 // Cells are laid out column-major: each .col holds its 6 rows, top first.
 const cell = (page, c, r) => page.locator(`.col[data-col="${c}"] .cell`).nth(r);
 
@@ -21,8 +24,9 @@ test.beforeEach(async ({ page }) => {
 
 test.describe('dropping', () => {
   test('starts empty with player 1 to move', async ({ page }) => {
-    await expect(turnText(page)).toHaveText('Player 1 to move');
+    await expect(turnText(page)).toHaveText('Next:');
     await expect(turn(page)).toHaveAttribute('data-player', '1');
+    await expect(turnLabel(page)).toHaveText('Player 1 to move');
     await expect(page.locator('.cell[data-p]')).toHaveCount(0);
   });
 
@@ -56,10 +60,11 @@ test.describe('dropping', () => {
 
   test('players alternate', async ({ page }) => {
     await col(page, 0).click();
-    await expect(turnText(page)).toHaveText('Player 2 to move');
     await expect(turn(page)).toHaveAttribute('data-player', '2');
+    await expect(turnLabel(page)).toHaveText('Player 2 to move');
     await col(page, 1).click();
-    await expect(turnText(page)).toHaveText('Player 1 to move');
+    await expect(turn(page)).toHaveAttribute('data-player', '1');
+    await expect(turnLabel(page)).toHaveText('Player 1 to move');
   });
 
   test('a full column is disabled and takes no more pieces', async ({ page }) => {
@@ -84,8 +89,10 @@ test.describe('winning', () => {
     await col(page, 2).click(); await col(page, 6).click();
     await col(page, 3).click();
 
-    await expect(turnText(page)).toHaveText('Player 1 wins');
+    await expect(turnText(page)).toHaveText('Wins!');
     await expect(turn(page)).toHaveAttribute('data-state', 'over');
+    await expect(turn(page)).toHaveAttribute('data-player', '1');
+    await expect(turnLabel(page)).toHaveText('Player 1 wins');
     await expect(page.locator('.cell[data-win]')).toHaveCount(4);
 
     // Every column is locked, so nothing can land after the win.
@@ -98,7 +105,7 @@ test.describe('winning', () => {
       await col(page, 2).click();   // P2 stacks column 2
     }
     await col(page, 1).click();
-    await expect(turnText(page)).toHaveText('Player 1 wins');
+    await expect(turnText(page)).toHaveText('Wins!');
     await expect(page.locator('.cell[data-win]')).toHaveCount(4);
   });
 
@@ -116,7 +123,7 @@ test.describe('winning', () => {
     await col(page, 3).click();                      // P2 (3,3)
     await col(page, 3).click();                      // P1 (2,3) completes 5,0/4,1/3,2/2,3
 
-    await expect(turnText(page)).toHaveText('Player 1 wins');
+    await expect(turnText(page)).toHaveText('Wins!');
     await expect(page.locator('.cell[data-win]')).toHaveCount(4);
   });
 
@@ -140,10 +147,10 @@ test.describe('undo and reset', () => {
 
   test('undo removes the last piece and hands the turn back', async ({ page }) => {
     await col(page, 3).click();
-    await expect(turnText(page)).toHaveText('Player 2 to move');
+    await expect(turnText(page)).toHaveText('Next:');
     await page.locator('#undo').click();
     await expect(page.locator('.cell[data-p]')).toHaveCount(0);
-    await expect(turnText(page)).toHaveText('Player 1 to move');
+    await expect(turnText(page)).toHaveText('Next:');
     await expect(page.locator('#undo')).toBeDisabled();
   });
 
@@ -152,10 +159,10 @@ test.describe('undo and reset', () => {
     await col(page, 1).click(); await col(page, 5).click();
     await col(page, 2).click(); await col(page, 6).click();
     await col(page, 3).click();
-    await expect(turnText(page)).toHaveText('Player 1 wins');
+    await expect(turnText(page)).toHaveText('Wins!');
 
     await page.locator('#undo').click();
-    await expect(turnText(page)).toHaveText('Player 1 to move');
+    await expect(turnText(page)).toHaveText('Next:');
     await expect(page.locator('.cell[data-win]')).toHaveCount(0);
     await expect(col(page, 3)).toBeEnabled();
   });
@@ -164,7 +171,7 @@ test.describe('undo and reset', () => {
     await playSafely(page, 5);
     await page.locator('#reset').click();
     await expect(page.locator('.cell[data-p]')).toHaveCount(0);
-    await expect(turnText(page)).toHaveText('Player 1 to move');
+    await expect(turnText(page)).toHaveText('Next:');
   });
 });
 
@@ -178,7 +185,7 @@ test.describe('persistence', () => {
     await expect(cell(page, 3, 5)).toHaveAttribute('data-p', '1');
     await expect(cell(page, 3, 4)).toHaveAttribute('data-p', '2');
     await expect(cell(page, 5, 5)).toHaveAttribute('data-p', '1');
-    await expect(turnText(page)).toHaveText('Player 2 to move');
+    await expect(turnText(page)).toHaveText('Next:');
   });
 
   test('only the move list is stored', async ({ page }) => {
@@ -194,7 +201,7 @@ test.describe('persistence', () => {
       localStorage.setItem('games.connect-four.v1', 'not json'));
     await page.reload();
     await expect(page.locator('.cell[data-p]')).toHaveCount(0);
-    await expect(turnText(page)).toHaveText('Player 1 to move');
+    await expect(turnText(page)).toHaveText('Next:');
   });
 
   test('an illegal saved move truncates the game at that point', async ({ page }) => {
@@ -203,7 +210,7 @@ test.describe('persistence', () => {
       'games.connect-four.v1', JSON.stringify({ moves: [0, 1, 99, 2] })));
     await page.reload();
     await expect(page.locator('.cell[data-p]')).toHaveCount(2);
-    await expect(turnText(page)).toHaveText('Player 1 to move');
+    await expect(turnText(page)).toHaveText('Next:');
   });
 });
 
@@ -272,11 +279,33 @@ test.describe('presentation', () => {
     expect(win.shadow).toContain('rgb(255, 255, 255)');
   });
 
-  test('the turn indicator names the player, not just a color', async ({ page }) => {
-    // Color must never be the only signal; see Player colors in CLAUDE.md.
-    await expect(turnText(page)).toContainText('Player 1');
+  test('the accessible label names the player the visible line omits', async ({ page }) => {
+    // The visible line is deliberately just "Next: <piece>" — the piece
+    // carries the identity. A screen reader gets nothing from a colored
+    // disc, so the label still spells it out. See Player colors in CLAUDE.md.
+    await expect(turnText(page)).toHaveText('Next:');
+    await expect(turnLabel(page)).toHaveText('Player 1 to move');
     await col(page, 0).click();
-    await expect(turnText(page)).toContainText('Player 2');
+    await expect(turnLabel(page)).toHaveText('Player 2 to move');
+  });
+
+  test('the piece sits after "Next:" while playing and before "Wins!"', async ({ page }) => {
+    const sides = async () => page.evaluate(() => {
+      const disc = document.getElementById('turn-disc').getBoundingClientRect();
+      const text = document.getElementById('turn-text').getBoundingClientRect();
+      return { disc: disc.left, text: text.left };
+    });
+
+    const playing = await sides();
+    expect(playing.text, '"Next:" comes before the piece').toBeLessThan(playing.disc);
+
+    await col(page, 0).click(); await col(page, 4).click();
+    await col(page, 1).click(); await col(page, 5).click();
+    await col(page, 2).click(); await col(page, 6).click();
+    await col(page, 3).click();
+
+    const won = await sides();
+    expect(won.disc, 'the piece comes before "Wins!"').toBeLessThan(won.text);
   });
 
   test('no raster images and nothing leaves the origin', async ({ page }) => {
