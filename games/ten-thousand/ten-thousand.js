@@ -18,6 +18,7 @@
     seats: document.getElementById('seats'),
     settingsBtn: document.getElementById('settings-btn'),
     settings: document.getElementById('settings'),
+    settingsClose: document.getElementById('settings-close'),
     countRow: document.getElementById('count-row'),
     status: document.getElementById('status-text'),
     roll: document.getElementById('roll'),
@@ -303,14 +304,32 @@
 
   function setPlayerCount(count) {
     startGame(count);
-    el.settings.hidden = true;
+    closeSettings();
+  }
+
+  function settingsOpen() {
+    return el.settings.hasAttribute('data-open');
+  }
+
+  function openSettings() {
+    el.settings.dataset.open = '';
+    el.settingsBtn.setAttribute('aria-expanded', 'true');
+    // Land focus inside the dialog rather than leaving it on the button
+    // behind the scrim.
+    const first = el.countRow.querySelector('.count');
+    if (first) first.focus();
+  }
+
+  function closeSettings() {
+    if (!settingsOpen()) return;
+    delete el.settings.dataset.open;
     el.settingsBtn.setAttribute('aria-expanded', 'false');
+    el.settingsBtn.focus();
   }
 
   function toggleSettings() {
-    const open = el.settings.hidden;
-    el.settings.hidden = !open;
-    el.settingsBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
+    if (settingsOpen()) closeSettings();
+    else openSettings();
   }
 
   for (let c = MIN_PLAYERS; c <= MAX_PLAYERS; c++) {
@@ -328,6 +347,17 @@
   el.next.addEventListener('click', nextPlayer);
   el.newGame.addEventListener('click', () => startGame(state.count));
   el.settingsBtn.addEventListener('click', toggleSettings);
+  el.settingsClose.addEventListener('click', closeSettings);
+  // A tap on the scrim, but not on the panel sitting on top of it.
+  el.settings.addEventListener('click', event => {
+    if (event.target === el.settings) closeSettings();
+  });
+  document.addEventListener('keydown', event => {
+    if (event.key === 'Escape' && settingsOpen()) {
+      closeSettings();
+      event.preventDefault();
+    }
+  });
 
   tray.setCount(DICE);
   buildSeats();

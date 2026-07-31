@@ -132,6 +132,36 @@ the screen, so a spec asserts the tray stays square with no overflow at 2,
 7 and 12 players. Landscape gets compact seats and a smaller per-row figure
 because height is the scarce axis there.
 
+## The settings overlay
+
+The player count opens as a **full-screen overlay with a dimming scrim**,
+not as a panel inline in the column. Inline it pushed the board down and
+competed with the tray for the height the tray sizes itself against, which
+is a real failure and not just a cosmetic one — the tray's size is computed
+from `--chrome`, and a panel that appears and disappears is not in that sum.
+Floating it over the board takes it out of the layout entirely.
+
+Fading needs **both `opacity` and `visibility`**, and the `visibility`
+transition needs a delay:
+
+```css
+transition: opacity 160ms ease, visibility 0s linear 160ms;   /* closed */
+transition: opacity 160ms ease, visibility 0s;                /* open   */
+```
+
+`visibility` is what stops a closed overlay swallowing taps and holding
+focusable buttons; `opacity` alone would leave an invisible sheet over the
+whole page. But `visibility` cannot be interpolated, so without the delay
+it flips immediately and the fade-out never appears — the panel just
+vanishes. Delaying it by exactly the fade duration on the closed state, and
+not at all on the open state, is what gives a fade in *and* out. The
+`hidden` attribute cannot do this at all, since `display: none` snaps.
+
+It closes on the Close button, on a tap on the scrim but not the panel, and
+on Escape. Focus moves to the first count button on open and back to the
+settings button on close, so it does not strand a keyboard user behind the
+scrim. `prefers-reduced-motion: reduce` drops both transitions.
+
 ## Colors
 
 This game deliberately does **not** use `--player-1` / `--player-2`. Those are

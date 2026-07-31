@@ -143,20 +143,50 @@
     }
     .settings-btn:active { background: var(--panel-hi); }
 
+    /* Settings float over the board rather than pushing it: the panel is
+       not part of the game, and inline it competed with the tray for the
+       height the tray sizes itself against.
+
+       Fading needs both opacity and visibility. visibility is what stops a
+       closed panel being clickable and focusable, and delaying its
+       transition by the fade duration is what lets the fade-out finish
+       before the panel is taken away — `hidden` alone would snap. */
     .settings {
-      flex: none;
-      margin: 0 0.5rem 0.4rem;
-      padding: 0.6rem 0.7rem;
+      position: fixed;
+      inset: 0;
+      z-index: 10;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 1rem;
+      background: rgba(6, 9, 16, 0.74);
+      opacity: 0;
+      visibility: hidden;
+      transition: opacity 160ms ease, visibility 0s linear 160ms;
+    }
+    .settings[data-open] {
+      opacity: 1;
+      visibility: visible;
+      transition: opacity 160ms ease, visibility 0s;
+    }
+    .settings-panel {
+      width: 100%;
+      max-width: 22rem;
+      padding: 1rem 1rem 0.9rem;
       background: var(--panel);
       border: 1px solid var(--panel-hi);
-      border-radius: 12px;
+      border-radius: 16px;
+      box-shadow: 0 12px 32px rgba(0, 0, 0, 0.55);
+      transform: translateY(0.6rem);
+      transition: transform 160ms ease;
     }
-    .settings[hidden] { display: none; }
+    .settings[data-open] .settings-panel { transform: translateY(0); }
     .settings-label {
       display: block;
-      font-size: 0.8rem;
-      color: var(--text-dim);
-      margin-bottom: 0.4rem;
+      margin: 0 0 0.6rem;
+      font-size: 1rem;
+      font-weight: 700;
+      color: var(--text);
     }
     /* 2 to 12 is eleven buttons — far too many for one row on a phone. */
     .count-row {
@@ -178,9 +208,24 @@
     }
     .count[aria-pressed="true"] { background: var(--panel-hi); }
     .settings-note {
-      margin: 0.45rem 0 0;
-      font-size: 0.72rem;
+      margin: 0.7rem 0 0.9rem;
+      font-size: 0.78rem;
       color: var(--text-dim);
+    }
+    .settings-close {
+      width: 100%;
+      border: 1px solid var(--panel-hi);
+      background: var(--bg);
+      color: var(--text);
+      border-radius: 10px;
+      font-size: 1rem;
+      font-weight: 700;
+      padding: 0.6rem 0;
+      cursor: pointer;
+      touch-action: manipulation;
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .settings, .settings-panel { transition: none; }
     }
 
     .stage {
@@ -275,10 +320,14 @@
             aria-label="Settings: number of players" aria-expanded="false">&#10043;</button>
   </div>
 
-  <div class="settings" id="settings" hidden>
-    <span class="settings-label">Number of players</span>
-    <div class="count-row" id="count-row"></div>
-    <p class="settings-note">Changing this starts a new game.</p>
+  <div class="settings" id="settings">
+    <div class="settings-panel" role="dialog" aria-modal="true"
+         aria-labelledby="settings-title">
+      <h2 class="settings-label" id="settings-title">Number of players</h2>
+      <div class="count-row" id="count-row"></div>
+      <p class="settings-note">Changing this starts a new game.</p>
+      <button id="settings-close" class="settings-close" type="button">Close</button>
+    </div>
   </div>
 
   <main class="stage">
