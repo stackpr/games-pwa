@@ -102,11 +102,23 @@ All client-side; no server APIs:
 
 ```
 python3 -m http.server 8080     # from repo root; SW requires http(s), file:// won't work
-cd _tests && npm install && npm test    # Playwright suite (starts its own server)
+cd _tests && npm ci && npm test         # Playwright suite (starts its own server)
 ```
 
 Service workers cache aggressively — when testing changes, use DevTools →
 Application → "Update on reload", or bump `CACHE_VERSION`.
+
+`_tests/` holds the Playwright suite: shell (manifest, icons, service
+worker, offline, install prompt), one spec per game, and `publishing.spec.js`
+guarding what reaches the deployed site. Run it before merging to
+`gh-pages`.
+
+Use `npm ci`, never `npm install`, and never run `npx playwright install`.
+The `@playwright/test` version is pinned to match a browser build that is
+already provisioned; `npm ci` honours that pin and the browsers need no
+download. Upgrading means bumping the package and the browser together —
+doing either alone leaves a runner that cannot launch its browser. See
+`_tests/README.md`.
 
 ## Cache busting
 
@@ -122,19 +134,51 @@ handler matches with `ignoreSearch: true`. Two consequences:
   makes `?level=2` and `?level=3` the same cache entry.
 
 `sw.js` itself cannot be busted this way — the browser refetches it on
-every navigation (bypassing its own HTTP cache), but a CDN in front of
-Pages may hold an old copy until its TTL expires. If deploys are slow to
-appear, that is the layer to purge; a cache rule that bypasses `/sw.js`
-removes the delay permanently.
+every navigation (bypassing its own HTTP cache), but Cloudflare sits in
+front of Pages and may hold an old copy until its TTL expires. Measured on
+the live site: `/sw.js` is edge-cached with `cache-control: max-age=600`,
+and `/` comes back `cf-cache-status: DYNAMIC` (not edge-cached at all). So
+the CDN can delay a deploy by **at most ~10 minutes**, and never touches
+the home page. A cache rule bypassing `/sw.js` would remove even that;
+it has not been added.
 
-`_tests/` holds the Playwright suite: shell (manifest, icons, service
-worker, offline, install prompt), one spec per game, and `publishing.spec.js`
-guarding what reaches the deployed site. Run it before merging to
-`gh-pages`. The `@playwright/test` version is pinned so it matches the
-preinstalled browser build — bump it and the browser together.
+That ceiling matters for diagnosis: anything still stale after ten minutes
+is not the CDN. See Deploying.
 
 ## Deploying
 
-GitHub Pages serves the `gh-pages` branch. Feature work happens on
-`claude/*` branches; merging to `gh-pages` deploys. Keep `CNAME`
+GitHub Pages serves the `gh-pages` branch, which is also the default
+branch — there is no staging step, so merging to `gh-pages` publishes
+immediately. Feature work happens on `claude/*` branches. Keep `CNAME`
 (`games.payne.run`) at the repo root on the deployed branch.
+
+### A merged PR ends its branch's life
+
+Once a PR merges, that branch is spent. Start the next piece of work from
+a fresh base:
+
+```bash
+git fetch origin gh-pages
+git checkout -B <branch-name> origin/gh-pages
+```
+
+Pushing another commit to a branch whose PR already merged is the failure
+mode to avoid: the commit lands on GitHub, the branch looks updated, and
+nothing deploys, because no PR is open to carry it. That is exactly how the
+footer-version commit got stranded. **Push first, then say it is ready to
+merge** — never the reverse. If the branch still holds unmerged commits,
+rebase them onto the new base rather than discarding them.
+
+### When a change isn't live
+
+Work down this list; it is ordered by how often each one is the answer.
+
+1. **The commit never merged.** Check that the change is actually in
+   `origin/gh-pages` (`git log origin/gh-pages --oneline`), not just pushed
+   to a branch. Every deploy gap found so far has been this.
+2. **`CACHE_VERSION` wasn't bumped.** Installed clients keep serving the
+   old precache until the version changes. Compare the version the live
+   site reports in the home-page footer against `sw.js` on `gh-pages`.
+3. **Pages hasn't finished building.** Usually under a minute.
+4. **Cloudflare.** Only plausible within ~10 minutes of a deploy, and only
+   for `/sw.js` — see Cache busting for the measured numbers.

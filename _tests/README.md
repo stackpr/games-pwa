@@ -44,14 +44,31 @@ same port is reused.
 
 ```
 cd _tests
-npm install          # first time only
-npx playwright install chromium   # first time only, downloads the browser
+npm ci               # first time only — see "Installing" below
 npm test             # run everything
 npm test -- --headed # watch it run
 npm test -- specs/scorekeeper.spec.js   # one file
 npm test -- -g "undo"                   # by test name
 npm run report       # open the HTML report after a CI-style run
 ```
+
+## Installing
+
+Two rules, both about keeping the runner and the browser in step:
+
+- **`npm ci`, not `npm install`.** `@playwright/test` is pinned to an exact
+  version in `package.json` (no `^`), and `npm ci` installs the lockfile
+  verbatim. `npm install` is free to resolve something newer, which is how
+  the runner drifts away from the browser build it has to drive.
+- **Never run `npx playwright install`.** The browsers are already on disk
+  and `PLAYWRIGHT_BROWSERS_PATH` points at them; downloading again either
+  wastes the bandwidth or installs a revision the pinned runner refuses to
+  launch. Upgrading is a deliberate two-part job — bump `@playwright/test`
+  and provision the matching browser together, never one alone.
+
+A fresh checkout or a new container starts with no `node_modules`, so the
+first `npx playwright test` fails with `MODULE_NOT_FOUND` pointing at
+`playwright.config.js`. That means "run `npm ci`", nothing more.
 
 Chromium only, on purpose: the behaviour under test (service worker,
 `beforeinstallprompt`) is Chromium-specific, and the iOS paths are covered
