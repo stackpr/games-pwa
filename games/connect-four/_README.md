@@ -34,13 +34,28 @@ board tells you where you can still play.
 - Player 1 drops first and the players alternate strictly; the turn is
   simply `moves.length % 2`.
 - A win is any four in a row horizontally, vertically, or on either
-  diagonal. The four winning pieces pulse.
+  diagonal. The four winning pieces are ringed in `--player-ink` and pulse
+  — the site-wide win marker, shared with tic-tac-toe. See Marking the
+  winning line in CLAUDE.md. The ring carries the highlight on its own, so
+  it still reads with the animation at its dimmest or switched off.
 - **The game stops at a win.** Every column is disabled, so no piece can
   land after the fact.
 - If the board fills with no line, it is a draw.
 - Only one win is ever reported. A position cannot legally contain two
   separate wins, since play stops at the first, but if a corrupt save
   contained one the scan reports the first it finds and stops.
+
+## The turn indicator
+
+Reads `Next: ⬤` while playing and `⬤ Wins!` once won, in the piece's own
+color — the disc says whose turn it is, so the words only carry state. See
+The turn indicator in CLAUDE.md for the shared rules.
+
+A Connect Four piece has no shape to distinguish it, only color, so this
+indicator is the one place on the site where the visible signal really is
+color alone. That is why the visually-hidden `#turn-label` matters more
+here than in tic-tac-toe: it is the only thing naming the player for a
+screen reader.
 
 ## The drop animation
 
@@ -76,10 +91,30 @@ asserts the computed `box-shadow` is not `none` so that cannot recur.
 ## Layout
 
 The board holds a 7:6 aspect ratio and is capped by both the available
-width and the available height (`(100dvh - 11rem) * 7 / 6`), so it grows to
-fill a phone in portrait but never pushes the turn indicator or the top bar
-off-screen, and never scrolls. Cells are drawn as circular holes cut out of
-the frame — the gaps between them are the frame color showing through.
+width and the available height (`(100dvh - var(--chrome)) * 7 / 6`), so it
+grows to fill a phone in portrait but never pushes the turn indicator or
+the top bar off-screen, and never scrolls. Cells are drawn as circular
+holes cut out of the frame — the gaps between them are the frame color
+showing through.
+
+In portrait the leftover space is split evenly above and below the board by
+a `body::after` spacer, so the board sits centered and the status line
+centers in the gap above it rather than hugging the top bar. Two traps live
+in that arrangement, and both fail silently:
+
+- **The portrait block must come after `.stage` and `.board` in the
+  stylesheet.** A media query adds no specificity, so `orientation:
+  portrait` overrides lose to the base rules on source order alone. Written
+  above them, the board simply keeps its old sizing and nothing looks
+  wrong until you measure it.
+- **`max-height` on the board must be `none` in portrait.** The stage is
+  content-sized there, so a percentage max-height resolves against a height
+  that depends on the board itself. That cycle resolves to a squashed board
+  with visibly non-square cells. `--chrome` reserves the vertical space
+  instead, which is why it is generous (`11.5rem`) — it covers the status
+  band *and* the matching spacer below the board.
+
+A spec asserts both the 7:6 ratio and the centering at two viewport sizes.
 
 ## Persisted state
 

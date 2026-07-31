@@ -18,7 +18,9 @@ until someone resets it.
 
 - **Tap anywhere in a team's column** to add a point. The tap target is the
   whole column rather than a button, because it is used at arm's length.
-- **&minus;1** at the bottom of each column corrects a misfire.
+- **&minus;1** and **+5** split the strip along the bottom of each column,
+  left and right. &minus;1 corrects a misfire; +5 is for sports that score
+  in fives, and for catching up when the tapping fell behind the game.
 - **Undo** reverts the last change (see grouping below).
 - **Reset** zeroes both teams, behind a confirm, and is itself undoable.
 - **Team names** are editable in place and persist.
@@ -45,6 +47,17 @@ burst stays one group however long it runs. Three things close a group:
 A group also never spans a page load. Restored history has no matching
 undo snapshot in memory, so merging a fresh tap into a pre-reload group
 would produce a change that Undo could not reach.
+
+**+5 is not a special case.** It calls the same `bump()` with a delta of
+five, and grouping keys on the team and the *sign* of the change, never on
+its size. So +5 is indistinguishable from five quick taps: it opens or
+extends a group the same way, a +1 straight after reads as `+6` rather
+than `+5, +1`, and one Undo takes the whole thing back. The same follows
+for the closing rules — a pause after +5 leaves `+5, +1`, and a &minus;1
+after it leaves `+5, -1`, because the direction changed.
+
+Adding a +10 or a +2 later needs no grouping work for the same reason;
+only a button and a `bump(team, n)` call.
 
 ## Score history
 

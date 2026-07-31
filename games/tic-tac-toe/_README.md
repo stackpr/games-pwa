@@ -29,11 +29,29 @@ the squares are reachable by Tab as ordinary buttons.
 
 - Player 1 (X) always moves first; the turn is `moves.length % 2`.
 - A win is three in a row along any of the eight lines — three rows, three
-  columns, two diagonals. The winning three pulse.
+  columns, two diagonals. The winning three are highlighted; see below.
 - **The game stops at a win**, so the ninth square cannot be filled after a
   win on the eighth.
 - A full board with no line is a draw.
 - The first matching line wins if a corrupt save somehow contains two.
+
+## The turn indicator
+
+Reads `Next: X` while playing and `X Wins!` once won — the mark, not the
+words, says whose turn it is, and it is the same SVG the next tap will
+place. See The turn indicator in CLAUDE.md for the shared rules.
+
+The one thing specific to this game: connect-four shows a plain colored
+disc there because a Connect Four piece has no shape to show, while here
+the indicator shows the real X or O. That makes the status line readable
+with no color vision at all, which is the same reason the marks are shapes
+on the board.
+
+Dropping "Player 1" from the visible line is what lets it run at
+`clamp(1.9rem, 9.5vw, 3.5rem)` without wrapping — `Player 1 (X) to move`
+wrapped to two lines on a 390px phone at that size and pushed the disc away
+from its text. The full sentence still exists for screen readers in the
+visually-hidden `#turn-label`.
 
 ## Marks and color
 
@@ -48,13 +66,36 @@ mark animates — restored and post-Undo marks are simply present, matching
 connect-four's rule that a reloaded board should not replay itself.
 `prefers-reduced-motion: reduce` turns this off.
 
-## Layout
+## The winning line
 
-The board is square, capped by width, by height (`100dvh - 11rem`) and by
-`30rem` so it does not become comically large on a desktop monitor. The
-turn indicator sits above it in the same position and the same markup as
-connect-four's, which is the point — the two games should feel like one
+The three winning squares are ringed in `--player-ink` and pulse — the
+site-wide way of marking a win, the same treatment connect-four gives its
+four discs. See Marking the winning line in CLAUDE.md for the rules; the
+one worth repeating here is that **the ring, not the pulse, carries the
+highlight**. It is what marks the line at the dim half of the animation,
+under `prefers-reduced-motion: reduce`, and in a screenshot.
+
+What differs between the two games is only the unit being ringed. A
+connect-four piece is a disc, so the ring is round and sits on the disc. A
+tic-tac-toe mark is an open stroked shape with no fill to ring, so the
+square is ringed instead, matching the cell's own 10px radius. Ringing the
+X and O themselves was the alternative and it looked like a stroke weight
+bug rather than a highlight.
+
+The board is square, capped by width, by height (`100dvh - var(--chrome)`)
+and by `30rem` so it does not become comically large on a desktop monitor.
+The turn indicator sits above it in the same position and the same markup
+as connect-four's, which is the point — the two games should feel like one
 family.
+
+In portrait a `body::after` spacer splits the leftover space evenly above
+and below the board, centering the board and letting the status line center
+in the gap above it. Connect-four's `_README.md` documents the two silent
+traps in that arrangement — the portrait block has to sit after `.stage`
+and `.board` because a media query adds no specificity, and the board's
+`max-height` has to be `none` there or a self-referential percentage
+squashes it. Both apply identically here; a spec asserts the board *and*
+its cells stay square.
 
 ## Persisted state
 

@@ -51,6 +51,82 @@ test.describe('scoring', () => {
   });
 });
 
+test.describe('the +5 button', () => {
+  test('adds five and records one entry', async ({ page }) => {
+    await page.locator('#plus5-a').click();
+    await expect(score(page, 'a')).toHaveText('5');
+    await expect(history(page, 'a')).toHaveText('+5');
+  });
+
+  test('is indistinguishable from five taps', async ({ page }) => {
+    // The whole contract: same score, same history, same undo depth.
+    await page.locator('#plus5-a').click();
+    await tap(page, 'b', 5);
+    await expect(score(page, 'a')).toHaveText(await score(page, 'b').innerText());
+    await expect(history(page, 'a')).toHaveText(await history(page, 'b').innerText());
+  });
+
+  test('+5 then +1 reads as +6, not two entries', async ({ page }) => {
+    await page.locator('#plus5-a').click();
+    await tap(page, 'a');
+    await expect(score(page, 'a')).toHaveText('6');
+    await expect(history(page, 'a')).toHaveText('+6');
+  });
+
+  test('+1 then +5 also merges', async ({ page }) => {
+    await tap(page, 'a');
+    await page.locator('#plus5-a').click();
+    await expect(score(page, 'a')).toHaveText('6');
+    await expect(history(page, 'a')).toHaveText('+6');
+  });
+
+  test('a pause closes the group, exactly as with taps', async ({ page }) => {
+    await page.locator('#plus5-a').click();
+    await page.waitForTimeout(PAST_GROUP_WINDOW);
+    await tap(page, 'a');
+    await expect(score(page, 'a')).toHaveText('6');
+    await expect(history(page, 'a')).toHaveText('+5, +1');
+  });
+
+  test('undo reverts the whole group a +5 opened', async ({ page }) => {
+    await page.locator('#plus5-a').click();
+    await tap(page, 'a');
+    await page.locator('#undo').click();
+    await expect(score(page, 'a')).toHaveText('0');
+    await expect(history(page, 'a')).toHaveText('');
+  });
+
+  test('a minus closes the group rather than merging', async ({ page }) => {
+    // Opposite signs never group, so +5 then -1 stays two entries.
+    await page.locator('#plus5-a').click();
+    await page.locator('#minus-a').click();
+    await expect(score(page, 'a')).toHaveText('4');
+    await expect(history(page, 'a')).toHaveText('+5, -1');
+  });
+
+  test('the two halves split the strip side by side', async ({ page }) => {
+    const boxes = await page.evaluate(() => {
+      const r = id => {
+        const b = document.getElementById(id).getBoundingClientRect();
+        return { left: b.left, right: b.right, top: b.top, width: b.width, height: b.height };
+      };
+      return { minus: r('minus-a'), plus: r('plus5-a') };
+    });
+
+    expect(boxes.minus.right, '-1 sits left of +5').toBeLessThanOrEqual(boxes.plus.left + 1);
+    expect(Math.abs(boxes.minus.top - boxes.plus.top), 'same row').toBeLessThan(1);
+    expect(Math.abs(boxes.minus.width - boxes.plus.width), 'equal halves').toBeLessThan(3);
+    // Half the width, so it needs the height back to stay thumb-sized.
+    expect(boxes.minus.height, 'tall enough to hit').toBeGreaterThan(52);
+  });
+
+  test('each team has its own +5', async ({ page }) => {
+    await page.locator('#plus5-b').click();
+    await expect(score(page, 'b')).toHaveText('5');
+    await expect(score(page, 'a')).toHaveText('0');
+  });
+});
+
 test.describe('tap grouping', () => {
   test('a rapid burst collapses into one entry', async ({ page }) => {
     await tap(page, 'a', 5);

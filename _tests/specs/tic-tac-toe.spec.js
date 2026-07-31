@@ -6,6 +6,9 @@ const URL = '/games/tic-tac-toe/';
 const square = (page, i) => page.locator(`.cell[data-index="${i}"]`);
 const turnText = page => page.locator('#turn-text');
 const turn = page => page.locator('#turn');
+// The visible line is only "Next:" / "Wins!" — the mark says who. This is
+// the screen-reader label that still names the player.
+const turnLabel = page => page.locator('#turn-label');
 
 /** Plays the given squares in order, alternating X and O. */
 async function playAll(page, indexes) {
@@ -23,10 +26,20 @@ test.beforeEach(async ({ page }) => {
 });
 
 test.describe('playing', () => {
-  test('starts empty with player 1 (X) to move', async ({ page }) => {
-    await expect(turnText(page)).toHaveText('Player 1 (X) to move');
+  test('starts empty with player 1 to move', async ({ page }) => {
+    await expect(turnText(page)).toHaveText('Next:');
     await expect(turn(page)).toHaveAttribute('data-player', '1');
+    await expect(turnLabel(page)).toHaveText('Player 1 (X) to move');
     await expect(page.locator('.cell[data-p]')).toHaveCount(0);
+  });
+
+  test('the indicator shows the mark the player will place', async ({ page }) => {
+    // The mark, not just the color, is how the label stays one line while
+    // still saying which side is up. See Player colors in CLAUDE.md.
+    await expect(page.locator('#turn-disc svg.mark-x')).toHaveCount(1);
+    await square(page, 0).click();
+    await expect(page.locator('#turn-disc svg.mark-o')).toHaveCount(1);
+    await expect(page.locator('#turn-disc svg.mark-x')).toHaveCount(0);
   });
 
   test('the board is nine squares', async ({ page }) => {
@@ -45,10 +58,11 @@ test.describe('playing', () => {
 
   test('players alternate', async ({ page }) => {
     await square(page, 0).click();
-    await expect(turnText(page)).toHaveText('Player 2 (O) to move');
     await expect(turn(page)).toHaveAttribute('data-player', '2');
+    await expect(turnLabel(page)).toHaveText('Player 2 (O) to move');
     await square(page, 1).click();
-    await expect(turnText(page)).toHaveText('Player 1 (X) to move');
+    await expect(turn(page)).toHaveAttribute('data-player', '1');
+    await expect(turnLabel(page)).toHaveText('Player 1 (X) to move');
   });
 
   test('a played square is disabled and cannot be overwritten', async ({ page }) => {
@@ -62,8 +76,9 @@ test.describe('playing', () => {
 test.describe('winning and drawing', () => {
   test('three in a row wins and stops the game', async ({ page }) => {
     await playAll(page, X_TOP_ROW);
-    await expect(turnText(page)).toHaveText('Player 1 (X) wins');
+    await expect(turnText(page)).toHaveText('Wins!');
     await expect(turn(page)).toHaveAttribute('data-state', 'over');
+    await expect(turnLabel(page)).toHaveText('Player 1 (X) wins');
     await expect(page.locator('.cell[data-win]')).toHaveCount(3);
 
     for (let i = 0; i < 9; i++) await expect(square(page, i)).toBeDisabled();
@@ -71,18 +86,18 @@ test.describe('winning and drawing', () => {
 
   test('a column wins', async ({ page }) => {
     await playAll(page, [0, 1, 3, 4, 6]);
-    await expect(turnText(page)).toHaveText('Player 1 (X) wins');
+    await expect(turnText(page)).toHaveText('Wins!');
   });
 
   test('a diagonal wins', async ({ page }) => {
     await playAll(page, [0, 1, 4, 2, 8]);
-    await expect(turnText(page)).toHaveText('Player 1 (X) wins');
+    await expect(turnText(page)).toHaveText('Wins!');
   });
 
   test('player 2 can win', async ({ page }) => {
     // X: 0, 1, 8 / O: 3, 4, 5 — O takes the middle row.
     await playAll(page, [0, 3, 1, 4, 8, 5]);
-    await expect(turnText(page)).toHaveText('Player 2 (O) wins');
+    await expect(turnText(page)).toHaveText('Wins!');
     await expect(turn(page)).toHaveAttribute('data-player', '2');
   });
 
@@ -96,7 +111,7 @@ test.describe('winning and drawing', () => {
 
   test('a full board with no line is a draw', async ({ page }) => {
     await playAll(page, DRAWN);
-    await expect(turnText(page)).toHaveText('Draw — nobody wins');
+    await expect(turnText(page)).toHaveText('Draw');
     await expect(turn(page)).toHaveAttribute('data-state', 'over');
     await expect(turn(page)).toHaveAttribute('data-player', 'none');
     await expect(page.locator('.cell[data-p]')).toHaveCount(9);
@@ -118,14 +133,14 @@ test.describe('undo and reset', () => {
     await square(page, 4).click();
     await page.locator('#undo').click();
     await expect(page.locator('.cell[data-p]')).toHaveCount(0);
-    await expect(turnText(page)).toHaveText('Player 1 (X) to move');
+    await expect(turnText(page)).toHaveText('Next:');
     await expect(square(page, 4)).toBeEnabled();
   });
 
   test('undo after a win resumes the game', async ({ page }) => {
     await playAll(page, X_TOP_ROW);
     await page.locator('#undo').click();
-    await expect(turnText(page)).toHaveText('Player 1 (X) to move');
+    await expect(turnText(page)).toHaveText('Next:');
     await expect(page.locator('.cell[data-win]')).toHaveCount(0);
     await expect(square(page, 2)).toBeEnabled();
   });
@@ -134,7 +149,7 @@ test.describe('undo and reset', () => {
     await playAll(page, [0, 4, 8]);
     await page.locator('#reset').click();
     await expect(page.locator('.cell[data-p]')).toHaveCount(0);
-    await expect(turnText(page)).toHaveText('Player 1 (X) to move');
+    await expect(turnText(page)).toHaveText('Next:');
   });
 });
 
@@ -144,7 +159,7 @@ test.describe('persistence', () => {
     await page.reload();
     await expect(square(page, 4)).toHaveAttribute('data-p', '1');
     await expect(square(page, 0)).toHaveAttribute('data-p', '2');
-    await expect(turnText(page)).toHaveText('Player 1 (X) to move');
+    await expect(turnText(page)).toHaveText('Next:');
   });
 
   test('only the move list is stored', async ({ page }) => {
@@ -159,7 +174,7 @@ test.describe('persistence', () => {
       localStorage.setItem('games.tic-tac-toe.v1', 'not json'));
     await page.reload();
     await expect(page.locator('.cell[data-p]')).toHaveCount(0);
-    await expect(turnText(page)).toHaveText('Player 1 (X) to move');
+    await expect(turnText(page)).toHaveText('Next:');
   });
 
   test('a repeated saved square truncates the game there', async ({ page }) => {
@@ -168,7 +183,7 @@ test.describe('persistence', () => {
       'games.tic-tac-toe.v1', JSON.stringify({ moves: [0, 1, 0, 5] })));
     await page.reload();
     await expect(page.locator('.cell[data-p]')).toHaveCount(2);
-    await expect(turnText(page)).toHaveText('Player 1 (X) to move');
+    await expect(turnText(page)).toHaveText('Next:');
   });
 });
 
@@ -182,8 +197,8 @@ test.describe('presentation', () => {
       return {
         p1: root.getPropertyValue('--player-1').trim(),
         p2: root.getPropertyValue('--player-2').trim(),
-        x: strokeOf('.mark-x'),
-        o: strokeOf('.mark-o'),
+        x: strokeOf('.cell .mark-x'),
+        o: strokeOf('.cell .mark-o'),
       };
     });
 
@@ -193,15 +208,70 @@ test.describe('presentation', () => {
     expect(colors.o).toBe('rgb(216, 74, 53)');
   });
 
-  test('the turn indicator names the player, not just a color', async ({ page }) => {
-    await expect(turnText(page)).toContainText('Player 1');
+  test('the winning line is ringed in the shared ink color', async ({ page }) => {
+    // Same treatment as connect-four: the ring, not the pulse, is what
+    // marks the line when the animation is dim or switched off. box-shadow
+    // discards the whole declaration if given a percentage length, so the
+    // computed value is asserted rather than the stylesheet text.
+    await playAll(page, X_TOP_ROW);
+
+    const shadows = await page.evaluate(() =>
+      [...document.querySelectorAll('.cell[data-win]')]
+        .map(c => getComputedStyle(c).boxShadow));
+
+    expect(shadows).toHaveLength(3);
+    for (const shadow of shadows) {
+      expect(shadow).not.toBe('none');
+      expect(shadow).toContain('rgb(255, 255, 255)');
+    }
+
+    const plain = await page.evaluate(() =>
+      getComputedStyle(document.querySelector('.cell:not([data-win])')).boxShadow);
+    expect(plain).toBe('none');
+  });
+
+  test('the ring survives reduced motion, which drops the pulse', async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await playAll(page, X_TOP_ROW);
+
+    const win = await page.evaluate(() => {
+      const cell = document.querySelector('.cell[data-win]');
+      const style = getComputedStyle(cell);
+      return { shadow: style.boxShadow, animation: style.animationName };
+    });
+
+    expect(win.animation).toBe('none');
+    expect(win.shadow).toContain('rgb(255, 255, 255)');
+  });
+
+  test('the accessible label names the player the visible line omits', async ({ page }) => {
+    // The visible line is just "Next: X" — the mark carries the identity.
+    // A screen reader gets nothing from an SVG glyph, so the label still
+    // spells it out. See Player colors in CLAUDE.md.
+    await expect(turnText(page)).toHaveText('Next:');
+    await expect(turnLabel(page)).toHaveText('Player 1 (X) to move');
     await square(page, 0).click();
-    await expect(turnText(page)).toContainText('Player 2');
+    await expect(turnLabel(page)).toHaveText('Player 2 (O) to move');
+  });
+
+  test('the mark sits after "Next:" while playing and before "Wins!"', async ({ page }) => {
+    const sides = async () => page.evaluate(() => ({
+      disc: document.getElementById('turn-disc').getBoundingClientRect().left,
+      text: document.getElementById('turn-text').getBoundingClientRect().left,
+    }));
+
+    const playing = await sides();
+    expect(playing.text, '"Next:" comes before the mark').toBeLessThan(playing.disc);
+
+    await playAll(page, X_TOP_ROW);
+    const won = await sides();
+    expect(won.disc, 'the mark comes before "Wins!"').toBeLessThan(won.text);
   });
 
   test('marks are inline SVG, not raster images', async ({ page }) => {
     await playAll(page, [0, 1]);
-    await expect(page.locator('svg.mark')).toHaveCount(2);
+    // Scoped to the board: the turn indicator carries a .mark of its own.
+    await expect(page.locator('.cell svg.mark')).toHaveCount(2);
     await expect(page.locator('img')).toHaveCount(0);
   });
 
@@ -209,6 +279,31 @@ test.describe('presentation', () => {
     const external = trackExternalRequests(page);
     await page.goto(URL);
     expect(external).toEqual([]);
+  });
+
+  test('the board stays square and the status centers above it', async ({ page }) => {
+    for (const size of [{ width: 390, height: 844 }, { width: 320, height: 568 }]) {
+      await page.setViewportSize(size);
+      const m = await page.evaluate(() => {
+        const bar = document.querySelector('.topbar').getBoundingClientRect();
+        const turn = document.getElementById('turn').getBoundingClientRect();
+        const board = document.getElementById('board').getBoundingClientRect();
+        const cell = document.querySelector('.cell').getBoundingClientRect();
+        return {
+          ratio: board.width / board.height,
+          cellRatio: cell.width / cell.height,
+          turnMid: (turn.top + turn.bottom) / 2,
+          bandMid: (bar.bottom + board.top) / 2,
+        };
+      });
+      const at = `${size.width}x${size.height}`;
+      // In portrait the stage is content-sized, so a percentage max-height on
+      // the board is self-referential and silently squashes it. See _README.md.
+      expect(m.ratio, `board stays square at ${at}`).toBeCloseTo(1, 2);
+      expect(m.cellRatio, `cells stay square at ${at}`).toBeCloseTo(1, 1);
+      expect(Math.abs(m.turnMid - m.bandMid),
+        `status centered in the band above the board at ${at}`).toBeLessThan(2);
+    }
   });
 
   test('the board fits the viewport in portrait and landscape', async ({ page }) => {

@@ -107,19 +107,72 @@ Rules that come with this:
 
 - **Player 1 always goes first**, in every game. The turn is
   `moves.length % 2`, never a stored flag that can drift out of sync.
-- **Never let color be the only signal.** The turn indicator names the
-  player in text (`Player 2 to move`), and where a game can carry a shape
-  as well it should — tic-tac-toe's X and O are readable with no color
-  vision at all. Connect Four's pieces can only differ by color, which is
-  exactly why its status line is wordy.
+- **Never let color be the only signal.** Where a game can carry a shape it
+  should — tic-tac-toe's X and O are readable with no color vision at all,
+  which is why its turn indicator shows the actual mark rather than a
+  disc. Connect Four's pieces genuinely can only differ by color, so its
+  indicator leans on the accessible label below.
 - Games with no players — Counter — do not use these tokens. Its `--up` and
   `--down` are semantic, not identities, and should stay separate.
 
-The turn indicator itself is a shared pattern rather than shared code:
-a colored disc plus a text label, `aria-live="polite"`, driven by
-`data-player="1|2|none"` and `data-state="playing|over"` on the container.
-Connect Four and tic-tac-toe carry identical markup and CSS for it. Copy it
-into a new game rather than inventing a third variant.
+### The turn indicator
+
+A shared pattern rather than shared code — Connect Four and tic-tac-toe
+carry near-identical markup and CSS. Copy it into a new game rather than
+inventing a third variant.
+
+**The piece identifies the player; the words carry only the state.** The
+line reads `Next: ⬤` while playing and `⬤ Wins!` once won, never
+"Player 1". The piece is the game's own token — Connect Four shows its
+disc, tic-tac-toe shows the actual X or O — so the indicator previews
+exactly what the next tap places.
+
+Three things make that work:
+
+- **Size it for across-the-room reading.** `clamp(1.9rem, 9.5vw, 3.5rem)`
+  in portrait, where there is room above the board, dropping to a
+  height-based clamp in landscape where there is not. Dropping the player
+  name is what buys the space, and keeps the line unwrapped on a 320px
+  phone.
+- **The word order flips with the state**, via
+  `.turn[data-state="playing"] .turn-text { order: -1 }` — one rule, so
+  "Next:" leads and "Wins!" trails without duplicating markup.
+- **Keep a full sentence for screen readers.** A colored disc says nothing
+  to a screen reader and an SVG glyph says little more, so the visible text
+  and piece are `aria-hidden` and a `.visually-hidden` `#turn-label` holds
+  `Player 2 (O) to move`. The `aria-live="polite"` container announces that,
+  not the abbreviation.
+
+The container is driven by `data-player="1|2|none"` and
+`data-state="playing|over"`; `none` hides the piece for a draw.
+
+Reserve the board's vertical space with a `--chrome` token rather than a
+literal, so growing this indicator cannot silently push the board
+off-screen — that is a real failure mode, since the board sizes itself
+against `100dvh - var(--chrome)`.
+
+### Marking the winning line
+
+When a game ends in a win, the pieces that made the line are marked the
+same way everywhere: **an inset `box-shadow` ring in `--player-ink`, plus a
+brightness pulse.** The winning cells carry a `data-win` attribute and the
+CSS hangs off that. Three rules make it work:
+
+- **The ring must stand on its own, without the animation.** It is what
+  marks the line at the dim half of the pulse, under
+  `prefers-reduced-motion: reduce`, and in any screenshot. A pulse alone
+  reads as "nothing happened" half the time it is looked at. Reduced motion
+  drops the animation and keeps the ring.
+- **Ring the unit the game is played in** — the disc in Connect Four, the
+  whole square in tic-tac-toe. Match the piece's own border radius so the
+  ring traces it rather than boxing it.
+- **`box-shadow` lengths are px, never `%`.** A single percentage makes the
+  entire declaration invalid and the browser drops it silently — no error,
+  no ring, and pieces that quietly render flat. Both games have a spec
+  asserting the computed `box-shadow` is not `none`; copy it.
+
+White on both player colors is the reason `--player-ink` exists rather than
+each game picking a highlight — one identity, one marker.
 
 ## Install-prompt strategy (js/install.js)
 

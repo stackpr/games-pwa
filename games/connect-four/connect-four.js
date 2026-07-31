@@ -11,6 +11,7 @@
     board: document.getElementById('board'),
     turn: document.getElementById('turn'),
     turnText: document.getElementById('turn-text'),
+    turnLabel: document.getElementById('turn-label'),
     undo: document.getElementById('undo'),
     reset: document.getElementById('reset')
   };
@@ -167,20 +168,26 @@
     renderTurn();
   }
 
+  // The piece itself says whose turn it is, so the words carry only the
+  // state. turnLabel keeps the full sentence for screen readers, which get
+  // nothing from the color. See _README.md.
   function renderTurn() {
     if (view.winner) {
       el.turn.dataset.player = String(view.winner);
       el.turn.dataset.state = 'over';
-      el.turnText.textContent = `Player ${view.winner} wins`;
+      el.turnText.textContent = 'Wins!';
+      el.turnLabel.textContent = `Player ${view.winner} wins`;
     } else if (view.full) {
       el.turn.dataset.player = 'none';
       el.turn.dataset.state = 'over';
-      el.turnText.textContent = 'Draw — board full';
+      el.turnText.textContent = 'Draw';
+      el.turnLabel.textContent = 'Draw — board full';
     } else {
       const player = (moves.length % 2) + 1;
       el.turn.dataset.player = String(player);
       el.turn.dataset.state = 'playing';
-      el.turnText.textContent = `Player ${player} to move`;
+      el.turnText.textContent = 'Next:';
+      el.turnLabel.textContent = `Player ${player} to move`;
     }
   }
 
