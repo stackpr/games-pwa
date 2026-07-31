@@ -239,6 +239,68 @@ test.describe('the roll animation', () => {
     expect(new Set(tops).size, 'settled onto one row').toBe(1);
   });
 
+  test('three falling bounces, then a constant low patter', async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: null });
+    await page.reload();
+    await page.locator('.count[data-count="1"]').click();
+
+    // Sample the die's height every frame and read the apexes back off it.
+    const peaks = await page.evaluate(async () => {
+      const die = document.querySelector('.die');
+      const seen = [];
+      document.getElementById('roll').click();
+      const t0 = performance.now();
+      await new Promise(done => {
+        const tick = () => {
+          seen.push({ t: performance.now() - t0, y: parseFloat(die.style.top) });
+          if (performance.now() - t0 < 1600) requestAnimationFrame(tick);
+          else done();
+        };
+        requestAnimationFrame(tick);
+      });
+      const floor = Math.max(...seen.map(s => s.y));
+      const out = [];
+      for (let i = 1; i < seen.length - 1; i++) {
+        if (seen[i].y < seen[i - 1].y && seen[i].y <= seen[i + 1].y) {
+          out.push({ t: seen[i].t, height: floor - seen[i].y });
+        }
+      }
+      return { peaks: out, floor, last: seen[seen.length - 1].y };
+    });
+
+    const h = peaks.peaks.map(p => p.height);
+    expect(h.length, `hops seen: ${h.map(v => v.toFixed(1))}`).toBeGreaterThanOrEqual(6);
+
+    // Three bounces, each meaningfully lower than the last.
+    expect(h[0]).toBeGreaterThan(h[1] * 1.4);
+    expect(h[1]).toBeGreaterThan(h[2] * 1.4);
+    // Then a low patter that stays level rather than decaying away.
+    const low = h.slice(3, 6);
+    expect(Math.min(...low)).toBeGreaterThan(0);
+    expect(Math.max(...low) - Math.min(...low)).toBeLessThan(h[2] * 0.25);
+    expect(Math.max(...low)).toBeLessThan(h[2]);
+    // And it ends on the floor.
+    expect(peaks.last).toBeCloseTo(peaks.floor, 1);
+  });
+
+  test('the whole roll is under a second and a quarter', async ({ page }) => {
+    // It used to run ~1.8s, which read as slow motion.
+    await page.emulateMedia({ reducedMotion: null });
+    await page.reload();
+    const ms = await page.evaluate(async () => {
+      const t0 = performance.now();
+      document.getElementById('roll').click();
+      await new Promise(done => {
+        const check = () => (document.getElementById('roll').disabled
+          ? requestAnimationFrame(check) : done());
+        requestAnimationFrame(check);
+      });
+      return performance.now() - t0;
+    });
+    expect(ms).toBeLessThan(1250);
+    expect(ms, 'still long enough to read as a roll').toBeGreaterThan(400);
+  });
+
   test('Roll is disabled while the dice are in the air', async ({ page }) => {
     await page.emulateMedia({ reducedMotion: null });
     await page.reload();

@@ -79,22 +79,40 @@ tablet changes nothing about the simulation. Die size is derived from the
 number of dice in play — six dice are 14 units across, one die is 20 — and
 the landing slots are spread evenly with the leftover as gaps.
 
-The roll has two phases:
+The roll is a **scripted timeline, not a simulation.** A die drops in from
+above the tray, bounces three times at falling heights, then hops along at a
+constant low height until it reaches its slot:
 
-1. **Bounce** (1100ms) — each die gets a random position, velocity and spin,
-   then integrates against gravity with damped reflections off all four
-   walls. Faces flicker every 80ms while tumbling, so the dice read as
-   rolling rather than sliding.
-2. **Settle** (700ms, staggered 45ms per die) — each die eases from wherever
-   it was to its slot on the bottom row, and the real face is revealed. The
-   stagger is what makes them land one after another instead of snapping
-   into place together.
+| Stage | Duration | Height |
+| --- | --- | --- |
+| Drop in | 170ms | from above the tray to the floor |
+| Bounce 1–3 | 250ms × √apex | 1.00, 0.52, 0.27 of the peak |
+| Low hops ×3 | 250ms × √0.085 ≈ 73ms | a constant 0.085 |
 
-Rotation settles to the *nearest whole turn* rather than to zero, so a die
-that has spun 700° finishes at 720° instead of unwinding backwards.
+Roughly 965ms end to end, plus 35ms of stagger per die.
 
-`prefers-reduced-motion: reduce` skips both phases and places the dice
-directly, which is also what the specs use to stay deterministic.
+It began as real physics — random velocities integrated against gravity with
+damped wall reflections — and that was the wrong tool. Free physics gives a
+mushy, slow decay, no way to say "exactly three bounces", and no way to make
+the tail read as a die pattering to a stop rather than drifting. A timeline
+gives all three, and it is far easier to test: a spec samples the die's
+height every frame and reads the apexes straight back off it.
+
+Each hop is a parabola whose duration scales with **√apex**, the way a real
+bounce does. That is what keeps the low hops quick patters instead of slow
+floats — halving the height shortens the hop rather than just flattening it.
+
+Horizontal travel and spin both ease across the *whole* timeline rather than
+per hop, so a die drifts toward its slot while it bounces instead of sliding
+at the end. Rotation lands on the **nearest whole turn**, so a die that has
+spun 700° finishes at 720° rather than visibly unwinding.
+
+Faces flicker every 70ms while the die is still bouncing high, and the real
+face appears when the three big bounces are done — so the last stretch of
+low hops reads as a die that has already settled on its result.
+
+`prefers-reduced-motion: reduce` skips the whole timeline and places the
+dice directly, which is also what the specs use to stay deterministic.
 
 Two things about this that are easy to get wrong:
 
@@ -109,6 +127,32 @@ Two things about this that are easy to get wrong:
   vanished. The pip grid is a separate absolutely-positioned child with
   `inset: 17%`, which does resolve against the die. A spec asserts the pips
   have real width.
+
+## Surviving a half-updated client
+
+Every listener is bound through a small null-tolerant `on()` helper rather
+than `el.thing.addEventListener` directly. That is not defensive
+programming for its own sake — it is a fix for a real failure.
+
+`sw.js` calls `skipWaiting()` on install and `clients.claim()` on activate,
+so a new service worker can take over a page **that is already loading**.
+The HTML can come from the outgoing worker and the script from the incoming
+one. When the settings overlay landed, this page's script gained a hard
+dependency on a `#settings-close` button that the previous release's markup
+did not have, so on those loads `el.settingsClose.addEventListener` threw,
+the whole IIFE aborted, and the page rendered **no dice, no seats and no
+working buttons** — which is exactly how it was reported.
+
+Two rules come out of it:
+
+- A missing control should cost that control and nothing else. One `null`
+  must never take the game down with it.
+- More generally, **a game's script has to tolerate markup from the
+  neighbouring release.** Adding an element and using it in the same version
+  is normal and fine; assuming it exists is what breaks.
+
+A spec covers this by intercepting the page HTML, deleting the Close button
+and asserting the game still deals its dice.
 
 ## The scoreboard
 

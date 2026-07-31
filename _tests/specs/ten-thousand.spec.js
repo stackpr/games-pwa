@@ -291,6 +291,31 @@ test.describe('settings', () => {
     await expect(status(page)).toHaveText('P1 to roll');
   });
 
+  test('the game still loads if the markup is from an older release', async ({ page }) => {
+    // sw.js calls skipWaiting() + clients.claim(), so a new worker can take
+    // over mid-load and pair older HTML with newer script. A missing control
+    // must cost that control, not the whole page. See _README.md.
+    await page.route('**/games/ten-thousand/**', async route => {
+      if (!route.request().url().match(/ten-thousand\/(index\.html)?(\?|$)/)) {
+        return route.continue();
+      }
+      const res = await route.fetch();
+      const body = (await res.text())
+        .replace(/<button id="settings-close"[\s\S]*?<\/button>/, '');
+      await route.fulfill({ response: res, body });
+    });
+
+    await page.goto(URL);
+    await clearState(page);
+
+    // Everything that does not depend on the missing node still works.
+    await expect(page.locator('#settings-close')).toHaveCount(0);
+    await expect(page.locator('.seat')).toHaveCount(2);
+    await roll(page);
+    await expect(page.locator('.die[data-state="active"]')).toHaveCount(6);
+    await expect(page.locator('#settings-btn')).toBeEnabled();
+  });
+
   test('the panel floats over the board rather than pushing it', async ({ page }) => {
     // Inline, the panel competed with the tray for the height the tray
     // sizes itself against. See _README.md.
