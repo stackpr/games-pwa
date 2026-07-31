@@ -1,0 +1,70 @@
+/*
+ * Shared dice styling, paired with js/lib/dice.js. 10,000 and Dice both link
+ * this; the tray's size, background and any game-specific state (10,000's
+ * kept ring) stay in the game's own stylesheet.
+ *
+ * The die size comes from --die-size, which the library sets on the tray
+ * from the number of dice in play.
+ */
+.dice-tray {
+  position: relative;
+  aspect-ratio: 1;
+  overflow: hidden;
+}
+
+.die {
+  position: absolute;
+  width: var(--die-size, 14%);
+  height: var(--die-size, 14%);
+  padding: 0;
+  border: none;
+  border-radius: 16%;
+  background: var(--die, #eef1f8);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.45);
+  touch-action: manipulation;
+  will-change: left, top, transform;
+}
+
+/*
+ * The pip grid is inset rather than padded. Percentage padding resolves
+ * against the containing block's width, not the die's own size, which
+ * inflates the die and collapses the pips to nothing; percentage inset on an
+ * absolutely positioned child resolves against the die. See
+ * games/ten-thousand/_README.md.
+ */
+.pips {
+  position: absolute;
+  inset: 17%;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  grid-template-rows: repeat(3, 1fr);
+  gap: 8%;
+}
+
+.pip {
+  background: var(--die-ink, #10141f);
+  border-radius: 50%;
+  opacity: 0;
+}
+
+.die[data-face="1"] .pip:nth-child(5),
+.die[data-face="2"] .pip:nth-child(1),
+.die[data-face="2"] .pip:nth-child(9),
+.die[data-face="3"] .pip:nth-child(1),
+.die[data-face="3"] .pip:nth-child(5),
+.die[data-face="3"] .pip:nth-child(9),
+.die[data-face="4"] .pip:nth-child(1),
+.die[data-face="4"] .pip:nth-child(3),
+.die[data-face="4"] .pip:nth-child(7),
+.die[data-face="4"] .pip:nth-child(9),
+.die[data-face="5"] .pip:nth-child(1),
+.die[data-face="5"] .pip:nth-child(3),
+.die[data-face="5"] .pip:nth-child(5),
+.die[data-face="5"] .pip:nth-child(7),
+.die[data-face="5"] .pip:nth-child(9),
+.die[data-face="6"] .pip:nth-child(1),
+.die[data-face="6"] .pip:nth-child(3),
+.die[data-face="6"] .pip:nth-child(4),
+.die[data-face="6"] .pip:nth-child(6),
+.die[data-face="6"] .pip:nth-child(7),
+.die[data-face="6"] .pip:nth-child(9) { opacity: 1; }

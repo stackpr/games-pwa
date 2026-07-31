@@ -29,20 +29,15 @@
   let groupOpen = false;
 
   function load() {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        return {
-          a: Number.isInteger(parsed.a) ? parsed.a : 0,
-          b: Number.isInteger(parsed.b) ? parsed.b : 0,
-          nameA: typeof parsed.nameA === 'string' ? parsed.nameA : 'Team 1',
-          nameB: typeof parsed.nameB === 'string' ? parsed.nameB : 'Team 2',
-          events: loadEvents(parsed.events)
-        };
-      }
-    } catch (err) {
-      console.warn('Could not load saved scores:', err);
+    const parsed = Store.load(STORAGE_KEY);
+    if (parsed) {
+      return {
+        a: Number.isInteger(parsed.a) ? parsed.a : 0,
+        b: Number.isInteger(parsed.b) ? parsed.b : 0,
+        nameA: typeof parsed.nameA === 'string' ? parsed.nameA : 'Team 1',
+        nameB: typeof parsed.nameB === 'string' ? parsed.nameB : 'Team 2',
+        events: loadEvents(parsed.events)
+      };
     }
     return { a: 0, b: 0, nameA: 'Team 1', nameB: 'Team 2', events: [] };
   }
@@ -56,11 +51,7 @@
   }
 
   function save() {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-    } catch (err) {
-      console.warn('Could not save scores:', err);
-    }
+    Store.save(STORAGE_KEY, state);
   }
 
   function formatEvent(delta) {

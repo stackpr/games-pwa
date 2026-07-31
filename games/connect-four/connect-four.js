@@ -22,24 +22,13 @@
   let view = derive(moves);
 
   function load() {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        if (Array.isArray(parsed.moves)) return legalPrefix(parsed.moves);
-      }
-    } catch (err) {
-      console.warn('Could not load saved game:', err);
-    }
+    const parsed = Store.load(STORAGE_KEY);
+    if (parsed && Array.isArray(parsed.moves)) return legalPrefix(parsed.moves);
     return [];
   }
 
   function save() {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify({ moves }));
-    } catch (err) {
-      console.warn('Could not save game:', err);
-    }
+    Store.save(STORAGE_KEY, { moves });
   }
 
   // Keeps the longest run of moves that is actually playable, so a corrupt

@@ -25,8 +25,12 @@ manifest.webmanifest        PWA manifest (relative start_url/scope)
 sw.js                       Service worker (precache app shell, cache-first)
 _config.yml                 Pages build: keeps repo-only files unpublished
 css/app.css                 Shared styles for the home page
+css/players.css             Player identity colors (see Player colors)
+css/dice.css                Die and pip styling, paired with js/lib/dice.js
 js/games.js                 Game registry + home-page list rendering
 js/install.js               "Install this app" prompt logic
+js/lib/store.js             localStorage load/save, used by every game
+js/lib/dice.js              Dice tray: builds the dice, rolls them
 icons/                      App icons (see Images below)
 games/<slug>/index.html     One folder per game; each page is self-contained
 games/<slug>/_README.md     Why the game exists and how it works (unpublished)
@@ -39,6 +43,32 @@ which is what keeps `_tests/` and every `games/<slug>/_README.md` out of
 the deployed site. Do **not** add a `.nojekyll` file — it disables the
 build and with it every exclusion. Repo-only files that lack an underscore
 (`CLAUDE.md`, `README.md`) are listed in `_config.yml` instead.
+
+## Naming a game — check the trademark first
+
+**Never name a game after a trademark.** This is a hard rule, and it is
+checked *before* the name is written anywhere.
+
+Game *rules* are not copyrightable and are free to reimplement. Game
+*names* are trademarked, and most well-known board and dice games are. The
+rules being public is not permission to use the name.
+
+- **If the obvious name is a trademark, stop and ask** which name to use.
+  Do not pick a replacement silently, and do not proceed with the
+  trademarked name "for now" — it ends up in the slug, the storage key,
+  the precache list, the specs, the commit messages and the PR title, and
+  every one of those has to be rewritten afterwards.
+- Prefer the **traditional, descriptive or numeric** name: `10,000 (Dice)`
+  rather than the trademarked name for the same six-dice game, `Dice`
+  rather than a branded roller.
+- This applies to **commit messages and PR text as much as to code.** A
+  trademarked name in a commit is the expensive kind of mistake, because
+  removing it means rewriting history on a pushed branch.
+- Being unsure counts as a hit. Ask.
+
+Names already in the tree are not evidence that they were checked. If you
+notice one that looks trademarked, raise it rather than copying the
+pattern.
 
 ## Adding a game or tool
 
@@ -55,6 +85,29 @@ Use the `add-game` skill, or by hand:
 6. Namespace persisted state: `localStorage` keys look like
    `games.<slug>.v1` and store a single JSON object.
 7. Add `_tests/specs/<slug>.spec.js` and run the suite.
+
+## Shared code
+
+Games are self-contained by default — each owns its markup, its stylesheet
+and its logic. `js/lib/` is the exception, for the few things where a
+second copy would be a second set of bugs:
+
+| Module | What it owns |
+| --- | --- |
+| `js/lib/store.js` | `Store.load(key)` / `Store.save(key, value)`. Swallows and warns, because storage throws in Safari private mode, on a full quota, and when a user blocks site data. Validation stays in the game — `load()` only promises "parsed JSON, or null". |
+| `js/lib/dice.js` | `DiceTray.create(el, { onPick })`, plus `randomFace()`. Builds the dice, sizes them from how many are in play, and runs the bounce-and-settle roll. Pairs with `css/dice.css`. Omit `onPick` and the dice are inert `<span>`s rather than buttons. |
+
+Load them with plain `<script>` tags before the game's own script; they
+attach `Store` and `DiceTray` to `window`. There is no module system here
+and no build step to add one.
+
+**Extract on the second use, not the first.** Both of these earned their
+place by being needed twice — 10,000 and Dice share the tray, and all six
+games share the storage wrapper. A helper with one caller is better left in
+the game that uses it, where it can stay shaped to that game.
+
+Anything genuinely game-specific stays put even when it looks generic: the
+kept-die ring is 10,000's, the count selector is Dice's.
 
 ## Documenting a game
 
@@ -114,6 +167,13 @@ Rules that come with this:
   indicator leans on the accessible label below.
 - Games with no players — Counter — do not use these tokens. Its `--up` and
   `--down` are semantic, not identities, and should stay separate.
+- **Two tokens means two sides.** A game with a variable number of seats —
+  10,000 has 2–6 — must not map them onto these, because the third seat
+  would have to invent a colour and the first two would stop meaning what
+  they mean everywhere else. Mark the active seat with weight, a ring or
+  position instead of a hue. A game may still define its own *semantic*
+  colours (10,000's `--keep` and `--bust`); those name a state, not a
+  player, which is why they are allowed to be local.
 
 ### The turn indicator
 
