@@ -8,7 +8,7 @@
  * cannot be reused. Pages request these files without a query string, so
  * the fetch handler matches with ignoreSearch; see below.
  */
-const CACHE_VERSION = 'v5';
+const CACHE_VERSION = 'v6';
 const CACHE_NAME = `games-pwa-${CACHE_VERSION}`;
 
 const PRECACHE_URLS = [
@@ -16,6 +16,7 @@ const PRECACHE_URLS = [
   'index.html',
   'manifest.webmanifest',
   'css/app.css',
+  'css/players.css',
   'js/games.js',
   'js/install.js',
   'js/version.js',
@@ -31,7 +32,13 @@ const PRECACHE_URLS = [
   'games/scorekeeper/scorekeeper.js',
   'games/counter/',
   'games/counter/index.html',
-  'games/counter/counter.js'
+  'games/counter/counter.js',
+  'games/connect-four/',
+  'games/connect-four/index.html',
+  'games/connect-four/connect-four.js',
+  'games/tic-tac-toe/',
+  'games/tic-tac-toe/index.html',
+  'games/tic-tac-toe/tic-tac-toe.js'
 ];
 
 function versioned(url) {

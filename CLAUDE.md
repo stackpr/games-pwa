@@ -85,6 +85,42 @@ decision is welcome, a paragraph of design rationale belongs in
   SVG first, then regenerate the PNGs by scripting Pillow again — never
   hand-edit them.
 
+## Player colors
+
+Any game with sides uses the same two identities, so a color means the
+same thing everywhere on the site:
+
+| Token | Value | Meaning |
+| --- | --- | --- |
+| `--player-1` | `#2f6fdb` blue | Player 1 — always moves first |
+| `--player-2` | `#d84a35` red | Player 2 |
+| `--player-ink` | `#ffffff` | Text/detail on top of a player fill |
+
+They live in `css/players.css`, which every such game links with
+`<link rel="stylesheet" href="../../css/players.css">`. **Use the tokens;
+never re-declare the hex values in a game.** A game may alias them to its
+own vocabulary — the scorekeeper sets `--team-a: var(--player-1)` — but the
+value has one home. Changing a value there restyles every game at once,
+which is the point.
+
+Rules that come with this:
+
+- **Player 1 always goes first**, in every game. The turn is
+  `moves.length % 2`, never a stored flag that can drift out of sync.
+- **Never let color be the only signal.** The turn indicator names the
+  player in text (`Player 2 to move`), and where a game can carry a shape
+  as well it should — tic-tac-toe's X and O are readable with no color
+  vision at all. Connect Four's pieces can only differ by color, which is
+  exactly why its status line is wordy.
+- Games with no players — Counter — do not use these tokens. Its `--up` and
+  `--down` are semantic, not identities, and should stay separate.
+
+The turn indicator itself is a shared pattern rather than shared code:
+a colored disc plus a text label, `aria-live="polite"`, driven by
+`data-player="1|2|none"` and `data-state="playing|over"` on the container.
+Connect Four and tic-tac-toe carry identical markup and CSS for it. Copy it
+into a new game rather than inventing a third variant.
+
 ## Install-prompt strategy (js/install.js)
 
 All client-side; no server APIs:

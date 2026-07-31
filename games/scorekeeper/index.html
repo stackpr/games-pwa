@@ -10,13 +10,15 @@
   <link rel="apple-touch-icon" href="../../icons/apple-touch-icon.png">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="stylesheet" href="../../css/players.css">
   <style>
     :root {
       --bg: #10141f;
       --text: #eef1f8;
       --text-dim: #9aa4bd;
-      --team-a: #2f6fdb;
-      --team-b: #d84a35;
+      /* Team 1/2 are the shared player identities; see css/players.css. */
+      --team-a: var(--player-1);
+      --team-b: var(--player-2);
       color-scheme: dark;
     }
     * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }

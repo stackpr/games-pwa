@@ -1,0 +1,16 @@
+/*
+ * Shared player identity colors.
+ *
+ * Player 1 is blue and Player 2 is red across every game that has sides,
+ * so a color means the same thing on each page. Games link this file and
+ * use the tokens rather than repeating hex values; see "Player colors" in
+ * CLAUDE.md before changing anything here, because these values are load-
+ * bearing for the scorekeeper, connect-four and tic-tac-toe pages at once.
+ *
+ * --player-ink is what stays readable on top of a player fill.
+ */
+:root {
+  --player-1: #2f6fdb;
+  --player-2: #d84a35;
+  --player-ink: #ffffff;
+}

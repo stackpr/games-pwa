@@ -12,6 +12,18 @@ const GAMES = [
     description: 'A single number, up and down',
     emoji: '\u{1F522}',
     path: 'games/counter/'
+  },
+  {
+    name: 'Connect Four',
+    description: 'Drop a piece — four in a row wins',
+    emoji: '\u{1F535}',
+    path: 'games/connect-four/'
+  },
+  {
+    name: 'Tic-Tac-Toe',
+    description: 'Three in a row, X against O',
+    emoji: '\u{2B55}',
+    path: 'games/tic-tac-toe/'
   }
 ];
 

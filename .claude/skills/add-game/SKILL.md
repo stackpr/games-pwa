@@ -21,6 +21,10 @@ already names the game; pick a short kebab-case `<slug>`.
      `100dvh` layouts, safe-area insets
    - Any images the game needs are SVG (inline where simple) — PNG is
      reserved for the install icons in `icons/`; see Images in CLAUDE.md
+   - If the game has **sides**, link `../../css/players.css` and use
+     `var(--player-1)` / `var(--player-2)` — never fresh hex values — and
+     copy the turn-indicator markup from `games/tic-tac-toe/`. Player 1
+     moves first. See Player colors in CLAUDE.md
 
 2. **Document it** in `games/<slug>/_README.md` (required). Cover the use
    case, the rules and edge cases, layout decisions, and the shape of the
