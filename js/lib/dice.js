@@ -14,16 +14,35 @@ window.DiceTray = (function () {
   const MAX_SIZE = 20;   // a lone die never grows past this, in tray units
   const SPAN = 84;       // width the dice share once there are enough of them
   const BOTTOM = 4;      // gap between the settled row and the tray floor
-  const BOUNCE_MS = 1100;
-  const SETTLE_MS = 700;
-  const STAGGER = 45;    // per-die delay, so they land one after another
-  const GRAVITY = 300;
-  const TUMBLE_MS = 80;
+
+  /*
+   * The roll is a scripted timeline rather than a simulation. A die drops in,
+   * bounces three times at falling heights, then hops along at a constant low
+   * height until it reaches its slot. Free physics gave a mushier, slower
+   * result and no way to say "exactly three bounces".
+   *
+   * Each hop is a parabola, so its duration scales with the square root of
+   * its height the way a real bounce does — the low hops are quick patters
+   * rather than slow floats.
+   */
+  const DROP_MS = 170;         // falling in from above the tray
+  const HOP_MS = 250;          // a full-height hop; shorter ones scale by √apex
+  const APEXES = [1, 0.52, 0.27];   // the three bounces, each lower
+  const LOW_APEX = 0.085;      // then a constant low hop, repeated
+  const LOW_HOPS = 3;
+  const PEAK = 0.62;           // first apex, as a fraction of the drop height
+  const STAGGER = 35;          // per-die delay, so they land one after another
+  const TUMBLE_MS = 70;
 
   const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
 
-  function easeInOut(t) {
-    return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+  function easeOut(t) {
+    return 1 - Math.pow(1 - t, 3);
+  }
+
+  function hopPlan() {
+    const apexes = APEXES.concat(new Array(LOW_HOPS).fill(LOW_APEX));
+    return apexes.map(apex => ({ apex, dur: HOP_MS * Math.sqrt(apex) }));
   }
 
   function randomFace() {
@@ -40,7 +59,6 @@ window.DiceTray = (function () {
     let rowY = 82;
     let anim = null;
     let raf = 0;
-    let lastTs = 0;
 
     function metrics(count) {
       size = Math.min(MAX_SIZE, SPAN / count);
@@ -124,94 +142,98 @@ window.DiceTray = (function () {
       }
 
       const maxP = 100 - size;
+      const hops = hopPlan();
+      const hopTotal = hops.reduce((sum, h) => sum + h.dur, 0);
+      // The real face appears once the big bounces are over, so the last
+      // stretch of low hops reads as the die already showing its result.
+      const revealAt = DROP_MS + hops.slice(0, APEXES.length)
+        .reduce((sum, h) => sum + h.dur, 0);
+
       anim = {
         start: performance.now(),
-        settling: false,
-        settleStart: 0,
         tumbleAt: 0,
-        maxP,
         faces,
         done,
-        parts: indices.map(i => ({
-          i,
-          x: maxP * (0.08 + Math.random() * 0.84),
-          y: maxP * (0.03 + Math.random() * 0.32),
-          vx: (Math.random() * 2 - 1) * 95,
-          vy: 25 + Math.random() * 55,
-          rot: Math.random() * 360,
-          vr: (Math.random() * 2 - 1) * 430,
-          fromX: 0, fromY: 0, fromRot: 0, toRot: 0
-        }))
+        revealAt,
+        parts: indices.map(i => {
+          const startX = maxP * (0.06 + Math.random() * 0.88);
+          const startRot = Math.random() * 360;
+          const spin = (Math.random() * 2 - 1) * 540;
+          return {
+            i,
+            startX,
+            // Above the tray, so the die drops in rather than appearing.
+            startY: -size * 0.9,
+            slotX: slotX(i),
+            floor: rowY,
+            peak: (rowY + size * 0.9) * PEAK,
+            startRot,
+            // Land on a whole turn, so the die finishes upright.
+            endRot: Math.round((startRot + spin) / 360) * 360,
+            hops,
+            total: DROP_MS + hopTotal
+          };
+        })
       };
 
-      // Seed the on-screen positions before the first frame, so the dice do
-      // not flash at their landing slots for one tick.
-      for (const p of anim.parts) place(p.i, p.x, p.y, p.rot);
-      lastTs = 0;
+      for (const p of anim.parts) place(p.i, p.startX, p.startY, p.startRot);
       raf = requestAnimationFrame(step);
+    }
+
+    /** Where a die is `t` ms into its own timeline. */
+    function poseAt(p, t) {
+      const progress = Math.min(1, Math.max(0, t / p.total));
+      const eased = easeOut(progress);
+      const x = p.startX + (p.slotX - p.startX) * eased;
+      const rot = p.startRot + (p.endRot - p.startRot) * eased;
+
+      if (t <= DROP_MS) {
+        // Accelerating fall, so it arrives rather than drifts down.
+        const u = Math.max(0, t) / DROP_MS;
+        return { x, rot, y: p.startY + (p.floor - p.startY) * u * u };
+      }
+
+      let left = t - DROP_MS;
+      for (const hop of p.hops) {
+        if (left < hop.dur) {
+          const u = left / hop.dur;
+          // Parabola: leaves and meets the floor, peaking at apex * peak.
+          return { x, rot, y: p.floor - hop.apex * p.peak * 4 * u * (1 - u) };
+        }
+        left -= hop.dur;
+      }
+      return { x: p.slotX, rot: p.endRot, y: p.floor };
     }
 
     function step(now) {
       const elapsed = now - anim.start;
-      const dt = lastTs ? Math.min(0.032, (now - lastTs) / 1000) : 0.016;
-      lastTs = now;
-      const maxP = anim.maxP;
 
-      if (elapsed < BOUNCE_MS) {
-        for (const p of anim.parts) {
-          p.vy += GRAVITY * dt;
-          p.x += p.vx * dt;
-          p.y += p.vy * dt;
-          p.rot += p.vr * dt;
-          if (p.x < 0) { p.x = 0; p.vx = Math.abs(p.vx) * 0.84; }
-          if (p.x > maxP) { p.x = maxP; p.vx = -Math.abs(p.vx) * 0.84; }
-          if (p.y < 0) { p.y = 0; p.vy = Math.abs(p.vy) * 0.84; }
-          if (p.y > maxP) { p.y = maxP; p.vy = -Math.abs(p.vy) * 0.68; p.vx *= 0.9; p.vr *= 0.8; }
-          place(p.i, p.x, p.y, p.rot);
-        }
-        // Faces flicker while tumbling; the real one is revealed on landing.
-        if (now - anim.tumbleAt > TUMBLE_MS) {
-          anim.tumbleAt = now;
-          for (const p of anim.parts) nodes[p.i].dataset.face = String(randomFace());
-        }
-        raf = requestAnimationFrame(step);
-        return;
-      }
-
-      if (!anim.settling) {
-        anim.settling = true;
-        anim.settleStart = now;
-        for (const p of anim.parts) {
-          p.fromX = p.x;
-          p.fromY = p.y;
-          p.fromRot = p.rot;
-          // Settle to the nearest whole turn so the die lands upright rather
-          // than visibly unwinding.
-          p.toRot = Math.round(p.rot / 360) * 360;
-          nodes[p.i].dataset.face = String(anim.faces[p.i]);
-        }
-      }
-
-      let done = true;
+      let running = false;
       for (let k = 0; k < anim.parts.length; k++) {
         const p = anim.parts[k];
-        const raw = (now - anim.settleStart - k * STAGGER) / SETTLE_MS;
-        const t = raw <= 0 ? 0 : raw >= 1 ? 1 : raw;
-        if (t < 1) done = false;
-        const e = easeInOut(t);
-        place(
-          p.i,
-          p.fromX + (slotX(p.i) - p.fromX) * e,
-          p.fromY + (rowY - p.fromY) * e,
-          p.fromRot + (p.toRot - p.fromRot) * e
-        );
+        const t = elapsed - k * STAGGER;
+        if (t < p.total) running = true;
+        const pose = poseAt(p, t);
+        place(p.i, pose.x, pose.y, pose.rot);
+        if (t >= anim.revealAt) nodes[p.i].dataset.face = String(anim.faces[p.i]);
       }
 
-      if (!done) {
+      // Faces flicker only while the die is still tumbling high.
+      if (elapsed < anim.revealAt && now - anim.tumbleAt > TUMBLE_MS) {
+        anim.tumbleAt = now;
+        for (const p of anim.parts) {
+          const t = elapsed - anim.parts.indexOf(p) * STAGGER;
+          if (t < anim.revealAt) nodes[p.i].dataset.face = String(randomFace());
+        }
+      }
+
+      if (running) {
         raf = requestAnimationFrame(step);
         return;
       }
 
+      showFaces(anim.faces);
+      layout();
       const finish = anim.done;
       cancel();
       if (finish) finish();

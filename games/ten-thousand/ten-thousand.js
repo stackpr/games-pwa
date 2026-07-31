@@ -308,12 +308,13 @@
   }
 
   function settingsOpen() {
-    return el.settings.hasAttribute('data-open');
+    return Boolean(el.settings && el.settings.hasAttribute('data-open'));
   }
 
   function openSettings() {
+    if (!el.settings) return;
     el.settings.dataset.open = '';
-    el.settingsBtn.setAttribute('aria-expanded', 'true');
+    if (el.settingsBtn) el.settingsBtn.setAttribute('aria-expanded', 'true');
     // Land focus inside the dialog rather than leaving it on the button
     // behind the scrim.
     const first = el.countRow.querySelector('.count');
@@ -323,8 +324,10 @@
   function closeSettings() {
     if (!settingsOpen()) return;
     delete el.settings.dataset.open;
-    el.settingsBtn.setAttribute('aria-expanded', 'false');
-    el.settingsBtn.focus();
+    if (el.settingsBtn) {
+      el.settingsBtn.setAttribute('aria-expanded', 'false');
+      el.settingsBtn.focus();
+    }
   }
 
   function toggleSettings() {
@@ -342,14 +345,24 @@
     el.countRow.append(b);
   }
 
-  el.roll.addEventListener('click', doRoll);
-  el.stop.addEventListener('click', doStop);
-  el.next.addEventListener('click', nextPlayer);
-  el.newGame.addEventListener('click', () => startGame(state.count));
-  el.settingsBtn.addEventListener('click', toggleSettings);
-  el.settingsClose.addEventListener('click', closeSettings);
+  // Bind through a null-tolerant helper. A service worker that claims a page
+  // mid-load can pair markup from one release with script from the next, and
+  // a single missing node taking down the whole IIFE means an empty tray and
+  // no seats. Missing one control should cost that control, nothing more.
+  // See _README.md.
+  function on(node, type, fn) {
+    if (node) node.addEventListener(type, fn);
+    else console.warn('Missing element for a ' + type + ' handler');
+  }
+
+  on(el.roll, 'click', doRoll);
+  on(el.stop, 'click', doStop);
+  on(el.next, 'click', nextPlayer);
+  on(el.newGame, 'click', () => startGame(state.count));
+  on(el.settingsBtn, 'click', toggleSettings);
+  on(el.settingsClose, 'click', closeSettings);
   // A tap on the scrim, but not on the panel sitting on top of it.
-  el.settings.addEventListener('click', event => {
+  on(el.settings, 'click', event => {
     if (event.target === el.settings) closeSettings();
   });
   document.addEventListener('keydown', event => {

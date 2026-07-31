@@ -294,6 +294,33 @@ it has not been added.
 That ceiling matters for diagnosis: anything still stale after ten minutes
 is not the CDN. See Deploying.
 
+## A game's JS must tolerate the neighbouring release's HTML
+
+`sw.js` calls `skipWaiting()` on install and `clients.claim()` on activate,
+so a new worker can take over a page **that is already loading**: the HTML
+can come from the outgoing worker and the script from the incoming one.
+
+That means a game whose script hard-requires an element added in the same
+release will break on exactly those loads — and because a throw at the top
+of the IIFE aborts everything after it, the symptom is not a missing
+button, it is a **blank game**. This has happened once: 10,000 gained a
+`#settings-close` button and a matching `addEventListener`, and clients
+caught mid-update rendered no dice, no seats and no working controls.
+
+Bind through a null-tolerant helper rather than reaching straight into the
+DOM:
+
+```js
+function on(node, type, fn) {
+  if (node) node.addEventListener(type, fn);
+  else console.warn('Missing element for a ' + type + ' handler');
+}
+```
+
+Adding an element and using it in the same version is fine. *Assuming it is
+there* is what breaks. The same applies to any node read at start-up —
+guard it, or accept that one missing element takes the page with it.
+
 ## Deploying
 
 GitHub Pages serves the `gh-pages` branch, which is also the default
