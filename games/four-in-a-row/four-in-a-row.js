@@ -1,6 +1,6 @@
-// Connect Four: drop a piece by touching a column. See _README.md.
+// Four in a Row: drop a piece by touching a column. See _README.md.
 (function () {
-  const STORAGE_KEY = 'games.connect-four.v1';
+  const STORAGE_KEY = 'games.four-in-a-row.v1';
   const COLS = 7;
   const ROWS = 6;
   const RUN = 4;

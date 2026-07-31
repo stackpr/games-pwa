@@ -1,7 +1,7 @@
 # 10,000 (Dice)
 
 Press your luck with six dice. Roll, set aside what scores, and decide
-whether to roll again or bank what you have — 2 to 6 players, first to
+whether to roll again or bank what you have — 2 to 12 players, first to
 10,000 wins.
 
 ## The name
@@ -17,9 +17,9 @@ parentheses.
 
 ## Use case
 
-The pass-the-phone game for a group rather than a pair. Connect Four and
+The pass-the-phone game for a group rather than a pair. Four in a Row and
 tic-tac-toe seat exactly two; 10,000 is the one that scales to a table of
-six, which is why the player count is a setting rather than a constant.
+twelve, which is why the player count is a setting rather than a constant.
 
 There is no AI opponent and no networked play. Everyone shares the one
 screen and hands it on, the same posture as the scorekeeper.
@@ -117,6 +117,50 @@ two rows of three rather than six slivers. The grid's column count is set
 from the player count rather than fixed at three, so two players still fill
 the row instead of leaving a hole. The settings button sits alongside the
 whole block and stretches to its full height.
+
+**Past six players it switches to four across.** Three would mean four rows
+of seats at twelve players, and the rows come straight out of the tray's
+height; four across keeps it to three rows. Seats get narrower rather than
+the tray getting shorter, which is the right trade when a seat only has to
+hold `P12` and a score.
+
+The row count is not free, so it is not guessed at: JS sets `--seat-rows`
+whenever it builds the seats, and `--chrome` is a sum — a measured `9.2rem`
+of top bar, status line and controls, plus `3.05rem` per seat row. Getting
+this wrong does not misalign anything, it pushes the bottom of the tray off
+the screen, so a spec asserts the tray stays square with no overflow at 2,
+7 and 12 players. Landscape gets compact seats and a smaller per-row figure
+because height is the scarce axis there.
+
+## The settings overlay
+
+The player count opens as a **full-screen overlay with a dimming scrim**,
+not as a panel inline in the column. Inline it pushed the board down and
+competed with the tray for the height the tray sizes itself against, which
+is a real failure and not just a cosmetic one — the tray's size is computed
+from `--chrome`, and a panel that appears and disappears is not in that sum.
+Floating it over the board takes it out of the layout entirely.
+
+Fading needs **both `opacity` and `visibility`**, and the `visibility`
+transition needs a delay:
+
+```css
+transition: opacity 160ms ease, visibility 0s linear 160ms;   /* closed */
+transition: opacity 160ms ease, visibility 0s;                /* open   */
+```
+
+`visibility` is what stops a closed overlay swallowing taps and holding
+focusable buttons; `opacity` alone would leave an invisible sheet over the
+whole page. But `visibility` cannot be interpolated, so without the delay
+it flips immediately and the fade-out never appears — the panel just
+vanishes. Delaying it by exactly the fade duration on the closed state, and
+not at all on the open state, is what gives a fade in *and* out. The
+`hidden` attribute cannot do this at all, since `display: none` snaps.
+
+It closes on the Close button, on a tap on the scrim but not the panel, and
+on Escape. Focus moves to the first count button on open and back to the
+settings button on close, so it does not strand a keyboard user behind the
+scrim. `prefers-reduced-motion: reduce` drops both transitions.
 
 ## Colors
 

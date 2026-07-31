@@ -1,7 +1,22 @@
-# Connect Four
+# Four in a Row
 
 Two players, one phone, passed back and forth. Seven columns, six rows,
 four in a row wins.
+
+## The name
+
+The generic name for the game. It was originally built here under a brand
+name, which is a trademark — rules are free to reimplement, names are not.
+See Naming a game in CLAUDE.md.
+
+The rename changed the slug and therefore the storage key, from
+`games.connect-four.v1` to `games.four-in-a-row.v1`. **Saved games from
+before the rename are not migrated and simply do not load**, which was a
+deliberate call: this is a two-player game finished in a couple of minutes,
+and carrying a compatibility shim for a half-finished board forever costs
+more than the board is worth. The old key is left in place rather than
+deleted, since a page that has been renamed has no business reaching for
+storage under its old name.
 
 ## Use case
 
@@ -51,7 +66,7 @@ Reads `Next: ⬤` while playing and `⬤ Wins!` once won, in the piece's own
 color — the disc says whose turn it is, so the words only carry state. See
 The turn indicator in CLAUDE.md for the shared rules.
 
-A Connect Four piece has no shape to distinguish it, only color, so this
+A Four in a Row piece has no shape to distinguish it, only color, so this
 indicator is the one place on the site where the visible signal really is
 color alone. That is why the visually-hidden `#turn-label` matters more
 here than in tic-tac-toe: it is the only thing naming the player for a
@@ -118,7 +133,7 @@ A spec asserts both the 7:6 ratio and the centering at two viewport sizes.
 
 ## Persisted state
 
-One JSON object under `games.connect-four.v1`, holding only the move list:
+One JSON object under `games.four-in-a-row.v1`, holding only the move list:
 
 ```json
 { "moves": [3, 3, 4, 2] }

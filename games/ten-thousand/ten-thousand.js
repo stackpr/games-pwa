@@ -6,14 +6,19 @@
   const FACES = 6;
   const TARGET = 10000;
   const MIN_PLAYERS = 2;
-  const MAX_PLAYERS = 6;
+  const MAX_PLAYERS = 12;
+  // Three seats a row reads best, but past six that is four rows of chrome
+  // eating the tray, so wider seats win over taller ones.
+  const WIDE_FROM = 7;
   const PER_ROW = 3;
+  const PER_ROW_WIDE = 4;
 
   const el = {
     tray: document.getElementById('tray'),
     seats: document.getElementById('seats'),
     settingsBtn: document.getElementById('settings-btn'),
     settings: document.getElementById('settings'),
+    settingsClose: document.getElementById('settings-close'),
     countRow: document.getElementById('count-row'),
     status: document.getElementById('status-text'),
     roll: document.getElementById('roll'),
@@ -126,8 +131,13 @@
     el.seats.textContent = '';
     seatScores = [];
     // At most three across; the rest wrap onto further rows.
+    const perRow = state.count >= WIDE_FROM ? PER_ROW_WIDE : PER_ROW;
     el.seats.style.gridTemplateColumns =
-      'repeat(' + Math.min(PER_ROW, state.count) + ', 1fr)';
+      'repeat(' + Math.min(perRow, state.count) + ', 1fr)';
+    // The tray sizes itself against --chrome, so the seat rows have to be
+    // part of that sum or a third row pushes the tray off screen.
+    document.documentElement.style.setProperty(
+      '--seat-rows', String(Math.ceil(state.count / perRow)));
 
     for (let i = 0; i < state.count; i++) {
       const seat = document.createElement('div');
@@ -294,14 +304,32 @@
 
   function setPlayerCount(count) {
     startGame(count);
-    el.settings.hidden = true;
+    closeSettings();
+  }
+
+  function settingsOpen() {
+    return el.settings.hasAttribute('data-open');
+  }
+
+  function openSettings() {
+    el.settings.dataset.open = '';
+    el.settingsBtn.setAttribute('aria-expanded', 'true');
+    // Land focus inside the dialog rather than leaving it on the button
+    // behind the scrim.
+    const first = el.countRow.querySelector('.count');
+    if (first) first.focus();
+  }
+
+  function closeSettings() {
+    if (!settingsOpen()) return;
+    delete el.settings.dataset.open;
     el.settingsBtn.setAttribute('aria-expanded', 'false');
+    el.settingsBtn.focus();
   }
 
   function toggleSettings() {
-    const open = el.settings.hidden;
-    el.settings.hidden = !open;
-    el.settingsBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
+    if (settingsOpen()) closeSettings();
+    else openSettings();
   }
 
   for (let c = MIN_PLAYERS; c <= MAX_PLAYERS; c++) {
@@ -319,6 +347,17 @@
   el.next.addEventListener('click', nextPlayer);
   el.newGame.addEventListener('click', () => startGame(state.count));
   el.settingsBtn.addEventListener('click', toggleSettings);
+  el.settingsClose.addEventListener('click', closeSettings);
+  // A tap on the scrim, but not on the panel sitting on top of it.
+  el.settings.addEventListener('click', event => {
+    if (event.target === el.settings) closeSettings();
+  });
+  document.addEventListener('keydown', event => {
+    if (event.key === 'Escape' && settingsOpen()) {
+      closeSettings();
+      event.preventDefault();
+    }
+  });
 
   tray.setCount(DICE);
   buildSeats();

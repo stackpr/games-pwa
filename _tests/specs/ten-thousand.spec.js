@@ -291,10 +291,125 @@ test.describe('settings', () => {
     await expect(status(page)).toHaveText('P1 to roll');
   });
 
-  test('offers 2 to 6 players', async ({ page }) => {
+  test('the panel floats over the board rather than pushing it', async ({ page }) => {
+    // Inline, the panel competed with the tray for the height the tray
+    // sizes itself against. See _README.md.
+    const trayBefore = await page.locator('#tray').boundingBox();
     await page.locator('#settings-btn').click();
-    await expect(page.locator('.count')).toHaveCount(5);
+    const after = await page.evaluate(() => {
+      const t = document.getElementById('tray').getBoundingClientRect();
+      const s = document.getElementById('settings');
+      const box = s.getBoundingClientRect();
+      return {
+        tray: { x: t.x, y: t.y, w: t.width, h: t.height },
+        covers: box.width >= window.innerWidth && box.height >= window.innerHeight,
+        position: getComputedStyle(s).position,
+      };
+    });
+
+    expect(after.position).toBe('fixed');
+    expect(after.covers, 'the scrim covers the viewport').toBe(true);
+    // The board has not moved or resized underneath it.
+    expect(after.tray.y).toBeCloseTo(trayBefore.y, 0);
+    expect(after.tray.h).toBeCloseTo(trayBefore.height, 0);
+  });
+
+  test('the scrim dims what is behind it, and fades', async ({ page }) => {
+    const opacity = () => page.evaluate(() =>
+      Number(getComputedStyle(document.getElementById('settings')).opacity));
+
+    expect(await opacity(), 'transparent while closed').toBe(0);
+    await page.locator('#settings-btn').click();
+    // Polled rather than read once: the value climbs over the fade, and
+    // reading immediately catches it around 0.1.
+    await expect.poll(opacity, { timeout: 2000 }).toBeGreaterThan(0.9);
+
+    const bg = await page.evaluate(() =>
+      getComputedStyle(document.getElementById('settings')).backgroundColor);
+    expect(bg).toMatch(/^rgba?\(/);
+    expect(bg, 'the scrim is actually tinted').not.toBe('rgba(0, 0, 0, 0)');
+
+    await page.keyboard.press('Escape');
+    await expect.poll(opacity, { timeout: 2000 }).toBe(0);
+  });
+
+  test('tapping the scrim closes it, tapping the panel does not', async ({ page }) => {
+    await page.locator('#settings-btn').click();
+    await expect(page.locator('#settings')).toBeVisible();
+
+    await page.locator('.settings-panel').click({ position: { x: 5, y: 5 } });
+    await expect(page.locator('#settings')).toBeVisible();
+
+    await page.locator('#settings').click({ position: { x: 5, y: 5 } });
+    await expect(page.locator('#settings')).toBeHidden();
+  });
+
+  test('Escape closes it', async ({ page }) => {
+    await page.locator('#settings-btn').click();
+    await expect(page.locator('#settings')).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(page.locator('#settings')).toBeHidden();
+  });
+
+  test('the Close button closes it without changing the game', async ({ page }) => {
+    await page.locator('#settings-btn').click();
+    await page.locator('#settings-close').click();
+    await expect(page.locator('#settings')).toBeHidden();
+    await expect(page.locator('.seat')).toHaveCount(2);
+  });
+
+  test('focus moves into the dialog and back to the button', async ({ page }) => {
+    await page.locator('#settings-btn').click();
+    await expect(page.locator('.count').first()).toBeFocused();
+    await page.keyboard.press('Escape');
+    await expect(page.locator('#settings-btn')).toBeFocused();
+  });
+
+  test('offers 2 to 12 players', async ({ page }) => {
+    await page.locator('#settings-btn').click();
+    await expect(page.locator('.count')).toHaveCount(11);
     await expect(page.locator('.count[data-count="2"]')).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.locator('.count[data-count="12"]')).toHaveCount(1);
+  });
+
+  test('twelve players each get a seat', async ({ page }) => {
+    await page.locator('#settings-btn').click();
+    await page.locator('.count[data-count="12"]').click();
+    await expect(page.locator('.seat')).toHaveCount(12);
+    await expect(page.locator('.seat[data-seat="11"] .seat-score')).toHaveText('0');
+  });
+
+  test('seats go three across up to six, four across beyond', async ({ page }) => {
+    const columns = () => page.evaluate(() =>
+      getComputedStyle(document.getElementById('seats')).gridTemplateColumns.split(' ').length);
+
+    for (const [count, cols] of [[2, 2], [3, 3], [6, 3], [7, 4], [12, 4]]) {
+      await page.locator('#settings-btn').click();
+      await page.locator(`.count[data-count="${count}"]`).click();
+      await expect(page.locator('.seat')).toHaveCount(count);
+      expect(await columns(), `${count} players`).toBe(cols);
+    }
+  });
+
+  test('the tray survives a third row of seats', async ({ page }) => {
+    // --seat-rows feeds --chrome; without it a third row pushes the tray
+    // off screen instead of shrinking it. See _README.md.
+    for (const count of [2, 7, 12]) {
+      await page.locator('#settings-btn').click();
+      await page.locator(`.count[data-count="${count}"]`).click();
+      const m = await page.evaluate(() => {
+        const t = document.getElementById('tray').getBoundingClientRect();
+        return {
+          ratio: t.width / t.height,
+          oy: document.documentElement.scrollHeight - window.innerHeight,
+          rows: getComputedStyle(document.documentElement).getPropertyValue('--seat-rows').trim(),
+        };
+      });
+      expect(m.ratio, `tray square with ${count}`).toBeCloseTo(1, 1);
+      expect(m.oy, `no overflow with ${count}`).toBeLessThanOrEqual(0);
+      expect(m.rows, `--seat-rows tracks ${count} players`)
+        .toBe(String(Math.ceil(count / (count >= 7 ? 4 : 3))));
+    }
   });
 });
 

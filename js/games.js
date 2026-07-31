@@ -14,10 +14,10 @@ const GAMES = [
     path: 'games/counter/'
   },
   {
-    name: 'Connect Four',
+    name: 'Four in a Row',
     description: 'Drop a piece — four in a row wins',
     emoji: '\u{1F535}',
-    path: 'games/connect-four/'
+    path: 'games/four-in-a-row/'
   },
   {
     name: 'Tic-Tac-Toe',
