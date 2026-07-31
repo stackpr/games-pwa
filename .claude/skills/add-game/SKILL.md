@@ -25,6 +25,10 @@ already names the game; pick a short kebab-case `<slug>`.
      `var(--player-1)` / `var(--player-2)` — never fresh hex values — and
      copy the turn-indicator markup from `games/tic-tac-toe/`. Player 1
      moves first. See Player colors in CLAUDE.md
+   - If it can be **won**, mark the winning pieces the shared way: a
+     `data-win` attribute, an inset `box-shadow` ring in `--player-ink`,
+     and a brightness pulse. The ring has to read without the animation.
+     See Marking the winning line in CLAUDE.md
 
 2. **Document it** in `games/<slug>/_README.md` (required). Cover the use
    case, the rules and edge cases, layout decisions, and the shape of the

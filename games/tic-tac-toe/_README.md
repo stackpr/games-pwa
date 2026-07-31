@@ -29,7 +29,7 @@ the squares are reachable by Tab as ordinary buttons.
 
 - Player 1 (X) always moves first; the turn is `moves.length % 2`.
 - A win is three in a row along any of the eight lines — three rows, three
-  columns, two diagonals. The winning three pulse.
+  columns, two diagonals. The winning three are highlighted; see below.
 - **The game stops at a win**, so the ninth square cannot be filled after a
   win on the eighth.
 - A full board with no line is a draw.
@@ -48,7 +48,21 @@ mark animates — restored and post-Undo marks are simply present, matching
 connect-four's rule that a reloaded board should not replay itself.
 `prefers-reduced-motion: reduce` turns this off.
 
-## Layout
+## The winning line
+
+The three winning squares are ringed in `--player-ink` and pulse — the
+site-wide way of marking a win, the same treatment connect-four gives its
+four discs. See Marking the winning line in CLAUDE.md for the rules; the
+one worth repeating here is that **the ring, not the pulse, carries the
+highlight**. It is what marks the line at the dim half of the animation,
+under `prefers-reduced-motion: reduce`, and in a screenshot.
+
+What differs between the two games is only the unit being ringed. A
+connect-four piece is a disc, so the ring is round and sits on the disc. A
+tic-tac-toe mark is an open stroked shape with no fill to ring, so the
+square is ringed instead, matching the cell's own 10px radius. Ringing the
+X and O themselves was the alternative and it looked like a stroke weight
+bug rather than a highlight.
 
 The board is square, capped by width, by height (`100dvh - 11rem`) and by
 `30rem` so it does not become comically large on a desktop monitor. The

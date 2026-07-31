@@ -123,8 +123,14 @@
     @media (hover: hover) {
       .cell:not(:disabled):hover { background: #141a28; }
     }
+    /* Winning line: ringed in --player-ink and pulsing, the same treatment
+       connect-four gives its four discs. The ring is what carries the
+       highlight when the pulse is at its dimmest and when motion is off,
+       so it must never be the animation alone. Lengths in px — box-shadow
+       voids the whole declaration if it sees a percentage. */
     .cell[data-win] {
       background: #1d2740;
+      box-shadow: inset 0 0 0 3px var(--player-ink);
       animation: pulse 900ms ease-in-out infinite;
     }
     @keyframes pulse {

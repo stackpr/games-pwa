@@ -193,6 +193,42 @@ test.describe('presentation', () => {
     expect(colors.o).toBe('rgb(216, 74, 53)');
   });
 
+  test('the winning line is ringed in the shared ink color', async ({ page }) => {
+    // Same treatment as connect-four: the ring, not the pulse, is what
+    // marks the line when the animation is dim or switched off. box-shadow
+    // discards the whole declaration if given a percentage length, so the
+    // computed value is asserted rather than the stylesheet text.
+    await playAll(page, X_TOP_ROW);
+
+    const shadows = await page.evaluate(() =>
+      [...document.querySelectorAll('.cell[data-win]')]
+        .map(c => getComputedStyle(c).boxShadow));
+
+    expect(shadows).toHaveLength(3);
+    for (const shadow of shadows) {
+      expect(shadow).not.toBe('none');
+      expect(shadow).toContain('rgb(255, 255, 255)');
+    }
+
+    const plain = await page.evaluate(() =>
+      getComputedStyle(document.querySelector('.cell:not([data-win])')).boxShadow);
+    expect(plain).toBe('none');
+  });
+
+  test('the ring survives reduced motion, which drops the pulse', async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await playAll(page, X_TOP_ROW);
+
+    const win = await page.evaluate(() => {
+      const cell = document.querySelector('.cell[data-win]');
+      const style = getComputedStyle(cell);
+      return { shadow: style.boxShadow, animation: style.animationName };
+    });
+
+    expect(win.animation).toBe('none');
+    expect(win.shadow).toContain('rgb(255, 255, 255)');
+  });
+
   test('the turn indicator names the player, not just a color', async ({ page }) => {
     await expect(turnText(page)).toContainText('Player 1');
     await square(page, 0).click();

@@ -34,7 +34,10 @@ board tells you where you can still play.
 - Player 1 drops first and the players alternate strictly; the turn is
   simply `moves.length % 2`.
 - A win is any four in a row horizontally, vertically, or on either
-  diagonal. The four winning pieces pulse.
+  diagonal. The four winning pieces are ringed in `--player-ink` and pulse
+  — the site-wide win marker, shared with tic-tac-toe. See Marking the
+  winning line in CLAUDE.md. The ring carries the highlight on its own, so
+  it still reads with the animation at its dimmest or switched off.
 - **The game stops at a win.** Every column is disabled, so no piece can
   land after the fact.
 - If the board fills with no line, it is a draw.

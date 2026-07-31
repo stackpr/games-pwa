@@ -121,6 +121,29 @@ a colored disc plus a text label, `aria-live="polite"`, driven by
 Connect Four and tic-tac-toe carry identical markup and CSS for it. Copy it
 into a new game rather than inventing a third variant.
 
+### Marking the winning line
+
+When a game ends in a win, the pieces that made the line are marked the
+same way everywhere: **an inset `box-shadow` ring in `--player-ink`, plus a
+brightness pulse.** The winning cells carry a `data-win` attribute and the
+CSS hangs off that. Three rules make it work:
+
+- **The ring must stand on its own, without the animation.** It is what
+  marks the line at the dim half of the pulse, under
+  `prefers-reduced-motion: reduce`, and in any screenshot. A pulse alone
+  reads as "nothing happened" half the time it is looked at. Reduced motion
+  drops the animation and keeps the ring.
+- **Ring the unit the game is played in** — the disc in Connect Four, the
+  whole square in tic-tac-toe. Match the piece's own border radius so the
+  ring traces it rather than boxing it.
+- **`box-shadow` lengths are px, never `%`.** A single percentage makes the
+  entire declaration invalid and the browser drops it silently — no error,
+  no ring, and pieces that quietly render flat. Both games have a spec
+  asserting the computed `box-shadow` is not `none`; copy it.
+
+White on both player colors is the reason `--player-ink` exists rather than
+each game picking a highlight — one identity, one marker.
+
 ## Install-prompt strategy (js/install.js)
 
 All client-side; no server APIs:

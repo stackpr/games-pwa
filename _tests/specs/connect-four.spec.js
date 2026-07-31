@@ -255,6 +255,23 @@ test.describe('presentation', () => {
     expect(winShadow).toContain('rgb(255, 255, 255)');
   });
 
+  test('the ring survives reduced motion, which drops the pulse', async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await col(page, 0).click(); await col(page, 4).click();
+    await col(page, 1).click(); await col(page, 5).click();
+    await col(page, 2).click(); await col(page, 6).click();
+    await col(page, 3).click();
+
+    const win = await page.evaluate(() => {
+      const disc = document.querySelector('.cell[data-win] .disc');
+      const style = getComputedStyle(disc);
+      return { shadow: style.boxShadow, animation: style.animationName };
+    });
+
+    expect(win.animation).toBe('none');
+    expect(win.shadow).toContain('rgb(255, 255, 255)');
+  });
+
   test('the turn indicator names the player, not just a color', async ({ page }) => {
     // Color must never be the only signal; see Player colors in CLAUDE.md.
     await expect(turnText(page)).toContainText('Player 1');
