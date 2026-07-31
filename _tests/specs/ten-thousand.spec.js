@@ -291,10 +291,51 @@ test.describe('settings', () => {
     await expect(status(page)).toHaveText('P1 to roll');
   });
 
-  test('offers 2 to 6 players', async ({ page }) => {
+  test('offers 2 to 12 players', async ({ page }) => {
     await page.locator('#settings-btn').click();
-    await expect(page.locator('.count')).toHaveCount(5);
+    await expect(page.locator('.count')).toHaveCount(11);
     await expect(page.locator('.count[data-count="2"]')).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.locator('.count[data-count="12"]')).toHaveCount(1);
+  });
+
+  test('twelve players each get a seat', async ({ page }) => {
+    await page.locator('#settings-btn').click();
+    await page.locator('.count[data-count="12"]').click();
+    await expect(page.locator('.seat')).toHaveCount(12);
+    await expect(page.locator('.seat[data-seat="11"] .seat-score')).toHaveText('0');
+  });
+
+  test('seats go three across up to six, four across beyond', async ({ page }) => {
+    const columns = () => page.evaluate(() =>
+      getComputedStyle(document.getElementById('seats')).gridTemplateColumns.split(' ').length);
+
+    for (const [count, cols] of [[2, 2], [3, 3], [6, 3], [7, 4], [12, 4]]) {
+      await page.locator('#settings-btn').click();
+      await page.locator(`.count[data-count="${count}"]`).click();
+      await expect(page.locator('.seat')).toHaveCount(count);
+      expect(await columns(), `${count} players`).toBe(cols);
+    }
+  });
+
+  test('the tray survives a third row of seats', async ({ page }) => {
+    // --seat-rows feeds --chrome; without it a third row pushes the tray
+    // off screen instead of shrinking it. See _README.md.
+    for (const count of [2, 7, 12]) {
+      await page.locator('#settings-btn').click();
+      await page.locator(`.count[data-count="${count}"]`).click();
+      const m = await page.evaluate(() => {
+        const t = document.getElementById('tray').getBoundingClientRect();
+        return {
+          ratio: t.width / t.height,
+          oy: document.documentElement.scrollHeight - window.innerHeight,
+          rows: getComputedStyle(document.documentElement).getPropertyValue('--seat-rows').trim(),
+        };
+      });
+      expect(m.ratio, `tray square with ${count}`).toBeCloseTo(1, 1);
+      expect(m.oy, `no overflow with ${count}`).toBeLessThanOrEqual(0);
+      expect(m.rows, `--seat-rows tracks ${count} players`)
+        .toBe(String(Math.ceil(count / (count >= 7 ? 4 : 3))));
+    }
   });
 });
 

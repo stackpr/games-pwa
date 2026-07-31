@@ -6,8 +6,12 @@
   const FACES = 6;
   const TARGET = 10000;
   const MIN_PLAYERS = 2;
-  const MAX_PLAYERS = 6;
+  const MAX_PLAYERS = 12;
+  // Three seats a row reads best, but past six that is four rows of chrome
+  // eating the tray, so wider seats win over taller ones.
+  const WIDE_FROM = 7;
   const PER_ROW = 3;
+  const PER_ROW_WIDE = 4;
 
   const el = {
     tray: document.getElementById('tray'),
@@ -126,8 +130,13 @@
     el.seats.textContent = '';
     seatScores = [];
     // At most three across; the rest wrap onto further rows.
+    const perRow = state.count >= WIDE_FROM ? PER_ROW_WIDE : PER_ROW;
     el.seats.style.gridTemplateColumns =
-      'repeat(' + Math.min(PER_ROW, state.count) + ', 1fr)';
+      'repeat(' + Math.min(perRow, state.count) + ', 1fr)';
+    // The tray sizes itself against --chrome, so the seat rows have to be
+    // part of that sum or a third row pushes the tray off screen.
+    document.documentElement.style.setProperty(
+      '--seat-rows', String(Math.ceil(state.count / perRow)));
 
     for (let i = 0; i < state.count; i++) {
       const seat = document.createElement('div');

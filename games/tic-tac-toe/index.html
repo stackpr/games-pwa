@@ -67,7 +67,7 @@
     }
     .chip:disabled { opacity: 0.4; }
 
-    /* Turn indicator — identical markup and behaviour in connect-four. */
+    /* Turn indicator — identical markup and behaviour in four-in-a-row. */
     .turn {
       display: flex;
       align-items: center;
@@ -103,9 +103,9 @@
         padding-bottom: 0.4rem;
       }
     }
-    /* Where connect-four shows a plain colored disc, this shows the mark the
+    /* Where four-in-a-row shows a plain colored disc, this shows the mark the
        player is about to place — so the indicator carries shape as well as
-       color, and the label stays as short as connect-four's. */
+       color, and the label stays as short as four-in-a-row's. */
     .turn-disc {
       width: 1.15em;
       height: 1.15em;
@@ -178,7 +178,7 @@
       .cell:not(:disabled):hover { background: #141a28; }
     }
     /* Winning line: ringed in --player-ink and pulsing, the same treatment
-       connect-four gives its four discs. The ring is what carries the
+       four-in-a-row gives its four discs. The ring is what carries the
        highlight when the pulse is at its dimmest and when motion is off,
        so it must never be the animation alone. Lengths in px — box-shadow
        voids the whole declaration if it sees a percentage. */

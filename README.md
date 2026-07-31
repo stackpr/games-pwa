@@ -14,9 +14,9 @@ installable PWA at **https://games.payne.run**.
 | --- | --- |
 | [Scorekeeper](games/scorekeeper/) | Running score for two teams — tap a column to score |
 | [Counter](games/counter/) | One number, up and down — tallies with no rules attached |
-| [Connect Four](games/connect-four/) | Two players, one phone — touch a column to drop a piece |
+| [Four in a Row](games/four-in-a-row/) | Two players, one phone — touch a column to drop a piece |
 | [Tic-Tac-Toe](games/tic-tac-toe/) | Three in a row, X against O |
-| [10,000 (Dice)](games/ten-thousand/) | Press your luck with six dice, 2–6 players |
+| [10,000 (Dice)](games/ten-thousand/) | Press your luck with six dice, 2–12 players |
 | [Dice](games/dice/) | A plain dice roller — pick one to six dice and throw |
 
 ## Development

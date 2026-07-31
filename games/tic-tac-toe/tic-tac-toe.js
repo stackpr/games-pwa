@@ -33,7 +33,7 @@
     Store.save(STORAGE_KEY, { moves });
   }
 
-  // Same contract as connect-four: keep the longest playable run so a
+  // Same contract as four-in-a-row: keep the longest playable run so a
   // corrupt save degrades to a valid position rather than throwing.
   function legalPrefix(raw) {
     const seen = new Set();

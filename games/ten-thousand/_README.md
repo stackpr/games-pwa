@@ -1,7 +1,7 @@
 # 10,000 (Dice)
 
 Press your luck with six dice. Roll, set aside what scores, and decide
-whether to roll again or bank what you have — 2 to 6 players, first to
+whether to roll again or bank what you have — 2 to 12 players, first to
 10,000 wins.
 
 ## The name
@@ -17,9 +17,9 @@ parentheses.
 
 ## Use case
 
-The pass-the-phone game for a group rather than a pair. Connect Four and
+The pass-the-phone game for a group rather than a pair. Four in a Row and
 tic-tac-toe seat exactly two; 10,000 is the one that scales to a table of
-six, which is why the player count is a setting rather than a constant.
+twelve, which is why the player count is a setting rather than a constant.
 
 There is no AI opponent and no networked play. Everyone shares the one
 screen and hands it on, the same posture as the scorekeeper.
@@ -117,6 +117,20 @@ two rows of three rather than six slivers. The grid's column count is set
 from the player count rather than fixed at three, so two players still fill
 the row instead of leaving a hole. The settings button sits alongside the
 whole block and stretches to its full height.
+
+**Past six players it switches to four across.** Three would mean four rows
+of seats at twelve players, and the rows come straight out of the tray's
+height; four across keeps it to three rows. Seats get narrower rather than
+the tray getting shorter, which is the right trade when a seat only has to
+hold `P12` and a score.
+
+The row count is not free, so it is not guessed at: JS sets `--seat-rows`
+whenever it builds the seats, and `--chrome` is a sum — a measured `9.2rem`
+of top bar, status line and controls, plus `3.05rem` per seat row. Getting
+this wrong does not misalign anything, it pushes the bottom of the tray off
+the screen, so a spec asserts the tray stays square with no overflow at 2,
+7 and 12 players. Landscape gets compact seats and a smaller per-row figure
+because height is the scarce axis there.
 
 ## Colors
 

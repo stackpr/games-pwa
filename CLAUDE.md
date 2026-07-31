@@ -163,12 +163,12 @@ Rules that come with this:
 - **Never let color be the only signal.** Where a game can carry a shape it
   should — tic-tac-toe's X and O are readable with no color vision at all,
   which is why its turn indicator shows the actual mark rather than a
-  disc. Connect Four's pieces genuinely can only differ by color, so its
+  disc. Four in a Row's pieces genuinely can only differ by color, so its
   indicator leans on the accessible label below.
 - Games with no players — Counter — do not use these tokens. Its `--up` and
   `--down` are semantic, not identities, and should stay separate.
 - **Two tokens means two sides.** A game with a variable number of seats —
-  10,000 has 2–6 — must not map them onto these, because the third seat
+  10,000 has 2–12 — must not map them onto these, because the third seat
   would have to invent a colour and the first two would stop meaning what
   they mean everywhere else. Mark the active seat with weight, a ring or
   position instead of a hue. A game may still define its own *semantic*
@@ -177,13 +177,13 @@ Rules that come with this:
 
 ### The turn indicator
 
-A shared pattern rather than shared code — Connect Four and tic-tac-toe
+A shared pattern rather than shared code — Four in a Row and tic-tac-toe
 carry near-identical markup and CSS. Copy it into a new game rather than
 inventing a third variant.
 
 **The piece identifies the player; the words carry only the state.** The
 line reads `Next: ⬤` while playing and `⬤ Wins!` once won, never
-"Player 1". The piece is the game's own token — Connect Four shows its
+"Player 1". The piece is the game's own token — Four in a Row shows its
 disc, tic-tac-toe shows the actual X or O — so the indicator previews
 exactly what the next tap places.
 
@@ -223,7 +223,7 @@ CSS hangs off that. Three rules make it work:
   `prefers-reduced-motion: reduce`, and in any screenshot. A pulse alone
   reads as "nothing happened" half the time it is looked at. Reduced motion
   drops the animation and keeps the ring.
-- **Ring the unit the game is played in** — the disc in Connect Four, the
+- **Ring the unit the game is played in** — the disc in Four in a Row, the
   whole square in tic-tac-toe. Match the piece's own border radius so the
   ring traces it rather than boxing it.
 - **`box-shadow` lengths are px, never `%`.** A single percentage makes the

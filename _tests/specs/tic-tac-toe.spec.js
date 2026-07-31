@@ -209,7 +209,7 @@ test.describe('presentation', () => {
   });
 
   test('the winning line is ringed in the shared ink color', async ({ page }) => {
-    // Same treatment as connect-four: the ring, not the pulse, is what
+    // Same treatment as four-in-a-row: the ring, not the pulse, is what
     // marks the line when the animation is dim or switched off. box-shadow
     // discards the whole declaration if given a percentage length, so the
     // computed value is asserted rather than the stylesheet text.

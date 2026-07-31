@@ -26,11 +26,20 @@
          colors in CLAUDE.md, and this game's own notes. */
       --keep: #f0b429;
       --bust: #d84a35;
-      --chrome: 17rem;
+      /* Vertical space above and below the tray. The seat rows are part of
+         it, so --seat-rows is set from the player count in JS; without that
+         a third row of seats pushes the tray off screen. */
+      --seat-rows: 1;
+      /* Measured: the top bar, status line and controls come to ~8.6rem, and
+         each row of seats adds ~3.05rem. Twelve players is three rows, so
+         this has to be a sum rather than a constant. */
+      --chrome: calc(9.2rem + var(--seat-rows) * 3.05rem);
       color-scheme: dark;
     }
     @media (orientation: landscape) {
-      :root { --chrome: 15rem; }
+      /* Height is the scarce axis here, so the seats get compact and the
+         per-row cost drops with them. */
+      :root { --chrome: calc(9.8rem + var(--seat-rows) * 2.3rem); }
     }
     * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
     html, body { margin: 0; padding: 0; height: 100%; }
@@ -115,6 +124,11 @@
       box-shadow: inset 0 0 0 2px rgba(255,255,255,0.55);
     }
     .seat[data-active] .seat-name { color: var(--text); }
+    @media (orientation: landscape) {
+      .seat { padding: 0.15rem 0.2rem; }
+      .seat-name { font-size: 0.62rem; }
+      .seat-score { font-size: 0.9rem; }
+    }
     .settings-btn {
       flex: none;
       width: 2.4rem;
@@ -144,7 +158,12 @@
       color: var(--text-dim);
       margin-bottom: 0.4rem;
     }
-    .count-row { display: flex; gap: 0.35rem; }
+    /* 2 to 12 is eleven buttons — far too many for one row on a phone. */
+    .count-row {
+      display: grid;
+      grid-template-columns: repeat(6, 1fr);
+      gap: 0.35rem;
+    }
     .count {
       flex: 1;
       background: var(--bg);

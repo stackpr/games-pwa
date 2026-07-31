@@ -1,7 +1,7 @@
 const { test, expect } = require('@playwright/test');
 const { clearState, trackExternalRequests } = require('../helpers');
 
-const URL = '/games/connect-four/';
+const URL = '/games/four-in-a-row/';
 
 const col = (page, c) => page.locator(`.col[data-col="${c}"]`);
 const turnText = page => page.locator('#turn-text');
@@ -192,13 +192,13 @@ test.describe('persistence', () => {
     await col(page, 3).click();
     await col(page, 1).click();
     const saved = await page.evaluate(() =>
-      JSON.parse(localStorage.getItem('games.connect-four.v1')));
+      JSON.parse(localStorage.getItem('games.four-in-a-row.v1')));
     expect(saved).toEqual({ moves: [3, 1] });
   });
 
   test('corrupt saved state falls back to an empty board', async ({ page }) => {
     await page.evaluate(() =>
-      localStorage.setItem('games.connect-four.v1', 'not json'));
+      localStorage.setItem('games.four-in-a-row.v1', 'not json'));
     await page.reload();
     await expect(page.locator('.cell[data-p]')).toHaveCount(0);
     await expect(turnText(page)).toHaveText('Next:');
@@ -207,7 +207,7 @@ test.describe('persistence', () => {
   test('an illegal saved move truncates the game at that point', async ({ page }) => {
     // Column 99 does not exist, so only the two moves before it survive.
     await page.evaluate(() => localStorage.setItem(
-      'games.connect-four.v1', JSON.stringify({ moves: [0, 1, 99, 2] })));
+      'games.four-in-a-row.v1', JSON.stringify({ moves: [0, 1, 99, 2] })));
     await page.reload();
     await expect(page.locator('.cell[data-p]')).toHaveCount(2);
     await expect(turnText(page)).toHaveText('Next:');
