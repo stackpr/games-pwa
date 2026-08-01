@@ -36,6 +36,18 @@ const GAMES = [
     description: 'Roll one to six dice, nothing else',
     emoji: '\u{1F3AF}',
     path: 'games/dice/'
+  },
+  {
+    name: 'Spades',
+    description: 'Scoresheet for four-handed partners',
+    emoji: '\u2660\uFE0F',
+    path: 'games/spades/'
+  },
+  {
+    name: 'Checkers',
+    description: 'Two players, forced jumps',
+    emoji: '\u{1F3C1}',
+    path: 'games/checkers/'
   }
 ];
 

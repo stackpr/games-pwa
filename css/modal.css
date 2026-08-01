@@ -1,0 +1,69 @@
+/*
+ * Shared overlay dialog, paired with js/lib/modal.js.
+ *
+ * Fading needs both opacity and visibility, and the visibility transition
+ * needs a delay. visibility is what stops a closed dialog swallowing taps
+ * and holding focusable controls, but it cannot be interpolated — without
+ * `visibility 0s linear <duration>` on the closed state it flips at once and
+ * the fade-out never appears. The `hidden` attribute cannot do this at all,
+ * since display: none snaps. See games/ten-thousand/_README.md.
+ */
+.modal {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  background: rgba(6, 9, 16, 0.74);
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 160ms ease, visibility 0s linear 160ms;
+}
+.modal[data-open] {
+  opacity: 1;
+  visibility: visible;
+  transition: opacity 160ms ease, visibility 0s;
+}
+
+.modal-panel {
+  width: 100%;
+  max-width: 24rem;
+  max-height: 100%;
+  overflow-y: auto;
+  padding: 1rem 1rem 0.9rem;
+  background: var(--panel, #1a2030);
+  border: 1px solid var(--panel-hi, #2b3450);
+  border-radius: 16px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.55);
+  transform: translateY(0.6rem);
+  transition: transform 160ms ease;
+}
+.modal[data-open] .modal-panel { transform: translateY(0); }
+
+.modal-title {
+  display: block;
+  margin: 0 0 0.6rem;
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--text, #eef1f8);
+}
+
+.modal-close {
+  width: 100%;
+  margin-top: 0.9rem;
+  border: 1px solid var(--panel-hi, #2b3450);
+  background: var(--bg, #10141f);
+  color: var(--text, #eef1f8);
+  border-radius: 10px;
+  font-size: 1rem;
+  font-weight: 700;
+  padding: 0.6rem 0;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .modal, .modal-panel { transition: none; }
+}

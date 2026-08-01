@@ -11,6 +11,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <link rel="stylesheet" href="../../css/dice.css">
+  <link rel="stylesheet" href="../../css/modal.css">
   <style>
     :root {
       --bg: #10141f;
@@ -143,51 +144,7 @@
     }
     .settings-btn:active { background: var(--panel-hi); }
 
-    /* Settings float over the board rather than pushing it: the panel is
-       not part of the game, and inline it competed with the tray for the
-       height the tray sizes itself against.
 
-       Fading needs both opacity and visibility. visibility is what stops a
-       closed panel being clickable and focusable, and delaying its
-       transition by the fade duration is what lets the fade-out finish
-       before the panel is taken away — `hidden` alone would snap. */
-    .settings {
-      position: fixed;
-      inset: 0;
-      z-index: 10;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      padding: 1rem;
-      background: rgba(6, 9, 16, 0.74);
-      opacity: 0;
-      visibility: hidden;
-      transition: opacity 160ms ease, visibility 0s linear 160ms;
-    }
-    .settings[data-open] {
-      opacity: 1;
-      visibility: visible;
-      transition: opacity 160ms ease, visibility 0s;
-    }
-    .settings-panel {
-      width: 100%;
-      max-width: 22rem;
-      padding: 1rem 1rem 0.9rem;
-      background: var(--panel);
-      border: 1px solid var(--panel-hi);
-      border-radius: 16px;
-      box-shadow: 0 12px 32px rgba(0, 0, 0, 0.55);
-      transform: translateY(0.6rem);
-      transition: transform 160ms ease;
-    }
-    .settings[data-open] .settings-panel { transform: translateY(0); }
-    .settings-label {
-      display: block;
-      margin: 0 0 0.6rem;
-      font-size: 1rem;
-      font-weight: 700;
-      color: var(--text);
-    }
     /* 2 to 12 is eleven buttons — far too many for one row on a phone. */
     .count-row {
       display: grid;
@@ -207,25 +164,48 @@
       touch-action: manipulation;
     }
     .count[aria-pressed="true"] { background: var(--panel-hi); }
+    .score-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.92rem;
+    }
+    .score-table th {
+      text-align: left;
+      font-weight: 500;
+      color: var(--text-dim);
+      padding: 0.3rem 0.5rem 0.3rem 0;
+    }
+    .score-table td {
+      text-align: right;
+      font-weight: 700;
+      font-variant-numeric: tabular-nums;
+      padding: 0.3rem 0;
+      white-space: nowrap;
+    }
+    .score-table tr + tr th, .score-table tr + tr td {
+      border-top: 1px solid var(--panel-hi);
+    }
+    .scoring-note {
+      margin: 0.7rem 0 0;
+      font-size: 0.78rem;
+      color: var(--text-dim);
+    }
+    .scoring-head {
+      margin: 0.9rem 0 0.35rem;
+      font-size: 0.95rem;
+    }
+    .scoring-list {
+      margin: 0;
+      padding-left: 1.1rem;
+      font-size: 0.85rem;
+      color: var(--text-dim);
+      line-height: 1.45;
+    }
+    .scoring-list li + li { margin-top: 0.3rem; }
     .settings-note {
       margin: 0.7rem 0 0.9rem;
       font-size: 0.78rem;
       color: var(--text-dim);
-    }
-    .settings-close {
-      width: 100%;
-      border: 1px solid var(--panel-hi);
-      background: var(--bg);
-      color: var(--text);
-      border-radius: 10px;
-      font-size: 1rem;
-      font-weight: 700;
-      padding: 0.6rem 0;
-      cursor: pointer;
-      touch-action: manipulation;
-    }
-    @media (prefers-reduced-motion: reduce) {
-      .settings, .settings-panel { transition: none; }
     }
 
     .stage {
@@ -316,17 +296,52 @@
 
   <div class="scoreboard">
     <div class="seats" id="seats"></div>
+    <button id="scoring-btn" class="settings-btn" type="button"
+            aria-label="How scoring works" aria-expanded="false">?</button>
     <button id="settings-btn" class="settings-btn" type="button"
             aria-label="Settings: number of players" aria-expanded="false">&#10043;</button>
   </div>
 
-  <div class="settings" id="settings">
-    <div class="settings-panel" role="dialog" aria-modal="true"
+  <div class="modal" id="settings">
+    <div class="modal-panel" role="dialog" aria-modal="true"
          aria-labelledby="settings-title">
-      <h2 class="settings-label" id="settings-title">Number of players</h2>
+      <h2 class="modal-title" id="settings-title">Number of players</h2>
       <div class="count-row" id="count-row"></div>
       <p class="settings-note">Changing this starts a new game.</p>
-      <button id="settings-close" class="settings-close" type="button">Close</button>
+      <button class="modal-close" type="button" data-close>Close</button>
+    </div>
+  </div>
+
+  <div class="modal" id="scoring">
+    <div class="modal-panel" role="dialog" aria-modal="true"
+         aria-labelledby="scoring-title">
+      <h2 class="modal-title" id="scoring-title">How scoring works</h2>
+      <table class="score-table">
+        <tbody>
+          <tr><th scope="row">Straight, 1&ndash;6</th><td>1500</td></tr>
+          <tr><th scope="row">Three pairs</th><td>1500</td></tr>
+          <tr><th scope="row">Three 1s</th><td>1000</td></tr>
+          <tr><th scope="row">Three of a kind, <em>n</em></th><td><em>n</em> &times; 100</td></tr>
+          <tr><th scope="row">Each die past the third</th><td>another set's worth</td></tr>
+          <tr><th scope="row">Single 1</th><td>100</td></tr>
+          <tr><th scope="row">Single 5</th><td>50</td></tr>
+        </tbody>
+      </table>
+      <p class="scoring-note">
+        Four 1s is 2000, five is 3000, six is 4000 — adding a die never
+        lowers a score.
+      </p>
+      <h3 class="scoring-head">Playing a turn</h3>
+      <ul class="scoring-list">
+        <li><strong>Every kept die must score.</strong> Keeping a 1 and a 3
+          is refused, because the 3 earns nothing.</li>
+        <li><strong>Bust</strong> is a roll with nothing scoring in it. The
+          whole turn score is lost.</li>
+        <li><strong>Hot dice:</strong> set all six aside and you get all six
+          back, keeping the turn score.</li>
+        <li><strong>Stop</strong> banks the turn. First to 10,000 wins.</li>
+      </ul>
+      <button class="modal-close" type="button" data-close>Close</button>
     </div>
   </div>
 
@@ -346,6 +361,7 @@
 
   <script src="../../js/lib/store.js"></script>
   <script src="../../js/lib/dice.js"></script>
+  <script src="../../js/lib/modal.js"></script>
   <script src="ten-thousand.js"></script>
   <script>
     if ('serviceWorker' in navigator) {

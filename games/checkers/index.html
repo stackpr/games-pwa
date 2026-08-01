@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Checkers</title>
+  <meta name="theme-color" content="#10141f">
+  <link rel="manifest" href="../../manifest.webmanifest">
+  <link rel="icon" href="../../icons/favicon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="../../icons/apple-touch-icon.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="stylesheet" href="../../css/players.css">
+  <link rel="stylesheet" href="../../css/modal.css">
+  <style>
+    :root {
+      --bg: #10141f;
+      --text: #eef1f8;
+      --text-dim: #9aa4bd;
+      --panel: #1a2030;
+      --panel-hi: #2b3450;
+      --light: #2f3a56;
+      --dark: #141a28;
+      --chrome: 11.5rem;
+      color-scheme: dark;
+    }
+    @media (orientation: landscape) {
+      :root { --chrome: 6rem; }
+    }
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    html, body { margin: 0; padding: 0; height: 100%; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      display: flex;
+      flex-direction: column;
+      height: 100dvh;
+      overflow: hidden;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: calc(0.5rem + env(safe-area-inset-top)) 0.75rem 0.5rem;
+      flex: none;
+    }
+    .topbar a { color: var(--text-dim); text-decoration: none; font-size: 0.95rem; }
+    .topbar-actions { display: flex; gap: 0.5rem; }
+    .chip {
+      border: 1px solid var(--panel-hi);
+      background: var(--panel);
+      color: var(--text);
+      border-radius: 999px;
+      padding: 0.35rem 0.9rem;
+      font-size: 0.9rem;
+      cursor: pointer;
+      touch-action: manipulation;
+    }
+    .chip:disabled { opacity: 0.4; }
+
+    /* Turn indicator — the shared pattern; see CLAUDE.md. */
+    .turn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.4em;
+      padding: 0 0.75rem 0.6rem;
+      flex: none;
+      font-size: clamp(1.9rem, 9.5vw, 3.5rem);
+      font-weight: 700;
+      line-height: 1.2;
+      text-align: center;
+    }
+    .visually-hidden {
+      position: absolute;
+      width: 1px; height: 1px;
+      margin: -1px; padding: 0;
+      overflow: hidden;
+      clip-path: inset(50%);
+      white-space: nowrap;
+      border: 0;
+    }
+    @media (orientation: landscape) {
+      .turn { font-size: clamp(1.05rem, 5vh, 1.7rem); padding-bottom: 0.4rem; }
+    }
+    .turn-disc {
+      width: 1.15em; height: 1.15em;
+      border-radius: 50%;
+      flex: none;
+      background: var(--player-1);
+      box-shadow: inset 0 0 0 2px rgba(0,0,0,0.25);
+    }
+    .turn[data-player="2"] .turn-disc { background: var(--player-2); }
+    .turn[data-player="none"] .turn-disc { display: none; }
+    .turn[data-state="playing"] .turn-text { order: -1; }
+    .turn[data-state="over"] .turn-text { font-weight: 800; }
+
+    .stage {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0 6px calc(6px + env(safe-area-inset-bottom));
+      min-height: 0;
+    }
+    .board {
+      display: grid;
+      grid-template-columns: repeat(8, 1fr);
+      grid-template-rows: repeat(8, 1fr);
+      aspect-ratio: 1;
+      width: 100%;
+      max-width: min(100%, calc(100dvh - var(--chrome)), 30rem);
+      max-height: 100%;
+      border-radius: 10px;
+      overflow: hidden;
+      border: 2px solid var(--panel-hi);
+    }
+    /* Portrait: split the slack above and below the board so the status line
+       centres in the gap. Must stay AFTER .stage and .board — a media query
+       adds no specificity, so these lose on source order otherwise. */
+    @media (orientation: portrait) {
+      .turn { flex: 1; padding-top: 0.6rem; }
+      .stage { flex: none; }
+      body::after { content: ''; flex: 1; }
+      .board { max-height: none; }
+    }
+
+    .sq {
+      position: relative;
+      border: none;
+      padding: 0;
+      background: var(--light);
+      min-width: 0;
+      min-height: 0;
+    }
+    .sq[data-dark] { background: var(--dark); }
+    .sq[data-playable] { cursor: pointer; touch-action: manipulation; }
+    .sq:disabled { cursor: default; }
+
+    .piece {
+      position: absolute;
+      inset: 12%;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: inset 0 -3px 6px rgba(0,0,0,0.4), inset 0 3px 5px rgba(255,255,255,0.18);
+    }
+    .sq[data-p="1"] .piece { background: var(--player-1); }
+    .sq[data-p="2"] .piece { background: var(--player-2); }
+    .crown { width: 58%; height: 58%; fill: var(--player-ink); }
+
+    /* The piece you have picked up. */
+    .sq[data-sel] .piece {
+      box-shadow: 0 0 0 3px var(--player-ink), inset 0 -3px 6px rgba(0,0,0,0.4);
+    }
+    /* Where it may go. A jump target is stronger, since jumps are forced. */
+    .sq[data-to]::after {
+      content: '';
+      position: absolute;
+      inset: 36%;
+      border-radius: 50%;
+      background: rgba(255,255,255,0.42);
+    }
+    .sq[data-to="jump"]::after {
+      inset: 26%;
+      background: rgba(240,180,41,0.85);
+    }
+    /* A piece that must move, because a jump is available somewhere. */
+    .sq[data-must] .piece {
+      animation: nudge 1.4s ease-in-out infinite;
+    }
+    @keyframes nudge {
+      0%, 100% { filter: brightness(1); }
+      50% { filter: brightness(1.35); }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .sq[data-must] .piece { animation: none; box-shadow: 0 0 0 2px rgba(240,180,41,0.9); }
+    }
+
+    .rules-list { margin: 0; padding-left: 1.1rem; font-size: 0.85rem;
+      color: var(--text-dim); line-height: 1.45; }
+    .rules-list li + li { margin-top: 0.35rem; }
+  </style>
+</head>
+<body>
+  <div class="topbar">
+    <a href="../../">&larr; Games</a>
+    <div class="topbar-actions">
+      <button id="rules-btn" class="chip" type="button" aria-expanded="false">Rules</button>
+      <button id="undo" class="chip" type="button" disabled>Undo</button>
+      <button id="reset" class="chip" type="button">New game</button>
+    </div>
+  </div>
+
+  <div id="turn" class="turn" data-player="1" data-state="playing" aria-live="polite">
+    <span id="turn-disc" class="turn-disc" aria-hidden="true"></span>
+    <span id="turn-text" class="turn-text" aria-hidden="true">Next:</span>
+    <span id="turn-label" class="visually-hidden">Player 1 to move</span>
+  </div>
+
+  <main class="stage">
+    <div id="board" class="board"></div>
+  </main>
+
+  <div class="modal" id="rules">
+    <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="rules-title">
+      <h2 class="modal-title" id="rules-title">Rules</h2>
+      <ul class="rules-list">
+        <li><strong>Jumping is forced.</strong> If any capture is available,
+          you must take one — only the pieces that can jump will pick up.</li>
+        <li><strong>Chains continue.</strong> If the piece you just jumped
+          with can jump again, it must, and the turn stays with you.</li>
+        <li>Men move and jump diagonally forward one square. Reaching the far
+          row crowns them, and kings move and jump in all four directions.</li>
+        <li><strong>Crowning ends the move</strong>, even if another jump
+          looks available from the new square.</li>
+        <li>You lose when you have no pieces left, or no legal move.</li>
+      </ul>
+      <button class="modal-close" type="button" data-close>Close</button>
+    </div>
+  </div>
+
+  <script src="../../js/lib/store.js"></script>
+  <script src="../../js/lib/modal.js"></script>
+  <script src="checkers.js"></script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('../../sw.js').catch(() => {});
+    }
+  </script>
+</body>
+</html>

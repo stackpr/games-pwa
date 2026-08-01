@@ -27,10 +27,12 @@ _config.yml                 Pages build: keeps repo-only files unpublished
 css/app.css                 Shared styles for the home page
 css/players.css             Player identity colors (see Player colors)
 css/dice.css                Die and pip styling, paired with js/lib/dice.js
+css/modal.css               Overlay dialog, paired with js/lib/modal.js
 js/games.js                 Game registry + home-page list rendering
 js/install.js               "Install this app" prompt logic
 js/lib/store.js             localStorage load/save, used by every game
 js/lib/dice.js              Dice tray: builds the dice, rolls them
+js/lib/modal.js             Overlay dialog: scrim, Escape, focus handling
 icons/                      App icons (see Images below)
 games/<slug>/index.html     One folder per game; each page is self-contained
 games/<slug>/_README.md     Why the game exists and how it works (unpublished)
@@ -96,14 +98,15 @@ second copy would be a second set of bugs:
 | --- | --- |
 | `js/lib/store.js` | `Store.load(key)` / `Store.save(key, value)`. Swallows and warns, because storage throws in Safari private mode, on a full quota, and when a user blocks site data. Validation stays in the game — `load()` only promises "parsed JSON, or null". |
 | `js/lib/dice.js` | `DiceTray.create(el, { onPick })`, plus `randomFace()`. Builds the dice, sizes them from how many are in play, and runs the bounce-and-settle roll. Pairs with `css/dice.css`. Omit `onPick` and the dice are inert `<span>`s rather than buttons. |
+| `js/lib/modal.js` | `Modal.create(el, { trigger })`. An overlay dialog with the parts that are easy to forget: closing on the scrim but not the panel, closing on Escape, and moving focus in and back out. Pairs with `css/modal.css`; a `[data-close]` button inside closes it. |
 
 Load them with plain `<script>` tags before the game's own script; they
 attach `Store` and `DiceTray` to `window`. There is no module system here
 and no build step to add one.
 
-**Extract on the second use, not the first.** Both of these earned their
-place by being needed twice — 10,000 and Dice share the tray, and all six
-games share the storage wrapper. A helper with one caller is better left in
+**Extract on the second use, not the first.** Each of these earned its
+place by being needed twice — 10,000 and Dice share the tray, 10,000 alone
+opened two dialogs, and every game shares the storage wrapper. A helper with one caller is better left in
 the game that uses it, where it can stay shaped to that game.
 
 Anything genuinely game-specific stays put even when it looks generic: the

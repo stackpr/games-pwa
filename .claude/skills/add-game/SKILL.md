@@ -32,7 +32,9 @@ in CLAUDE.md.
    - Load `../../js/lib/store.js` and use `Store.load`/`Store.save` rather
      than touching `localStorage` directly. If the game rolls dice, load
      `../../js/lib/dice.js` + `../../css/dice.css` and build the tray with
-     `DiceTray.create`. See Shared code in CLAUDE.md
+     `DiceTray.create`. For a settings or rules dialog, use
+     `../../js/lib/modal.js` + `../../css/modal.css` rather than a bespoke
+     overlay. See Shared code in CLAUDE.md
    - Top bar with `<a href="../../">&larr; Games</a>`
    - `<link rel="manifest" href="../../manifest.webmanifest">` and the same
      icon/meta tags as the scorekeeper page

@@ -301,7 +301,7 @@ test.describe('settings', () => {
       }
       const res = await route.fetch();
       const body = (await res.text())
-        .replace(/<button id="settings-close"[\s\S]*?<\/button>/, '');
+        .replace(/<button class="modal-close"[\s\S]*?<\/button>/, '');
       await route.fulfill({ response: res, body });
     });
 
@@ -309,7 +309,7 @@ test.describe('settings', () => {
     await clearState(page);
 
     // Everything that does not depend on the missing node still works.
-    await expect(page.locator('#settings-close')).toHaveCount(0);
+    await expect(page.locator('#settings .modal-close')).toHaveCount(0);
     await expect(page.locator('.seat')).toHaveCount(2);
     await roll(page);
     await expect(page.locator('.die[data-state="active"]')).toHaveCount(6);
@@ -362,7 +362,7 @@ test.describe('settings', () => {
     await page.locator('#settings-btn').click();
     await expect(page.locator('#settings')).toBeVisible();
 
-    await page.locator('.settings-panel').click({ position: { x: 5, y: 5 } });
+    await page.locator('#settings .modal-panel').click({ position: { x: 5, y: 5 } });
     await expect(page.locator('#settings')).toBeVisible();
 
     await page.locator('#settings').click({ position: { x: 5, y: 5 } });
@@ -378,7 +378,7 @@ test.describe('settings', () => {
 
   test('the Close button closes it without changing the game', async ({ page }) => {
     await page.locator('#settings-btn').click();
-    await page.locator('#settings-close').click();
+    await page.locator('#settings .modal-close').click();
     await expect(page.locator('#settings')).toBeHidden();
     await expect(page.locator('.seat')).toHaveCount(2);
   });

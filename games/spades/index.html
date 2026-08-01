@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Spades</title>
+  <meta name="theme-color" content="#10141f">
+  <link rel="manifest" href="../../manifest.webmanifest">
+  <link rel="icon" href="../../icons/favicon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="../../icons/apple-touch-icon.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="stylesheet" href="../../css/players.css">
+  <link rel="stylesheet" href="../../css/modal.css">
+  <style>
+    :root {
+      --bg: #10141f;
+      --text: #eef1f8;
+      --text-dim: #9aa4bd;
+      --panel: #1a2030;
+      --panel-hi: #2b3450;
+      --team-1: var(--player-1);
+      --team-2: var(--player-2);
+      color-scheme: dark;
+    }
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    html, body { margin: 0; padding: 0; height: 100%; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      display: flex;
+      flex-direction: column;
+      height: 100dvh;
+      overflow: hidden;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.4rem;
+      padding: calc(0.4rem + env(safe-area-inset-top)) 0.6rem 0.4rem;
+      flex: none;
+    }
+    .topbar a { color: var(--text-dim); text-decoration: none; font-size: 0.95rem; }
+    .topbar-actions { display: flex; gap: 0.35rem; }
+    .chip {
+      border: 1px solid var(--panel-hi);
+      background: var(--panel);
+      color: var(--text);
+      border-radius: 999px;
+      padding: 0.3rem 0.75rem;
+      font-size: 0.85rem;
+      cursor: pointer;
+      touch-action: manipulation;
+    }
+    .chip:disabled { opacity: 0.4; }
+
+    /* Scoresheet: a round per row, both teams side by side. */
+    .sheet {
+      flex: 1;
+      min-height: 0;
+      overflow-y: auto;
+      padding: 0 0.5rem;
+    }
+    table.rounds {
+      width: 100%;
+      border-collapse: collapse;
+      font-variant-numeric: tabular-nums;
+    }
+    .rounds thead th {
+      position: sticky;
+      top: 0;
+      background: var(--bg);
+      padding: 0.3rem 0.25rem;
+      font-size: 0.72rem;
+      color: var(--text-dim);
+      font-weight: 600;
+    }
+    .rounds thead .team-head {
+      font-size: 0.9rem;
+      font-weight: 800;
+      color: var(--text);
+      padding-top: 0.15rem;
+    }
+    .rounds thead .team-head[data-team="1"] { color: var(--team-1); }
+    .rounds thead .team-head[data-team="2"] { color: var(--team-2); }
+    .rounds td {
+      padding: 0.32rem 0.25rem;
+      font-size: 0.95rem;
+      text-align: center;
+      border-top: 1px solid #222a3d;
+    }
+    .rounds .rnd { color: var(--text-dim); font-size: 0.78rem; width: 1.6rem; }
+    .rounds .bids { color: var(--text-dim); font-size: 0.85rem; }
+    .rounds .pts { font-weight: 700; }
+    .rounds .pts[data-sign="down"] { color: #e0806f; }
+    .rounds .divider { width: 1px; padding: 0; background: #222a3d; }
+    .empty {
+      text-align: center;
+      color: var(--text-dim);
+      font-size: 0.85rem;
+      padding: 1.5rem 1rem;
+    }
+
+    .totals {
+      flex: none;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.5rem;
+      padding: 0.5rem;
+    }
+    .total {
+      border-radius: 12px;
+      padding: 0.4rem 0.5rem 0.5rem;
+      text-align: center;
+      color: var(--player-ink);
+    }
+    .total[data-team="1"] { background: var(--team-1); }
+    .total[data-team="2"] { background: var(--team-2); }
+    .total-name { display: block; font-size: 0.75rem; opacity: 0.85; }
+    .total-score {
+      display: block;
+      font-size: 1.9rem;
+      font-weight: 800;
+      line-height: 1.05;
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* Entry: one column per seat, stepped rather than typed. */
+    .entry {
+      flex: none;
+      background: var(--panel);
+      border-top: 1px solid var(--panel-hi);
+      padding: 0.45rem 0.5rem calc(0.5rem + env(safe-area-inset-bottom));
+    }
+    .seats {
+      display: grid;
+      grid-template-columns: 2.6rem repeat(4, 1fr);
+      gap: 0.3rem;
+      align-items: center;
+    }
+    .row-label {
+      font-size: 0.72rem;
+      color: var(--text-dim);
+      text-align: right;
+      padding-right: 0.1rem;
+    }
+    .seat-name {
+      text-align: center;
+      font-size: 0.78rem;
+      font-weight: 700;
+      padding-bottom: 0.1rem;
+    }
+    .seat-name[data-team="1"] { color: var(--team-1); }
+    .seat-name[data-team="2"] { color: var(--team-2); }
+    .seat-name .deal {
+      display: block;
+      font-size: 0.62rem;
+      font-weight: 600;
+      color: var(--text-dim);
+      min-height: 0.8rem;
+    }
+    .stepper {
+      display: flex;
+      flex-direction: column;
+      align-items: stretch;
+      gap: 0.15rem;
+    }
+    .step {
+      border: 1px solid var(--panel-hi);
+      background: var(--bg);
+      color: var(--text);
+      border-radius: 8px;
+      font-size: 0.95rem;
+      line-height: 1;
+      padding: 0.34rem 0;
+      cursor: pointer;
+      touch-action: manipulation;
+    }
+    .step:disabled { opacity: 0.3; cursor: default; }
+    .step:not(:disabled):active { background: var(--panel-hi); }
+    .value {
+      text-align: center;
+      font-size: 1.05rem;
+      font-weight: 800;
+      padding: 0.12rem 0;
+      min-height: 1.5rem;
+    }
+    .value[data-special] { font-size: 0.8rem; color: #f0b429; }
+
+    .go {
+      width: 100%;
+      margin-top: 0.5rem;
+      border: none;
+      border-radius: 12px;
+      background: #2f6f5a;
+      color: var(--text);
+      font-size: 1.1rem;
+      font-weight: 700;
+      padding: 0.62rem 0;
+      cursor: pointer;
+      touch-action: manipulation;
+    }
+
+    .rules-list { margin: 0; padding-left: 1.1rem; font-size: 0.85rem;
+      color: var(--text-dim); line-height: 1.45; }
+    .rules-list li + li { margin-top: 0.35rem; }
+    .rules-head { margin: 0.9rem 0 0.35rem; font-size: 0.95rem; color: var(--text); }
+  </style>
+</head>
+<body>
+  <div class="topbar">
+    <a href="../../">&larr; Games</a>
+    <div class="topbar-actions">
+      <button id="rules-btn" class="chip" type="button" aria-expanded="false">Scoring</button>
+      <button id="undo" class="chip" type="button" disabled>Undo</button>
+      <button id="new-game" class="chip" type="button">New</button>
+    </div>
+  </div>
+
+  <div class="sheet">
+    <table class="rounds">
+      <thead>
+        <tr>
+          <th></th>
+          <th class="team-head" data-team="1" colspan="2">Team 1</th>
+          <th class="divider"></th>
+          <th class="team-head" data-team="2" colspan="2">Team 2</th>
+        </tr>
+        <tr>
+          <th class="rnd">#</th>
+          <th>bids</th><th>pts</th>
+          <th class="divider"></th>
+          <th>bids</th><th>pts</th>
+        </tr>
+      </thead>
+      <tbody id="rows"></tbody>
+    </table>
+    <p id="empty" class="empty">No rounds yet. Set the bids and tricks below.</p>
+  </div>
+
+  <div class="totals">
+    <div class="total" data-team="1">
+      <span class="total-name">Team 1 &middot; P1 &amp; P3</span>
+      <span class="total-score" id="total-1">0</span>
+    </div>
+    <div class="total" data-team="2">
+      <span class="total-name">Team 2 &middot; P2 &amp; P4</span>
+      <span class="total-score" id="total-2">0</span>
+    </div>
+  </div>
+
+  <div class="entry">
+    <div class="seats" id="seats"></div>
+    <button id="score-round" class="go" type="button">Score round</button>
+  </div>
+
+  <div class="modal" id="rules">
+    <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="rules-title">
+      <h2 class="modal-title" id="rules-title">How scoring works</h2>
+      <ul class="rules-list">
+        <li><strong>Made the contract:</strong> 10 points per bid trick, plus
+          1 for each overtrick.</li>
+        <li><strong>Set:</strong> &minus;10 per bid trick, and the overtricks
+          count for nothing.</li>
+        <li><strong>Nil:</strong> &plusmn;100. <strong>Blind nil:</strong>
+          &plusmn;200. Scored per player, on top of the team contract.</li>
+        <li>A nil bidder's tricks still count toward their partner's
+          contract, so a failed nil can still fill a bid.</li>
+      </ul>
+      <h3 class="rules-head">What this does not do</h3>
+      <ul class="rules-list">
+        <li>No bag penalty — overtricks accumulate as points and never cost
+          you 100.</li>
+        <li>Bids are not forced to total anything, and tricks are not forced
+          to total 13. Enter what happened.</li>
+      </ul>
+      <button class="modal-close" type="button" data-close>Close</button>
+    </div>
+  </div>
+
+  <script src="../../js/lib/store.js"></script>
+  <script src="../../js/lib/modal.js"></script>
+  <script src="spades.js"></script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('../../sw.js').catch(() => {});
+    }
+  </script>
+</body>
+</html>
