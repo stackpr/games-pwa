@@ -29,6 +29,7 @@ installable PWA at **https://games.payne.run**.
 | [Somewhere Between](games/somewhere-between/) | Drag the marker to the hidden spot on a scale |
 | [Honeycomb: 3 Bees](games/honeycomb-3-bees/) | Drop a bee in a cell, take a cell away — the comb shrinks under you |
 | [Blackjack](games/blackjack/) | Vegas rules, any bet, a bankroll that carries over |
+| [Quik Dice](games/quik-dice/) | Six dice, four colour rows — everyone on their own phone |
 
 ## Development
 

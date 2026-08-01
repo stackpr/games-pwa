@@ -13,6 +13,11 @@
   <link rel="stylesheet" href="../../css/players.css">
   <style>
     :root {
+      /* js/lib/viewport.js measures the usable height and publishes it as
+         --measured-height. Capping it at 100dvh means a measurement that
+         is late or stale can only ever make the page shorter, never
+         taller than the window. See CLAUDE.md. */
+      --app-height: min(var(--measured-height, 100dvh), 100dvh);
       --bg: #10141f;
       --text: #eef1f8;
       --text-dim: #9aa4bd;
@@ -37,7 +42,7 @@
       font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
       display: flex;
       flex-direction: column;
-      height: 100dvh;
+      height: var(--app-height, 100dvh);
       overflow: hidden;
       user-select: none;
       -webkit-user-select: none;
@@ -139,7 +144,7 @@
       border-radius: 16px;
       aspect-ratio: 1;
       width: 100%;
-      max-width: min(100%, calc(100dvh - var(--chrome)), 30rem);
+      max-width: min(100%, calc(var(--app-height, 100dvh) - var(--chrome)), 30rem);
       max-height: 100%;
     }
     /* Portrait: the board is smaller than the space below the top bar, and
@@ -244,6 +249,7 @@
     <div id="board" class="board"></div>
   </main>
 
+  <script src="../../js/lib/viewport.js"></script>
   <script src="../../js/lib/store.js"></script>
   <script src="tic-tac-toe.js"></script>
   <script>

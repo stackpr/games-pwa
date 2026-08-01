@@ -13,6 +13,11 @@
   <link rel="stylesheet" href="../../css/dice.css">
   <style>
     :root {
+      /* js/lib/viewport.js measures the usable height and publishes it as
+         --measured-height. Capping it at 100dvh means a measurement that
+         is late or stale can only ever make the page shorter, never
+         taller than the window. See CLAUDE.md. */
+      --app-height: min(var(--measured-height, 100dvh), 100dvh);
       --bg: #10141f;
       --text: #eef1f8;
       --text-dim: #9aa4bd;
@@ -35,7 +40,7 @@
       font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
       display: flex;
       flex-direction: column;
-      height: 100dvh;
+      height: var(--app-height, 100dvh);
       overflow: hidden;
       user-select: none;
       -webkit-user-select: none;
@@ -94,7 +99,7 @@
        tray's size and skin. The whole tray is a roll target. */
     .tray {
       width: 100%;
-      max-width: min(100%, calc(100dvh - var(--chrome)), 26rem);
+      max-width: min(100%, calc(var(--app-height, 100dvh) - var(--chrome)), 26rem);
       background: var(--tray);
       border: 1px solid var(--panel-hi);
       border-radius: 16px;
@@ -153,6 +158,7 @@
 
   <p id="result" class="visually-hidden" aria-live="polite"></p>
 
+  <script src="../../js/lib/viewport.js"></script>
   <script src="../../js/lib/store.js"></script>
   <script src="../../js/lib/dice.js"></script>
   <script src="dice.js"></script>

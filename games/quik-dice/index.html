@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Quik Dice</title>
+  <meta name="theme-color" content="#10141f">
+  <link rel="manifest" href="../../manifest.webmanifest">
+  <link rel="icon" href="../../icons/favicon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="../../icons/apple-touch-icon.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="stylesheet" href="../../css/dice.css">
+  <link rel="stylesheet" href="../../css/modal.css">
+  <style>
+    :root {
+      /* js/lib/viewport.js measures the usable height and publishes it as
+         --measured-height. Capping it at 100dvh means a measurement that
+         is late or stale can only ever make the page shorter, never
+         taller than the window. See CLAUDE.md. */
+      --app-height: min(var(--measured-height, 100dvh), 100dvh);
+      --bg: #10141f;
+      --text: #eef1f8;
+      --text-dim: #9aa4bd;
+      --panel: #1a2030;
+      --panel-hi: #2b3450;
+      --tray: #171d2c;
+      --die: #eef1f8;
+      --die-ink: #10141f;
+      /* Four row colours, not player identities: this sheet has no sides, so
+         the two-token --player-1/--player-2 system does not apply. See
+         Player colors in CLAUDE.md, and this game's own notes. */
+      --red: #e5484d;
+      --yellow: #f2c14e;
+      --green: #3aa76d;
+      --blue: #3d7fe0;
+      --ink-light: #ffffff;
+      --ink-dark: #10141f;
+      /* Everything the tray is not. Measured: the bars come to ~13rem, and
+         the sheet's height follows its own width because the cells are
+         square — 12 columns and four rows, so 0.4 of it. Guessing a constant
+         here either overflows a short window or wastes half of a tall one. */
+      --bars: 13rem;
+      --sheet-width: min(100vw - 0.8rem, 32rem);
+      --chrome: calc(var(--bars) + 0.4 * var(--sheet-width));
+      color-scheme: dark;
+    }
+    @media (orientation: landscape) {
+      /* The sheet is beside the tray rather than above it, so it is out of
+         the sum entirely. */
+      :root { --chrome: 12.5rem; }
+    }
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    html, body { margin: 0; padding: 0; height: 100%; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      display: flex;
+      flex-direction: column;
+      height: var(--app-height, 100dvh);
+      overflow: hidden;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.4rem;
+      padding: calc(0.4rem + env(safe-area-inset-top)) 0.6rem 0.4rem;
+      flex: none;
+    }
+    .topbar a {
+      color: var(--text-dim);
+      text-decoration: none;
+      font-size: 0.95rem;
+      white-space: nowrap;
+    }
+    .topbar-right { display: flex; gap: 0.35rem; }
+    .chip {
+      border: 1px solid var(--panel-hi);
+      background: var(--panel);
+      color: var(--text);
+      border-radius: 999px;
+      padding: 0.35rem 0.75rem;
+      font-size: 0.85rem;
+      cursor: pointer;
+      touch-action: manipulation;
+      white-space: nowrap;
+    }
+    .chip:disabled { opacity: 0.35; cursor: default; }
+    .chip.round { padding: 0.35rem 0.65rem; }
+
+    /* The sheet: four rows of eleven numbers plus a lock box, sized so the
+       whole row fits a 320px phone without scrolling sideways. */
+    .sheet {
+      flex: none;
+      display: flex;
+      flex-direction: column;
+      gap: 0.28rem;
+      padding: 0 0.4rem;
+      width: 100%;
+      /* Square cells mean an unbounded sheet grows with the window, and four
+         rows of 70px cells is taller than a phone in landscape. */
+      max-width: calc(var(--sheet-width) + 0.8rem);
+      margin: 0 auto;
+    }
+    .side {
+      flex: 1;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+    }
+    @media (orientation: landscape) {
+      body {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(11rem, 21rem);
+        grid-template-rows: auto minmax(0, 1fr);
+        grid-template-areas: "top top" "sheet side";
+      }
+      .topbar { grid-area: top; }
+      .sheet { grid-area: sheet; align-self: center; }
+      .side { grid-area: side; }
+    }
+    .row {
+      display: grid;
+      grid-template-columns: repeat(11, 1fr) 1.15fr;
+      gap: 0.14rem;
+    }
+    .cell {
+      position: relative;
+      min-width: 0;
+      aspect-ratio: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: none;
+      border-radius: 5px;
+      padding: 0;
+      font: inherit;
+      font-size: clamp(0.62rem, 2.7vw, 0.95rem);
+      font-weight: 700;
+      font-variant-numeric: tabular-nums;
+      cursor: pointer;
+      touch-action: manipulation;
+      color: var(--ink);
+      background: var(--fill);
+    }
+    .row[data-color="red"]    { --fill: var(--red);    --ink: var(--ink-light); }
+    .row[data-color="yellow"] { --fill: var(--yellow); --ink: var(--ink-dark); }
+    .row[data-color="green"]  { --fill: var(--green);  --ink: var(--ink-light); }
+    .row[data-color="blue"]   { --fill: var(--blue);   --ink: var(--ink-light); }
+
+    /* Crossed off: the number stays readable under the X, because a player
+       checking their sheet is reading which numbers are gone. */
+    .cell[data-marked] { opacity: 0.5; }
+    .cell[data-marked]::after {
+      content: '';
+      position: absolute;
+      inset: 10%;
+      background:
+        linear-gradient(to bottom right, transparent calc(50% - 1.1px),
+          currentColor calc(50% - 1.1px), currentColor calc(50% + 1.1px),
+          transparent calc(50% + 1.1px)),
+        linear-gradient(to bottom left, transparent calc(50% - 1.1px),
+          currentColor calc(50% - 1.1px), currentColor calc(50% + 1.1px),
+          transparent calc(50% + 1.1px));
+    }
+    /* A white ring marks what this roll allows, the same way the site marks
+       anything else that is picked out. */
+    .cell[data-target] { box-shadow: inset 0 0 0 2px var(--ink-light), 0 0 0 1px rgba(0,0,0,0.4); }
+    body[data-phase="turn"] .cell:not([data-target]):not([data-marked]) { opacity: 0.34; }
+    .cell:disabled { cursor: default; }
+
+    .cell.lock { background: color-mix(in srgb, var(--fill) 55%, #000); }
+    .lock-icon { width: 62%; height: 62%; fill: var(--ink); }
+    .cell.lock[data-marked]::after { inset: 14%; }
+
+    /* A closed row is out of play — for everyone, not just whoever closed
+       it — so it greys out along with its die. */
+    .row[data-closed] .cell { filter: grayscale(1); opacity: 0.3; }
+    .row[data-closed] .cell[data-marked] { opacity: 0.24; }
+
+    .totals {
+      flex: none;
+      display: grid;
+      grid-template-columns: repeat(6, 1fr);
+      gap: 0.25rem;
+      padding: 0.45rem 0.4rem 0.15rem;
+    }
+    .tot {
+      background: var(--panel);
+      border-radius: 8px;
+      padding: 0.18rem 0.1rem 0.25rem;
+      text-align: center;
+      line-height: 1.15;
+      border-bottom: 3px solid var(--mark, transparent);
+    }
+    .tot[data-color="red"]    { --mark: var(--red); }
+    .tot[data-color="yellow"] { --mark: var(--yellow); }
+    .tot[data-color="green"]  { --mark: var(--green); }
+    .tot[data-color="blue"]   { --mark: var(--blue); }
+    .tot-cap {
+      display: block;
+      font-size: 0.6rem;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+    }
+    .tot b {
+      display: block;
+      font-size: 1.05rem;
+      font-variant-numeric: tabular-nums;
+    }
+    .tot.sum { background: var(--panel-hi); }
+    .tot.sum b { font-size: 1.2rem; }
+
+    .stage {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0.3rem 0.5rem 0;
+      min-height: 0;
+    }
+    /* Square, positioning and pips come from css/dice.css; this is only the
+       tray's size and skin. */
+    .tray {
+      width: 100%;
+      max-width: min(100%, calc(var(--app-height, 100dvh) - var(--chrome)), 22rem);
+      background: var(--tray);
+      border: 1px solid var(--panel-hi);
+      border-radius: 14px;
+    }
+    /* Two white dice, then one per row, in row order. */
+    .die[data-index="2"] { --die: var(--red);    --die-ink: var(--ink-light); }
+    .die[data-index="3"] { --die: var(--yellow); --die-ink: var(--ink-dark); }
+    .die[data-index="4"] { --die: var(--green);  --die-ink: var(--ink-light); }
+    .die[data-index="5"] { --die: var(--blue);   --die-ink: var(--ink-light); }
+    .die[data-locked] { filter: grayscale(1); opacity: 0.28; }
+
+    .status {
+      flex: none;
+      margin: 0;
+      padding: 0.35rem 0.75rem 0.1rem;
+      text-align: center;
+      font-size: 1rem;
+      font-weight: 700;
+      min-height: 1.9rem;
+    }
+    body[data-phase="over"] .status { color: var(--yellow); }
+
+    .controls {
+      flex: none;
+      display: flex;
+      gap: 0.5rem;
+      padding: 0.3rem 0.5rem calc(0.5rem + env(safe-area-inset-bottom));
+    }
+    .action {
+      flex: 1;
+      border: none;
+      border-radius: 14px;
+      background: var(--panel-hi);
+      color: var(--text);
+      font-size: 1.2rem;
+      font-weight: 700;
+      padding: 0.7rem 0.5rem;
+      cursor: pointer;
+      touch-action: manipulation;
+    }
+    .action:disabled { opacity: 0.35; cursor: default; }
+    .action:not(:disabled):active { filter: brightness(1.25); }
+    #roll { background: #2f6f5a; }
+    #done { background: #4a4370; }
+
+    .rules-list {
+      margin: 0;
+      padding-left: 1.1rem;
+      font-size: 0.86rem;
+      color: var(--text-dim);
+      line-height: 1.45;
+    }
+    .rules-list li + li { margin-top: 0.4rem; }
+    .rules-list strong { color: var(--text); }
+    .rules-head {
+      margin: 0.9rem 0 0.35rem;
+      font-size: 0.95rem;
+    }
+
+    .visually-hidden {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      margin: -1px;
+      padding: 0;
+      overflow: hidden;
+      clip-path: inset(50%);
+      white-space: nowrap;
+      border: 0;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .die { will-change: auto; }
+    }
+  </style>
+</head>
+<body data-phase="idle">
+  <svg class="visually-hidden" aria-hidden="true" focusable="false">
+    <symbol id="lock-glyph" viewBox="0 0 24 24">
+      <path d="M7 10V7a5 5 0 0 1 10 0v3h1.2A1.8 1.8 0 0 1 20 11.8v7.4A1.8 1.8 0 0 1 18.2 21H5.8A1.8 1.8 0 0 1 4 19.2v-7.4A1.8 1.8 0 0 1 5.8 10H7Zm2.4 0h5.2V7a2.6 2.6 0 0 0-5.2 0v3Z"/>
+    </symbol>
+  </svg>
+
+  <div class="topbar">
+    <a href="../../">&larr; Games</a>
+    <div class="topbar-right">
+      <button id="undo" class="chip" type="button">Undo</button>
+      <button id="rules-btn" class="chip round" type="button"
+              aria-label="How to play" aria-expanded="false">?</button>
+      <button id="new-game" class="chip" type="button">New</button>
+    </div>
+  </div>
+
+  <div class="modal" id="rules">
+    <div class="modal-panel" role="dialog" aria-modal="true"
+         aria-labelledby="rules-title">
+      <h2 class="modal-title" id="rules-title">How to play</h2>
+      <ul class="rules-list">
+        <li><strong>One sheet per phone.</strong> Everyone opens this page on
+          their own phone; only the player whose turn it is taps
+          <strong>Roll</strong>.</li>
+        <li><strong>On your turn</strong> the sheet only offers what your roll
+          allows: the two white dice added together, in any row, and one white
+          die added to one colour die, in that colour's row. Take the white sum
+          first if you want both.</li>
+        <li><strong>On someone else's turn</strong> you may cross off their
+          white sum in any row — so every number that is still legal is
+          tappable. Tap nothing if it does not suit you.</li>
+        <li><strong>Left to right only.</strong> Crossing a number skips
+          everything to its left for good.</li>
+        <li><strong>The last number</strong> in a row needs five crosses in
+          that row already. Taking it locks the row and earns you the padlock
+          as an extra cross.</li>
+        <li><strong>When another player locks a row</strong>, tap that row's
+          padlock to close it on your sheet too.</li>
+        <li><strong>Done with nothing crossed costs 5.</strong> Four of those
+          ends the game, and so does the second locked row.</li>
+      </ul>
+      <h3 class="rules-head">Scoring</h3>
+      <ul class="rules-list">
+        <li>1 cross scores 1, 2 score 3, 3 score 6, 4 score 10 — and so on up
+          to 12 crosses for 78. The padlock counts as one more cross.</li>
+        <li>Each penalty takes 5 off the total.</li>
+      </ul>
+      <button class="modal-close" type="button" data-close>Close</button>
+    </div>
+  </div>
+
+  <main class="sheet" id="sheet"></main>
+
+  <!-- Everything that is not the sheet. In landscape it moves alongside the
+       sheet rather than under it, which is the only way the tray survives a
+       390px-tall window. -->
+  <div class="side">
+    <div class="totals" id="totals"></div>
+
+    <div class="stage">
+      <div class="tray dice-tray" id="tray"></div>
+    </div>
+
+    <p class="status" id="status" aria-live="polite"></p>
+
+    <div class="controls">
+      <button id="roll" class="action" type="button">Roll</button>
+      <button id="done" class="action" type="button">Done</button>
+    </div>
+  </div>
+
+  <script src="../../js/lib/viewport.js"></script>
+  <script src="../../js/lib/store.js"></script>
+  <script src="../../js/lib/dice.js"></script>
+  <script src="../../js/lib/modal.js"></script>
+  <script src="quik-dice.js"></script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('../../sw.js').catch(() => {});
+    }
+  </script>
+</body>
+</html>

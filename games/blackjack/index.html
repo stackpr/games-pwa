@@ -15,6 +15,11 @@
   <link rel="stylesheet" href="../../css/cards.css">
   <style>
     :root {
+      /* js/lib/viewport.js measures the usable height and publishes it as
+         --measured-height. Capping it at 100dvh means a measurement that
+         is late or stale can only ever make the page shorter, never
+         taller than the window. See CLAUDE.md. */
+      --app-height: min(var(--measured-height, 100dvh), 100dvh);
       --bg: #0d1b14;
       --felt: #14432f;
       --felt-line: #1d6144;
@@ -35,7 +40,7 @@
       font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
       display: flex;
       flex-direction: column;
-      height: 100dvh;
+      height: var(--app-height, 100dvh);
       overflow: hidden;
       user-select: none;
       -webkit-user-select: none;
@@ -305,6 +310,7 @@
     </div>
   </div>
 
+  <script src="../../js/lib/viewport.js"></script>
   <script src="../../js/lib/store.js"></script>
   <script src="../../js/lib/modal.js"></script>
   <script src="../../js/lib/deck.js"></script>

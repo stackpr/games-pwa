@@ -33,6 +33,7 @@ js/install.js               "Install this app" prompt logic
 js/lib/store.js             localStorage load/save, used by every game
 js/lib/dice.js              Dice tray: builds the dice, rolls them
 js/lib/modal.js             Overlay dialog: scrim, Escape, focus handling
+js/lib/viewport.js          Measures the usable height; re-measures after load
 icons/                      App icons (see Images below)
 games/<slug>/index.html     One folder per game; each page is self-contained
 games/<slug>/_README.md     Why the game exists and how it works (unpublished)
@@ -103,6 +104,7 @@ second copy would be a second set of bugs:
 | `js/lib/store.js` | `Store.load(key)` / `Store.save(key, value)`. Swallows and warns, because storage throws in Safari private mode, on a full quota, and when a user blocks site data. Validation stays in the game — `load()` only promises "parsed JSON, or null". |
 | `js/lib/dice.js` | `DiceTray.create(el, { onPick })`, plus `randomFace()`. Builds the dice, sizes them from how many are in play, and runs the bounce-and-settle roll. Pairs with `css/dice.css`. Omit `onPick` and the dice are inert `<span>`s rather than buttons. |
 | `js/lib/modal.js` | `Modal.create(el, { trigger })`. An overlay dialog with the parts that are easy to forget: closing on the scrim but not the panel, closing on Escape, and moving focus in and back out. Pairs with `css/modal.css`; a `[data-close]` button inside closes it. |
+| `js/lib/viewport.js` | Sets `--measured-height` from `window.innerHeight` and re-measures on resize, orientation change, `pageshow` and 1s after load. Pages cap it — `--app-height: min(var(--measured-height, 100dvh), 100dvh)` — and size themselves with `var(--app-height, 100dvh)`. See The Android bottom-bar bug. |
 
 Load them with plain `<script>` tags before the game's own script; they
 attach `Store` and `DiceTray` to `window`. There is no module system here
@@ -240,6 +242,36 @@ CSS hangs off that. Three rules make it work:
 
 White on both player colors is the reason `--player-ink` exists rather than
 each game picking a highlight — one identity, one marker.
+
+## The Android bottom-bar bug (js/lib/viewport.js)
+
+Installed on Android, a full-height page could lay itself out taller than
+the space the system navigation bar actually leaves, so the bottom row of
+controls sat *under* the home/back/recents buttons. Rotating the phone and
+rotating back fixed it — which is the whole diagnosis: the height was
+stale, not wrong.
+
+So every full-height page carries `js/lib/viewport.js`, which publishes
+`window.innerHeight` as `--measured-height` and re-measures on resize,
+orientation change, `pageshow`, becoming visible again, and **once a second
+after load** — that last beat being the one that fixes the install case.
+
+Three rules come with it:
+
+- **The measurement is a cap, not the height.** Every such page declares
+  `--app-height: min(var(--measured-height, 100dvh), 100dvh)` in its
+  `:root`, so JS can only make the page *shorter*. That is the direction the
+  bug runs in, and it means a stale reading — the script always trails a
+  resize by a frame — can never push content off the bottom instead. There
+  is a spec asserting both halves.
+- **Write `height: var(--app-height, 100dvh)`, never bare `100dvh`.** The
+  fallback is what renders before the script runs, and what the page keeps
+  if a neighbouring release serves markup without the script. The same
+  applies inside `calc()` where a board or tray sizes itself against the
+  viewport.
+- **It measures `innerHeight`, not `visualViewport.height`.** The visual
+  viewport shrinks for the on-screen keyboard and for pinch-zoom, neither
+  of which should resize a board.
 
 ## Install-prompt strategy (js/install.js)
 

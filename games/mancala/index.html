@@ -14,6 +14,11 @@
   <link rel="stylesheet" href="../../css/modal.css">
   <style>
     :root {
+      /* js/lib/viewport.js measures the usable height and publishes it as
+         --measured-height. Capping it at 100dvh means a measurement that
+         is late or stale can only ever make the page shorter, never
+         taller than the window. See CLAUDE.md. */
+      --app-height: min(var(--measured-height, 100dvh), 100dvh);
       --bg: #10141f;
       --text: #eef1f8;
       --text-dim: #9aa4bd;
@@ -34,7 +39,7 @@
       font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
       display: flex;
       flex-direction: column;
-      height: 100dvh;
+      height: var(--app-height, 100dvh);
       overflow: hidden;
       user-select: none;
       -webkit-user-select: none;
@@ -117,7 +122,7 @@
       border-radius: 14px;
       width: 100%;
       aspect-ratio: 3.6;
-      max-width: min(100%, calc((100dvh - var(--chrome)) * 3.6), 60rem);
+      max-width: min(100%, calc((var(--app-height, 100dvh) - var(--chrome)) * 3.6), 60rem);
       max-height: 100%;
       grid-template-columns: 1.15fr repeat(6, 1fr) 1.15fr;
       grid-template-rows: 1fr 1fr;
@@ -128,7 +133,7 @@
     @media (orientation: portrait) {
       .board {
         aspect-ratio: 1 / 2.2;
-        max-width: min(100%, calc((100dvh - var(--chrome)) / 2.2), 22rem);
+        max-width: min(100%, calc((var(--app-height, 100dvh) - var(--chrome)) / 2.2), 22rem);
         max-height: none;
         grid-template-columns: 1fr 1fr;
         grid-template-rows: 1.15fr repeat(6, 1fr) 1.15fr;
@@ -362,6 +367,7 @@
     </div>
   </div>
 
+  <script src="../../js/lib/viewport.js"></script>
   <script src="../../js/lib/store.js"></script>
   <script src="../../js/lib/modal.js"></script>
   <script src="mancala.js"></script>
