@@ -15,8 +15,8 @@ const board = page => page.evaluate(() =>
 const playable = page => page.evaluate(() =>
   [...document.querySelectorAll('.cell[data-play]')].map(c => Number(c.dataset.i)));
 
-const CAPTURE = { store: 'again', empty: 'capture', full: 'end' };
-const AVALANCHE = { store: 'end', empty: 'none', full: 'sow' };
+const CAPTURE = { store: 'again', empty: 'capture', emptyAgain: 'no', full: 'end' };
+const AVALANCHE = { store: 'end', empty: 'none', emptyAgain: 'no', full: 'sow' };
 
 /** Seeds an exact board. Anything omitted is empty. */
 async function position(page, pits, turn = 1, rules = CAPTURE) {
@@ -172,18 +172,20 @@ test.describe('the three rule axes', () => {
 
   test('every axis shows exactly one option chosen', async ({ page }) => {
     await page.locator('#rules-btn').click();
-    expect(await pressed(page)).toEqual(['empty:capture', 'full:end', 'store:again']);
+    expect(await pressed(page)).toEqual(
+      ['empty:capture', 'emptyAgain:no', 'full:end', 'store:again']);
   });
 
   test('the axes are independent — the extra turn survives dropping captures',
     async ({ page }) => {
       await page.locator('#rules-btn').click();
       await page.locator('#pick-empty-none').click();
-      expect(await pressed(page)).toEqual(['empty:none', 'full:end', 'store:again']);
+      expect(await pressed(page)).toEqual(
+        ['empty:none', 'emptyAgain:no', 'full:end', 'store:again']);
 
       // Store still grants another turn, with no capture on the empty pit.
       await position(page, padded({ 0: 1, 4: 2, 11: 5 }), 1,
-        { store: 'again', empty: 'none', full: 'end' });
+        { store: 'again', empty: 'none', emptyAgain: 'no', full: 'end' });
       await cell(page, 4).click();
       await expect(note(page)).toHaveText('Extra turn');
       await expect(label(page)).toHaveText(/^Player 1 to move/);
@@ -191,10 +193,49 @@ test.describe('the three rule axes', () => {
 
   test('turning the extra turn off leaves captures alone', async ({ page }) => {
     await position(page, padded({ 0: 1, 3: 2, 11: 5, 7: 1 }), 1,
-      { store: 'end', empty: 'capture', full: 'end' });
+      { store: 'end', empty: 'capture', emptyAgain: 'no', full: 'end' });
     await cell(page, 0).click();
     await expect(note(page)).toHaveText('Captured 6');
     await expect(label(page)).toHaveText(/^Player 2 to move/);
+  });
+
+  test('the empty pit can also earn another turn', async ({ page }) => {
+    // The same capture as above, now with the follow-up turned on.
+    await position(page, padded({ 0: 1, 3: 2, 11: 5, 7: 1 }), 1,
+      { store: 'again', empty: 'capture', emptyAgain: 'again', full: 'end' });
+    await cell(page, 0).click();
+    await expect(note(page)).toHaveText('Captured 6. Extra turn');
+    await expect(label(page)).toHaveText(/^Player 1 to move/);
+  });
+
+  test('the extra turn works without the capture', async ({ page }) => {
+    // Nothing is taken, but the turn still comes back — which a bundled
+    // three-way setting could not express.
+    await position(page, padded({ 0: 1, 3: 2, 11: 5, 7: 1 }), 1,
+      { store: 'again', empty: 'none', emptyAgain: 'again', full: 'end' });
+    await cell(page, 0).click();
+    const after = await board(page);
+    expect(after[11]).toBe(5);
+    await expect(note(page)).toHaveText('Extra turn');
+    await expect(label(page)).toHaveText(/^Player 1 to move/);
+  });
+
+  test("landing in the opponent's empty pit earns nothing", async ({ page }) => {
+    // Three seeds from pit 5 land on their side, which has never counted.
+    await position(page, padded({ 0: 1, 5: 3 }), 1,
+      { store: 'again', empty: 'capture', emptyAgain: 'again', full: 'end' });
+    await cell(page, 5).click();
+    await expect(note(page)).toBeEmpty();
+    await expect(label(page)).toHaveText(/^Player 2 to move/);
+  });
+
+  test('the follow-up is its own axis and survives a reload', async ({ page }) => {
+    await page.locator('#rules-btn').click();
+    await page.locator('#pick-again-yes').click();
+    await page.locator('#pick-empty-none').click();
+    await page.reload();
+    expect(await pressed(page)).toEqual(
+      ['empty:none', 'emptyAgain:again', 'full:end', 'store:again']);
   });
 
   test('changing an axis restarts the game', async ({ page }) => {
@@ -210,16 +251,18 @@ test.describe('the three rule axes', () => {
     await page.locator('#pick-store-end').click();
     await page.locator('#pick-full-sow').click();
     await page.reload();
-    expect(await pressed(page)).toEqual(['empty:capture', 'full:sow', 'store:end']);
+    expect(await pressed(page)).toEqual(
+      ['empty:capture', 'emptyAgain:no', 'full:sow', 'store:end']);
   });
 
   test('one bad axis in a save falls back on its own', async ({ page }) => {
     await page.evaluate(() => localStorage.setItem('games.mancala.v1', JSON.stringify({
       board: [4, 4, 4, 4, 4, 4, 0, 4, 4, 4, 4, 4, 4, 0], turn: 1, over: false,
-      rules: { store: 'nonsense', empty: 'none', full: 'sow' },
+      rules: { store: 'nonsense', empty: 'none', emptyAgain: 'no', full: 'sow' },
     })));
     await page.reload();
-    expect(await pressed(page)).toEqual(['empty:none', 'full:sow', 'store:again']);
+    expect(await pressed(page)).toEqual(
+      ['empty:none', 'emptyAgain:no', 'full:sow', 'store:again']);
   });
 });
 
@@ -287,7 +330,7 @@ test.describe('persistence', () => {
   test('a board whose seeds do not add up is rejected', async ({ page }) => {
     await page.evaluate(() => localStorage.setItem('games.mancala.v1', JSON.stringify({
       board: new Array(14).fill(1), turn: 1, over: false,
-      rules: { store: 'again', empty: 'capture', full: 'end' },
+      rules: { store: 'again', empty: 'capture', emptyAgain: 'no', full: 'end' },
     })));
     await page.reload();
     expect(await board(page)).toEqual([4, 4, 4, 4, 4, 4, 0, 4, 4, 4, 4, 4, 4, 0]);
@@ -299,7 +342,9 @@ test.describe('presentation', () => {
     await page.locator('#rules-btn').click();
     await expect(page.locator('#rules')).toBeVisible();
     await expect(page.locator('#picks .axis')).toHaveCount(3);
-    await expect(page.locator('#picks .pick')).toHaveCount(6);
+    // Three questions, but the empty-pit one asks a follow-up.
+    await expect(page.locator('#picks .pick-row')).toHaveCount(4);
+    await expect(page.locator('#picks .pick')).toHaveCount(8);
     await page.keyboard.press('Escape');
     await expect(page.locator('#rules')).toBeHidden();
   });

@@ -1,14 +1,14 @@
 # Mancala
 
-Two-player Mancala on one device, with **two rule sets to choose between**.
+Two-player Mancala on one device, with the house rules set one at a time.
 
 ## The name
 
 *Mancala* is the generic name for the whole family of sowing games — it is
-not a brand and not a trademark. The two rule sets are named for what they
-do (**Capture**, **Avalanche**) rather than after any product, which is the
-same reason this game is not called after the boxed version most people
-learned it from. See "Naming a game" in `CLAUDE.md`.
+not a brand and not a trademark. The settings are named for what they do
+rather than after any product, which is the same reason this game is not
+called after the boxed version most people learned it from. See "Naming a
+game" in `CLAUDE.md`.
 
 ## The board
 
@@ -28,33 +28,49 @@ facing `i` is `12 - i`, which falls out of the same ordering.
 Four seeds per pit, stores empty. **Player 1 moves first**, the site-wide
 rule.
 
-## The rules are three independent choices
+## The rules are independent choices
 
 Every house rule worth arguing about fires on the same event — **where the
 last seed landed** — and there are only three kinds of cell it can land in.
-So rather than two bundled, named rule sets, the game offers one choice per
-kind of cell, and any combination of the three is a legal way to play:
+So rather than bundled, named rule sets, the game asks one question per kind
+of cell, and any combination of the answers is a legal way to play:
 
 | Your last seed lands… | Options | Default |
 | --- | --- | --- |
 | in **your own store** | Go again / Turn ends | Go again |
 | in an **empty pit of yours** | Capture it and the pit facing it / Nothing | Capture |
+| …and take another turn? | No / Yes | No |
 | in a pit that **already had seeds** | Turn ends / Scoop it up and keep sowing | Turn ends |
 
-That is eight combinations from three toggles, and it covers the two sets
-this game shipped with: *Capture* is `again / capture / end`, and
-*Avalanche* is `end / none / sow`. Bundling them hid the fact that a table
-usually disagrees about **one** of these, not all of them — someone wants
-the extra turn but no captures, and a named pair cannot express that.
+Sixteen combinations from four toggles, and they cover the two sets this
+game shipped with: *Capture* is `again / capture / no / end`, and
+*Avalanche* is `end / none / no / sow`. Bundling them hid the fact that a
+table usually disagrees about **one** of these, not all of them — someone
+wants the extra turn but no captures, and a named pair cannot express that.
+
+### Why the extra turn is its own axis
+
+The empty-pit rule really asks two questions, and a table can answer them
+independently: *do I take the seeds*, and *do I go again*. A three-way
+setting (`capture / go again / nothing`) would have made them exclusive and
+quietly ruled out the two combinations people actually argue about — capture
+without another turn, and another turn without a capture. So the follow-up
+is a fourth axis, shown indented under the question it belongs to so it
+reads as one rule with two parts rather than as a fourth question.
+
+Both halves are settled on the **same test**: the pit has to be on your own
+side. Landing in one of the opponent's empty pits has never earned anything,
+and the extra turn does not change that.
 
 A capture takes nothing when the facing pit is already empty. Some houses
 let you take the lone seed anyway; this one does not, which is the more
 common reading, and it is the one edge case the modal spells out.
 
-Because all three fire on the landing cell, `play()` reads as one loop:
-sow, look at where the last seed landed, ask the axis that owns that kind
-of cell what happens next. Adding a fourth axis means adding a branch there
-and an entry in `AXES` — nowhere else.
+Because they all fire on the landing cell, `play()` reads as one loop: sow,
+look at where the last seed landed, ask the axes that own that kind of cell
+what happens next. Adding another axis means adding a branch there and an
+entry in `AXES` — nowhere else, which is exactly what adding the extra-turn
+follow-up came to.
 
 **Scoop-and-keep-sowing always terminates**, which is not obvious. Count the
 total distance every seed still has to travel to reach the mover's store.
@@ -102,7 +118,8 @@ number, because the store total is the score and that is what gets read.
 
 ```json
 { "board": [4,4,4,4,4,4,0,4,4,4,4,4,4,0], "turn": 1, "over": false,
-  "rules": { "store": "again", "empty": "capture", "full": "end" } }
+  "rules": { "store": "again", "empty": "capture", "emptyAgain": "no",
+             "full": "end" } }
 ```
 
 A restored board is rejected unless the seeds still total 48, because every
@@ -112,7 +129,9 @@ in memory only, like the other board games here.
 
 Each rule axis is validated **on its own** when a save is read, so one
 unrecognised value falls back to its own default rather than resetting the
-other two.
+rest. That is also what let the extra-turn follow-up be added without a
+storage version bump: an older save simply has no `emptyAgain` key, and it
+takes the default like any other unreadable value.
 
 Changing any axis **starts a new game**: a position halfway through one set
 of rules is not a meaningful position under another, and quietly carrying it
