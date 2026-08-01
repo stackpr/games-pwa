@@ -1,0 +1,54 @@
+/*
+ * Playing cards, paired with js/lib/deck.js.
+ *
+ * A card is drawn in CSS rather than as an image: it is a rounded rectangle
+ * with a rank and a pip, which is one rule set instead of fifty-two files,
+ * and it scales without a density variant. See Images in CLAUDE.md.
+ *
+ * Size comes from `font-size` on `.hand`, so a game shrinks a row of cards
+ * by setting one property rather than by touching the card itself.
+ */
+.hand {
+  display: flex;
+  justify-content: center;
+  font-size: clamp(0.62rem, 2.6vmin, 1rem);
+  /* Cards overlap so a six-card hand still fits the seat it was dealt to. */
+  padding-left: 1.4em;
+  min-width: 0;
+}
+.card {
+  position: relative;
+  flex: none;
+  width: 3.4em;
+  height: 4.8em;
+  margin-left: -1.4em;
+  border-radius: 0.45em;
+  background: #f6f4ee;
+  color: #14161c;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.5), inset 0 0 0 1px rgba(0, 0, 0, 0.25);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+.card[data-red] { color: #c3241b; }
+.card-rank { font-size: 1.5em; font-weight: 800; }
+.card-pip { font-size: 1.3em; }
+
+/* The dealer's hole card. Backed rather than blank, so an empty seat and a
+   face-down card can never be confused with one another. */
+.card[data-down] {
+  background:
+    repeating-linear-gradient(45deg, #2b4c8c 0 0.28em, #21386a 0.28em 0.56em);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.5), inset 0 0 0 1px rgba(0, 0, 0, 0.35);
+}
+.card[data-down] .card-rank, .card[data-down] .card-pip { visibility: hidden; }
+
+.hand-total {
+  font-size: 0.78rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+.hand-total[data-bust] { color: #e0806f; }
+.hand-total[data-blackjack] { color: #d8b34a; }

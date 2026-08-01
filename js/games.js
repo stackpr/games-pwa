@@ -84,6 +84,18 @@ const GAMES = [
     description: 'Scoresheet for four or five hands',
     emoji: '\u{1F0CF}',
     path: 'games/pitch/'
+  },
+  {
+    name: 'Somewhere Between',
+    description: 'Find the hidden spot on the scale',
+    emoji: '\u{1F39A}\uFE0F',
+    path: 'games/somewhere-between/'
+  },
+  {
+    name: 'Blackjack',
+    description: 'Vegas rules, your own bankroll',
+    emoji: '\u{1F0A1}',
+    path: 'games/blackjack/'
   }
 ];
 
