@@ -196,22 +196,36 @@ test.describe('guessing and scoring', () => {
     expect(rows[1]).toEqual({ name: 'Team 2', score: 0 });
   });
 
-  test('pairs mode scores the clue-giver and the guesser together',
+  test('solo mode credits the clue-giver and whoever placed the marker',
     async ({ page }) => {
-      await page.locator('#mode-pairs').click();
+      await page.locator('#mode-solo').click();
       await page.locator('.count[data-count="4"]').click();
       await page.locator('#begin').click();
       await expect(page.locator('#ready-sub'))
-        .toHaveText('gives the clue to Player 2. Both of them score.');
+        .toHaveText('gives the clue. Whoever placed the marker scores, and so do they.');
       await page.locator('#start').click();
+      await expect(page.locator('.who-btn')).toHaveCount(3);
 
+      await page.locator('.who-btn[data-seat="2"]').click();
       const at = await page.evaluate(() =>
         parseFloat(document.getElementById('target').style.left));
       await dragTo(page, at / 100);
       await page.locator('#lock').click();
-      expect((await board(page)).map(r => r.score)).toEqual([4, 4, 0, 0]);
+      expect((await board(page)).map(r => r.score)).toEqual([4, 0, 4, 0]);
       await expect(page.locator('#dial-hint')).toContainText('+4');
     });
+
+  test('nobody named means the clue-giver takes it alone', async ({ page }) => {
+    await page.locator('#mode-solo').click();
+    await page.locator('.count[data-count="3"]').click();
+    await page.locator('#begin').click();
+    await page.locator('#start').click();
+    const at = await page.evaluate(() =>
+      parseFloat(document.getElementById('target').style.left));
+    await dragTo(page, at / 100);
+    await page.locator('#lock').click();
+    expect((await board(page)).map(r => r.score)).toEqual([4, 0, 0]);
+  });
 });
 
 test.describe('presentation', () => {

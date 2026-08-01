@@ -44,12 +44,30 @@ test.describe('the covered card', () => {
     await expect(page.locator('#card-cat')).toHaveText('Animals');
   });
 
-  test('the next card covers itself again', async ({ page }) => {
+  test('only the first card of a round is covered', async ({ page }) => {
+    // Tapping through must not put a cover between every word: the drawer
+    // already has the screen, and the clock is running.
     await oneCategory(page);
     await page.locator('#begin').click();
     await page.locator('#start').click();
     await page.locator('#reveal').click();
     await page.locator('#got').click();
+    await expect(card(page)).not.toHaveAttribute('data-hidden', /.*/);
+    await page.locator('#got').click();
+    await expect(card(page)).not.toHaveAttribute('data-hidden', /.*/);
+  });
+
+  test('the next round covers again', async ({ page }) => {
+    await page.clock.install();
+    await page.goto(URL);
+    await page.locator('.count[data-seconds="60"]').click();
+    await oneCategory(page);
+    await page.locator('#begin').click();
+    await page.locator('#start').click();
+    await page.locator('#reveal').click();
+    await page.clock.fastForward('01:05');
+    await page.locator('#next').click();
+    await page.locator('#start').click();
     await expect(card(page)).toHaveAttribute('data-hidden', '');
   });
 
@@ -89,13 +107,28 @@ test.describe('rounds and scoring', () => {
     ]);
   });
 
-  test('pairs mode names the drawer and the guesser', async ({ page }) => {
-    await page.locator('#mode-pairs').click();
+  test('solo mode scores the named guesser and the drawer', async ({ page }) => {
+    await page.locator('#mode-solo').click();
     await page.locator('.count[data-count="4"]').click();
+    await page.locator('#name-mode-type').click();
+    for (const [i, name] of ['Ari', 'Bo', 'Cass', 'Dee'].entries()) {
+      await page.locator('#name-' + i).fill(name);
+    }
     await oneCategory(page);
     await page.locator('#begin').click();
     await expect(page.locator('#ready-sub'))
-      .toHaveText('draws for Player 2. Both of them score.');
+      .toHaveText('draws. Whoever gets it scores, and so do they.');
+
+    await page.locator('#start').click();
+    await page.locator('#reveal').click();
+    const who = await page.evaluate(() =>
+      [...document.querySelectorAll('.who-btn')].map(b => b.textContent));
+    expect(who).toEqual(['Bo', 'Cass', 'Dee']);
+
+    await page.locator('.who-btn[data-seat="3"]').click();
+    expect((await board(page)).map(r => r.score)).toEqual([1, 0, 0, 1]);
+    // And the next word is already up, with no cover in between.
+    await expect(card(page)).not.toHaveAttribute('data-hidden', /.*/);
   });
 });
 

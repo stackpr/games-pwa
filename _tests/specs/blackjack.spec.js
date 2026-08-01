@@ -111,8 +111,13 @@ test.describe('betting', () => {
   });
 
   test('the stake leaves the bankroll when the hand is dealt', async ({ page }) => {
+    // Stacked, because a natural blackjack settles the hand on the deal and
+    // the bankroll would already have moved on — about one deal in twenty.
+    await stack(page, ['TS', '9D', '8H', '7C']);
+    await table(page);
     await page.locator('#deal').click();
     await expect(bank(page)).toHaveText('$490');
+    await expect(page.locator('body')).toHaveAttribute('data-phase', 'player');
   });
 });
 

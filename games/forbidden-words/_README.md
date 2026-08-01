@@ -31,29 +31,54 @@ picking both must not deal it twice.
 
 ## Scoring, and the two modes
 
-**Got it** is +1, **Skip** is 0, **Foul** is −1. Foul is the guessers' call,
-not the describer's — the button is there so the table can enforce the rule
-without stopping the clock.
-
 - **Two teams** — the teams alternate rounds and the whole team banks what
-  its describer earned. Exactly two sides, so the shared `--player-1` and
+  its presenter earned. Exactly two sides, so the shared `--player-1` and
   `--player-2` identities apply.
-- **Presenter and guesser** — nobody is on a team. Each round pairs one
-  describer with one guesser and **both** take every point.
+- **Each player scores** — nobody is on a team. One player presents, and the
+  action row becomes **one button per player**. Tapping a name gives the
+  point to that player *and* to the presenter, and deals the next card in
+  the same tap.
 
-The pair rotation is in `js/lib/party.js`: the describer walks one seat a
-round, the guesser sits one further along and slides an extra seat every
-full lap. Over `n − 1` laps everyone describes to everyone exactly once,
-rather than the same two people pairing forever.
+The per-player buttons are why **names matter here** in a way they do not in
+the board games: a row reading "Player 3, Player 4, Player 5" is unusable
+across a table. Hence the name editor, and hence the shared recent list.
 
-Pairs mode deliberately **fixes** the guesser instead of awarding the point
-to whoever shouted first. Tracking that means tapping a name for every card,
-mid-timer, with the room yelling — the one moment a game cannot ask for
-input. Fixing the pair keeps a round to one tap per card.
+Naming the guesser at the moment of scoring — rather than pairing people up
+in advance — is what makes the presenter's job a real one. Getting through
+to *anybody* scores, so there is no partner to specialise with, and the
+player who is quickest all evening genuinely earns it.
 
-More than two seats means no player colours: two tokens means two sides, so
-pairs mode marks who is up with weight and a ring rather than inventing a
-third hue. See Player colors in `CLAUDE.md`.
+Two consequences in the code:
+
+- **Solo pays out per card; teams banks at the end of the round.** The point
+  belongs to the seat that was named at that moment, so it cannot wait; a
+  team round has only one side it could ever have gone to. `score()` branches
+  on exactly that and nothing else.
+- **Skip and a foul name nobody**, so they land on the presenter alone. A
+  foul is the presenter's mistake by definition.
+
+### Setting names
+
+Two input modes, switched in setup:
+
+- **Type them** — one box per seat. A name is committed on every keystroke
+  and **remembered when the box loses focus**, not on every keystroke, or the
+  recent list would fill with every half-typed prefix.
+- **Pick who's here** — tap names from the list of everyone who has played.
+  The **player count follows the ticks**, which is the point: the table sets
+  itself up by tapping who turned up. Ticking fills the first unnamed seat
+  rather than adding a seat beside it, which is why an unnamed seat holds an
+  empty string rather than "Player 3" — the numbered version is a display
+  fallback (`Party.nameAt`), never data.
+
+A first run finds the list empty, so it is put into the typing mode rather
+than shown a panel it cannot use.
+
+The recent list lives under `games.party-names.v1`, **shared by every party
+game**, because the people at the table are the same people whichever game
+they are playing. It is the one cross-game key in the tree. A name already
+on the list is promoted rather than duplicated, so the regulars stay at the
+top and it never needs managing; it keeps the newest twenty.
 
 ## Layout
 

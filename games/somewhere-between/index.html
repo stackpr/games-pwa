@@ -147,13 +147,23 @@
       <span class="field-label">Scoring</span>
       <div class="pick-row" id="mode-row" role="group" aria-label="Scoring mode">
         <button class="pick" id="mode-teams" type="button" data-mode="teams">Two teams</button>
-        <button class="pick" id="mode-pairs" type="button" data-mode="pairs">Clue-giver and guesser</button>
+        <button class="pick" id="mode-solo" type="button" data-mode="solo">Each player scores</button>
       </div>
     </div>
 
     <div class="field" id="players-field">
       <span class="field-label">Players</span>
       <div class="count-row" id="count-row"></div>
+    </div>
+
+    <div class="field" id="names-field">
+      <span class="field-label">Names</span>
+      <div class="pick-row" id="name-mode-row" role="group" aria-label="How to set names">
+        <button class="pick" id="name-mode-pick" type="button" data-name-mode="pick">Pick who's here</button>
+        <button class="pick" id="name-mode-type" type="button" data-name-mode="type">Type them</button>
+      </div>
+      <div class="name-inputs" id="name-inputs"></div>
+      <div class="recent-wrap" id="recent-list"></div>
     </div>
 
     <div class="field">
@@ -212,7 +222,11 @@
       <span class="dial-hint" id="dial-hint">Drag the marker, then lock it in.</span>
     </div>
 
-    <div class="actions two">
+    <div class="who-row" id="who-row">
+      <div class="who-grid" id="who-grid"></div>
+    </div>
+
+    <div class="actions two keeps-actions">
       <button class="act" id="new-scale" type="button">New scale<small>same clue-giver</small></button>
       <button class="act good" id="lock" type="button">Lock it in<small>score</small></button>
     </div>
@@ -251,8 +265,9 @@
       <ul class="rules-list">
         <li><strong>Two teams</strong> &mdash; the teams alternate and the
           whole team keeps the round.</li>
-        <li><strong>Clue-giver and guesser</strong> &mdash; each round pairs
-          one of each and they <em>both</em> take the points.</li>
+        <li><strong>Each player scores</strong> &mdash; tap who placed the
+          marker before locking in, and they take the points alongside the
+          clue-giver. Name nobody and the clue-giver takes them alone.</li>
       </ul>
       <button class="modal-close" type="button" data-close>Close</button>
     </div>
@@ -261,6 +276,7 @@
   <script src="../../js/lib/store.js"></script>
   <script src="../../js/lib/modal.js"></script>
   <script src="../../js/lib/vocab.js"></script>
+  <script src="../../js/lib/names.js"></script>
   <script src="../../js/lib/party.js"></script>
   <script src="../../js/lib/setup.js"></script>
   <script src="somewhere-between.js"></script>

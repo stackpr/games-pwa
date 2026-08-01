@@ -31,6 +31,10 @@
     catAll: pick('cat-all', 'button'),
     catNone: pick('cat-none', 'button'),
     begin: pick('begin', 'button'),
+    nameModeRow: pick('name-mode-row'),
+    nameInputs: pick('name-inputs'),
+    recentList: pick('recent-list'),
+    whoGrid: pick('who-grid'),
     readyWho: pick('ready-who'),
     readySub: pick('ready-sub'),
     start: pick('start', 'button'),
@@ -71,6 +75,9 @@
   let clue = null;
   let target = 50;
   let guess = 50;
+  // Solo mode credits a named seat alongside the clue-giver; null until
+  // somebody is picked, and reset with every scale.
+  let credited = null;
 
   function save() {
     Store.save(STORAGE_KEY, { settings, party });
@@ -80,19 +87,41 @@
     el.body.dataset.screen = name;
   }
 
+  /**
+   * Seats follow the settings the moment they change, rather than at Start.
+   * A name typed into setup has to land on the party that will actually
+   * play, and rebuilding at Start threw those names away.
+   *
+   * The scores start over whenever the shape changes, because a score left
+   * on a seat that moved is worse than no score. Names carry across a change
+   * of player count but not a change of mode: "Team 1" is not a person.
+   */
+  function syncSeats() {
+    const want = settings.mode === 'teams' ? Party.TEAMS : settings.players;
+    if (party.mode === settings.mode && party.scores.length === want) return;
+    const kept = party.mode === settings.mode ? party.names.slice() : [];
+    party = Party.blank(settings.mode, settings.players);
+    for (let i = 0; i < party.names.length; i++) {
+      if (kept[i]) party.names[i] = kept[i];
+    }
+  }
+
   const setup = PartySetup.create({
     el: {
       modeRow: el.modeRow, countRow: el.countRow,
       catGrid: el.catGrid, catCount: el.catCount,
-      all: el.catAll, none: el.catNone, begin: el.begin
+      all: el.catAll, none: el.catNone, begin: el.begin,
+      nameModeRow: el.nameModeRow, nameInputs: el.nameInputs,
+      recentList: el.recentList
     },
     seconds: [60],
     settings,
-    onChange: save
+    onChange: () => { syncSeats(); save(); },
+    names: () => party.names
   });
 
   function seatName(i) {
-    return party.names[i] || Party.defaultName(party.mode, i);
+    return Party.nameAt(party, i);
   }
 
   function seatToken(i) {
@@ -109,6 +138,8 @@
   }
 
   function dealScale() {
+    credited = null;
+    buildWho();
     delete el.body.dataset.revealed;
     el.lock.textContent = 'Lock it in';
     el.dialHint.textContent = 'Drag the marker, then lock it in.';
@@ -181,6 +212,26 @@
     renderGuess();
   }
 
+  /** In solo mode, who placed the marker. Teams mode needs no such button. */
+  function buildWho() {
+    el.whoGrid.textContent = '';
+    if (party.mode === 'teams') return;
+    for (const seat of Party.guessers(party)) {
+      const b = document.createElement('button');
+      b.className = 'who-btn';
+      b.type = 'button';
+      b.dataset.seat = String(seat);
+      b.textContent = seatName(seat);
+      b.setAttribute('aria-pressed', credited === seat ? 'true' : 'false');
+      b.setAttribute('aria-label', seatName(seat) + ' placed the marker');
+      b.addEventListener('click', () => {
+        credited = credited === seat ? null : seat;
+        buildWho();
+      });
+      el.whoGrid.append(b);
+    }
+  }
+
   function renderBoard() {
     const scoring = Party.scoring(party);
     el.board.textContent = '';
@@ -203,12 +254,11 @@
     const r = Party.roles(party);
     el.readyWho.textContent = seatName(r.present);
     el.readyWho.dataset.seat = seatToken(r.present);
-    el.readySub.textContent = r.guess === null
+    el.readySub.textContent = party.mode === 'teams'
       ? 'gives the clue. Everyone else guesses.'
-      : 'gives the clue to ' + seatName(r.guess) + '. Both of them score.';
-    el.playWho.textContent = r.guess === null
-      ? seatName(r.present)
-      : seatName(r.present) + ' → ' + seatName(r.guess);
+      : 'gives the clue. Whoever placed the marker scores, and so do they.';
+    el.playWho.textContent = seatName(r.present);
+    buildWho();
     el.roundNo.textContent = '#' + (party.round + 1);
     el.scoreSoFar.textContent = String(party.scores[r.present]);
   }
@@ -226,8 +276,11 @@
       return;
     }
     const points = scoreFor(guess);
-    Party.award(party, points);
-    const who = Party.scoring(party).map(seatName).join(' and ');
+    Party.award(party, points, credited);
+    const who = party.mode === 'teams'
+      ? seatName(Party.roles(party).present)
+      : seatName(Party.roles(party).present)
+        + (credited === null ? '' : ' and ' + seatName(credited));
     el.overLabel.textContent = points ? who : 'Missed it — ' + who;
     el.overScore.textContent = '+' + points;
     el.dialHint.textContent = points
@@ -242,10 +295,7 @@
 
   el.begin.addEventListener('click', () => {
     if (!Vocab.pool(settings.categories).length) return;
-    const want = settings.mode === 'teams' ? Party.TEAMS : settings.players;
-    if (party.mode !== settings.mode || party.scores.length !== want) {
-      party = Party.blank(settings.mode, settings.players);
-    }
+    syncSeats();
     deck = Vocab.deck(settings.categories);
     at = 0;
     scales = Vocab.spectrums();

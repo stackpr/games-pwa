@@ -58,8 +58,19 @@ half off the scale and every round is winnable at full marks. That is the
 one arbitrary-looking constant in the file and it is why.
 
 The two modes come from `js/lib/party.js` and match the other party games:
-two teams alternating, or a clue-giver paired with a guesser where both take
-the points.
+
+- **Two teams** — the teams alternate and the whole team banks the round.
+- **Each player scores** — tap **who placed the marker** before locking in,
+  and they take the points alongside the clue-giver. Tapping the same name
+  again clears it, and if nobody is named the clue-giver takes it alone —
+  which is the honest outcome when the table decided together.
+
+This game scores **once a round** rather than once a card, so it keeps its
+own action row in both modes rather than swapping it for the name buttons.
+That is what the `.keeps-actions` opt-out in `css/party.css` is for.
+
+See `games/forbidden-words/_README.md` for the name editor and the shared
+recent list.
 
 **New scale** deals a fresh spectrum and clue without passing the turn —
 for the round where the pairing is plainly unplayable, which happens often

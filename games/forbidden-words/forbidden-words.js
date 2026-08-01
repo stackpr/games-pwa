@@ -23,6 +23,14 @@
     catAll: pick('cat-all', 'button'),
     catNone: pick('cat-none', 'button'),
     begin: pick('begin', 'button'),
+    nameModeRow: pick('name-mode-row'),
+    nameInputs: pick('name-inputs'),
+    recentList: pick('recent-list'),
+    whoRow: pick('who-row'),
+    whoGrid: pick('who-grid'),
+    whoSkip: pick('who-skip', 'button'),
+    whoFoul: pick('who-foul', 'button'),
+
     readyWho: pick('ready-who'),
     readySub: pick('ready-sub'),
     start: pick('start', 'button'),
@@ -61,15 +69,39 @@
     el.body.dataset.screen = name;
   }
 
+  /**
+   * Seats follow the settings the moment they change, rather than at Start.
+   * A name typed into setup has to land on the party that will actually
+   * play, and rebuilding at Start threw those names away.
+   *
+   * The scores start over whenever the shape changes, because a score left
+   * on a seat that moved is worse than no score. Names carry across a change
+   * of player count but not a change of mode: "Team 1" is not a person.
+   */
+  function syncSeats() {
+    const want = settings.mode === 'teams' ? Party.TEAMS : settings.players;
+    if (party.mode === settings.mode && party.scores.length === want) return;
+    const kept = party.mode === settings.mode ? party.names.slice() : [];
+    party = Party.blank(settings.mode, settings.players);
+    for (let i = 0; i < party.names.length; i++) {
+      if (kept[i]) party.names[i] = kept[i];
+    }
+  }
+
   const setup = PartySetup.create({
     el: {
       modeRow: el.modeRow, countRow: el.countRow, secsRow: el.secsRow,
       catGrid: el.catGrid, catCount: el.catCount,
-      all: el.catAll, none: el.catNone, begin: el.begin
+      all: el.catAll, none: el.catNone, begin: el.begin,
+      nameModeRow: el.nameModeRow, nameInputs: el.nameInputs,
+      recentList: el.recentList
     },
     seconds: SECONDS,
     settings,
-    onChange: save
+    onChange: () => { syncSeats(); save(); },
+    // The names live on the party, which is rebuilt when the seats change,
+    // so the editor asks for them rather than holding a stale reference.
+    names: () => party.names
   });
 
   // Rebuilt per round, because the round length is a setting and a Timer
@@ -103,7 +135,7 @@
   }
 
   function seatName(i) {
-    return party.names[i] || Party.defaultName(party.mode, i);
+    return Party.nameAt(party, i);
   }
 
   /** Teams get the shared player colours; a table of players does not. */
@@ -115,12 +147,32 @@
     const r = Party.roles(party);
     el.readyWho.textContent = seatName(r.present);
     el.readyWho.dataset.seat = seatToken(r.present);
-    el.readySub.textContent = r.guess === null
+    el.readySub.textContent = party.mode === 'teams'
       ? 'describes. Everyone else guesses.'
-      : 'describes to ' + seatName(r.guess) + '. Both of them score.';
-    el.playWho.textContent = r.guess === null
-      ? seatName(r.present)
-      : seatName(r.present) + ' → ' + seatName(r.guess);
+      : 'describes. Whoever gets it scores, and so do they.';
+    el.playWho.textContent = seatName(r.present);
+    buildWho();
+  }
+
+
+  /**
+   * Solo mode scores by naming who got it, so the action row becomes one
+   * button per player — everybody but whoever is presenting. Rebuilt when
+   * the round turns over, since the presenter changes and so do the names.
+   */
+  function buildWho() {
+    el.whoGrid.textContent = '';
+    if (party.mode === 'teams') return;
+    for (const seat of Party.guessers(party)) {
+      const b = document.createElement('button');
+      b.className = 'who-btn';
+      b.type = 'button';
+      b.dataset.seat = String(seat);
+      b.textContent = seatName(seat);
+      b.setAttribute('aria-label', seatName(seat) + ' got it');
+      b.addEventListener('click', () => score(1, seat));
+      el.whoGrid.append(b);
+    }
   }
 
   function renderBoard() {
@@ -152,17 +204,27 @@
     timer.start();
   }
 
-  function score(points) {
+  /**
+   * Solo mode pays out per card, because the point belongs to the seat that
+   * was named at that moment. Teams mode banks the round total at the end,
+   * where there is only one side it could have gone to anyway.
+   */
+  function score(points, seat) {
     if (el.body.dataset.screen !== 'play') return;
     roundScore += points;
     el.roundTally.textContent = String(roundScore);
+    if (party.mode !== 'teams') {
+      Party.award(party, points, seat);
+      renderBoard();
+      save();
+    }
     draw();
   }
 
   function endRound() {
     timer.stop();
-    Party.award(party, roundScore);
-    const who = Party.scoring(party).map(seatName).join(' and ');
+    if (party.mode === 'teams') Party.award(party, roundScore);
+    const who = seatName(Party.roles(party).present);
     el.overLabel.textContent = 'Time! ' + who;
     el.overScore.textContent = (roundScore > 0 ? '+' : '') + roundScore;
     Party.advance(party);
@@ -173,12 +235,7 @@
 
   el.begin.addEventListener('click', () => {
     if (!Vocab.pool(settings.categories).length) return;
-    // A change of mode or player count is a different set of seats, so the
-    // scores start over rather than being carried onto seats that moved.
-    const want = settings.mode === 'teams' ? Party.TEAMS : settings.players;
-    if (party.mode !== settings.mode || party.scores.length !== want) {
-      party = Party.blank(settings.mode, settings.players);
-    }
+    syncSeats();
     deck = Vocab.deck(settings.categories);
     at = 0;
     save();
@@ -199,6 +256,9 @@
     screen('ready');
   });
   el.got.addEventListener('click', () => score(1));
+  el.whoSkip.addEventListener('click', () => score(0));
+  // A foul is the presenter's alone, so it names no guesser.
+  el.whoFoul.addEventListener('click', () => score(-1, null));
   el.skip.addEventListener('click', () => score(0));
   el.foul.addEventListener('click', () => score(-1));
 
