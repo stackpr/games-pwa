@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Honeycomb: 3 Bees</title>
+  <meta name="theme-color" content="#10141f">
+  <link rel="manifest" href="../../manifest.webmanifest">
+  <link rel="icon" href="../../icons/favicon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="../../icons/apple-touch-icon.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="stylesheet" href="../../css/players.css">
+  <link rel="stylesheet" href="../../css/modal.css">
+  <style>
+    :root {
+      --bg: #10141f;
+      --text: #eef1f8;
+      --text-dim: #9aa4bd;
+      --panel: #1a2030;
+      --panel-hi: #2b3450;
+      /* The three bees are told apart by VALUE, not hue, so they survive any
+         colour vision, and the empty cell sits below all three. */
+      --bee-w: #eae6dc;
+      --bee-g: #8c93a3;
+      --bee-b: #38415a;
+      /* An empty cell has to sit below the darkest bee on the same ramp, or
+         a dark bee reads as an empty cell. */
+      --cell: #161b27;
+      --cell-line: #39425c;
+      --live: #f0b429;
+      /* Measured, not guessed: the tallest chrome across the tested sizes is
+         177px, at 320px wide where the topbar wraps. */
+      --chrome: 11.5rem;
+      color-scheme: dark;
+    }
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    html, body { margin: 0; padding: 0; height: 100%; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      display: flex;
+      flex-direction: column;
+      height: 100dvh;
+      overflow: hidden;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.4rem;
+      padding: calc(0.4rem + env(safe-area-inset-top)) 0.6rem 0.4rem;
+      flex: none;
+    }
+    .topbar a { color: var(--text-dim); text-decoration: none; font-size: 0.95rem; }
+    .topbar-actions { display: flex; gap: 0.4rem; }
+    .chip {
+      border: 1px solid var(--panel-hi);
+      background: var(--panel);
+      color: var(--text);
+      border-radius: 999px;
+      padding: 0.3rem 0.8rem;
+      font-size: 0.85rem;
+      cursor: pointer;
+      touch-action: manipulation;
+    }
+    .chip:disabled { opacity: 0.4; }
+
+    /* What each side has taken, which is the only score there is. */
+    .trays { flex: none; display: grid; grid-template-columns: 1fr 1fr; gap: 0.4rem;
+      padding: 0 0.6rem 0.3rem; }
+    .tray {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.45rem;
+      border-radius: 10px;
+      background: var(--panel);
+      padding: 0.3rem 0.4rem;
+      min-width: 0;
+    }
+    .tray[data-turn] { box-shadow: inset 0 0 0 2px var(--live); }
+    .tray[data-side="1"] .tray-name { color: var(--player-1); }
+    .tray[data-side="2"] .tray-name { color: var(--player-2); }
+    .tray-name { font-size: 0.7rem; font-weight: 800; }
+    .count { display: flex; align-items: center; gap: 0.18rem;
+      font-size: 0.85rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+    .pip {
+      width: 0.8rem; height: 0.8rem;
+      border-radius: 50%;
+      flex: none;
+      box-shadow: inset 0 0 0 1px rgba(0,0,0,0.5);
+    }
+    .pip[data-c="w"] { background: var(--bee-w); }
+    .pip[data-c="g"] { background: var(--bee-g); }
+    .pip[data-c="b"] { background: var(--bee-b); box-shadow: inset 0 0 0 1px var(--cell-line); }
+    /* A colour already at its winning count is called out, because the whole
+       game is a race to one of four numbers. */
+    .count[data-done] { color: var(--live); }
+
+    .turn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.4em;
+      flex: none;
+      padding: 0 0.6rem 0.15rem;
+      font-size: clamp(1.15rem, 5.4vw, 1.8rem);
+      font-weight: 700;
+      line-height: 1.2;
+    }
+    .turn-disc {
+      width: 1.05em; height: 1.05em;
+      border-radius: 50%;
+      flex: none;
+      background: var(--player-1);
+      box-shadow: inset 0 0 0 2px rgba(0,0,0,0.25);
+    }
+    .turn[data-player="2"] .turn-disc { background: var(--player-2); }
+    .turn[data-player="none"] .turn-disc { display: none; }
+    .turn[data-state="playing"] .turn-text { order: -1; }
+    .turn[data-state="over"] .turn-text { font-weight: 800; }
+    .hint { flex: none; min-height: 1.2rem; text-align: center;
+      font-size: 0.82rem; color: var(--text-dim); padding: 0 0.6rem 0.3rem; }
+    .visually-hidden {
+      position: absolute; width: 1px; height: 1px;
+      margin: -1px; padding: 0; overflow: hidden;
+      clip-path: inset(50%); white-space: nowrap; border: 0;
+    }
+
+    .stage { flex: 1; display: flex; align-items: center; justify-content: center;
+      min-height: 0; padding: 0 0.4rem; }
+    /*
+     * Thirty-seven cells on a hex grid, placed as percentages of the board
+     * rather than from a measured pixel size — so the layout needs no JS and
+     * no resize handler. The aspect ratio is what makes a percentage of the
+     * width and a percentage of the height mean the same distance.
+     *
+     * The hexagon is laid out flat across in landscape and turned a
+     * quarter-turn in portrait, where a wide board would leave most of a
+     * phone empty. Each ring carries both sets of coordinates and the media
+     * query picks one, so nothing runs on a rotation.
+     */
+    .board {
+      position: relative;
+      width: 100%;
+      aspect-ratio: 7 / 6.196;
+      /* The height budget bounds the WIDTH, and there is deliberately no
+         max-height: pairing one with aspect-ratio silently breaks the ratio
+         rather than the height. See CLAUDE.md. */
+      max-width: min(100%, calc((100dvh - var(--chrome)) * 1.13), 30rem);
+    }
+    .cell {
+      position: absolute;
+      width: 13.4%;
+      aspect-ratio: 1;
+      transform: translate(-50%, -50%);
+      left: calc(50% + var(--x) * 14.286%);
+      top: calc(50% + var(--y) * 13.977%);
+      border: none;
+      padding: 0;
+      border-radius: 50%;
+      background: var(--cell);
+      box-shadow: inset 0 0 0 max(2px, 0.09em) var(--cell-line);
+      font-size: inherit;
+      cursor: default;
+    }
+    /* A removed cell leaves a hole, not a gap: the comb really does shrink. */
+    .cell[data-gone] { display: none; }
+
+    /* Turned a quarter-turn, so a tall screen gets a tall board. Placed
+       after the base rules, because a media query adds no specificity and
+       source order is what decides. */
+    @media (orientation: portrait) {
+      .board {
+        aspect-ratio: 6.196 / 7;
+        max-width: min(100%, calc((100dvh - var(--chrome)) * 0.885), 26rem);
+      }
+      .cell {
+        width: 15.17%;
+        left: calc(50% + var(--fx) * 16.14%);
+        top: calc(50% + var(--fy) * 14.286%);
+      }
+    }
+
+    /* The bee: a circle within its cell. */
+    .bee {
+      position: absolute;
+      inset: 17%;
+      border-radius: 50%;
+      display: none;
+      box-shadow: inset 0 -0.12em 0.2em rgba(0,0,0,0.45),
+                  inset 0 0.1em 0.18em rgba(255,255,255,0.28);
+    }
+    .cell[data-c] .bee { display: block; }
+    .cell[data-c="w"] .bee { background: var(--bee-w); }
+    .cell[data-c="g"] .bee { background: var(--bee-g); }
+    .cell[data-c="b"] .bee { background: var(--bee-b); }
+
+    .cell[data-live] { cursor: pointer; touch-action: manipulation; }
+    .cell[data-live="drop"] { box-shadow: inset 0 0 0 max(3px, 0.12em) var(--live); }
+    .cell[data-live="take"] { box-shadow: inset 0 0 0 max(3px, 0.12em) #e0806f; }
+    .cell[data-live="jump"] .bee { box-shadow: 0 0 0 max(3px, 0.11em) var(--live); }
+    .cell[data-sel] .bee { box-shadow: 0 0 0 max(4px, 0.16em) var(--player-ink); }
+    .cell[data-live]:active { filter: brightness(1.3); }
+
+    /* The pool, and the picker for which bee to place. */
+    .pool { flex: none; display: flex; justify-content: center; gap: 0.4rem;
+      padding: 0.35rem 0.6rem calc(0.5rem + env(safe-area-inset-bottom)); }
+    .pick {
+      display: flex;
+      align-items: center;
+      gap: 0.35rem;
+      border: 1px solid var(--panel-hi);
+      background: var(--panel);
+      color: var(--text);
+      border-radius: 12px;
+      padding: 0.45rem 0.8rem;
+      font-size: 1rem;
+      font-weight: 800;
+      font-variant-numeric: tabular-nums;
+      cursor: pointer;
+      touch-action: manipulation;
+    }
+    .pick[aria-pressed="true"] { background: var(--panel-hi); box-shadow: inset 0 0 0 2px var(--live); }
+    .pick:disabled { opacity: 0.35; }
+    .pick .pip { width: 1.1rem; height: 1.1rem; }
+
+    .rules-list { margin: 0; padding-left: 1.1rem; font-size: 0.85rem;
+      color: var(--text-dim); line-height: 1.45; }
+    .rules-list li + li { margin-top: 0.35rem; }
+    .rules-sub { margin: 0.9rem 0 0.4rem; font-size: 0.9rem; }
+    .rules-note { margin: 0.9rem 0 0; font-size: 0.78rem; color: var(--text-dim); }
+    .win-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+    .win-table td { padding: 0.22rem 0.3rem; color: var(--text-dim); }
+    .win-table td:first-child { width: 3.4rem; }
+  </style>
+</head>
+<body>
+  <div class="topbar">
+    <a href="../../">&larr; Games</a>
+    <div class="topbar-actions">
+      <button id="rules-btn" class="chip" type="button" aria-expanded="false">Rules</button>
+      <button id="undo" class="chip" type="button" disabled>Undo</button>
+      <button id="reset" class="chip" type="button">New game</button>
+    </div>
+  </div>
+
+  <div class="trays" aria-hidden="true">
+    <div class="tray" id="tray-1" data-side="1">
+      <span class="tray-name">P1</span>
+      <span class="count" id="c1w"><span class="pip" data-c="w"></span><span>0</span></span>
+      <span class="count" id="c1g"><span class="pip" data-c="g"></span><span>0</span></span>
+      <span class="count" id="c1b"><span class="pip" data-c="b"></span><span>0</span></span>
+    </div>
+    <div class="tray" id="tray-2" data-side="2">
+      <span class="tray-name">P2</span>
+      <span class="count" id="c2w"><span class="pip" data-c="w"></span><span>0</span></span>
+      <span class="count" id="c2g"><span class="pip" data-c="g"></span><span>0</span></span>
+      <span class="count" id="c2b"><span class="pip" data-c="b"></span><span>0</span></span>
+    </div>
+  </div>
+
+  <div id="turn" class="turn" data-player="1" data-state="playing" aria-live="polite">
+    <span id="turn-disc" class="turn-disc" aria-hidden="true"></span>
+    <span id="turn-text" class="turn-text" aria-hidden="true">Next:</span>
+    <span id="turn-label" class="visually-hidden">Player 1 to move</span>
+  </div>
+  <div class="hint" id="hint" aria-live="polite"></div>
+
+  <main class="stage">
+    <div id="board" class="board"></div>
+  </main>
+
+  <div class="pool" id="pool">
+    <button class="pick" id="pick-w" type="button" data-c="w">
+      <span class="pip" data-c="w"></span><span id="pool-w">6</span>
+    </button>
+    <button class="pick" id="pick-g" type="button" data-c="g">
+      <span class="pip" data-c="g"></span><span id="pool-g">8</span>
+    </button>
+    <button class="pick" id="pick-b" type="button" data-c="b">
+      <span class="pip" data-c="b"></span><span id="pool-b">10</span>
+    </button>
+  </div>
+
+  <div class="modal" id="rules">
+    <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="rules-title">
+      <h2 class="modal-title" id="rules-title">Rules</h2>
+      <p class="rules-note" style="margin-top:0">
+        Nobody owns the bees. You are both taking from the same pool, and the
+        comb shrinks as you go.
+      </p>
+      <h3 class="rules-sub">Win by taking</h3>
+      <table class="win-table">
+        <tr><td><span class="pip" data-c="w"></span> &times;3</td><td>three light</td></tr>
+        <tr><td><span class="pip" data-c="g"></span> &times;4</td><td>four mid</td></tr>
+        <tr><td><span class="pip" data-c="b"></span> &times;5</td><td>five dark</td></tr>
+        <tr><td>2 each</td><td>two of every kind</td></tr>
+      </table>
+      <h3 class="rules-sub">Your turn</h3>
+      <ul class="rules-list">
+        <li><strong>Jumping is compulsory.</strong> If any bee can jump an
+          adjacent bee into the empty cell beyond it, you must &mdash; and you
+          keep jumping with the same bee while it can.</li>
+        <li>Otherwise <strong>put a bee in a cell and take a cell away</strong>.
+          Pick a bee from the pool, tap an empty cell, then tap a cell to
+          remove. Only cells at the edge of the comb come off.</li>
+        <li>If no cell can be removed, the placement is the whole move.</li>
+        <li><strong>Cut a piece of comb off</strong> and, if every cell in it
+          is full, you take all of those bees.</li>
+        <li>When the pool is empty you place from what you have taken, which
+          is a real cost late on.</li>
+        <li>A player with no move at all loses.</li>
+      </ul>
+      <p class="rules-note">
+        The bees are told apart by how light or dark they are, not by hue,
+        so the game reads the same to anyone.
+      </p>
+      <p class="rules-note">
+        This is a fresh build of a published game whose own name is a
+        registered trademark. The rules are not owned; the name is, so this
+        one is called Honeycomb: 3 Bees.
+      </p>
+      <button class="modal-close" type="button" data-close>Close</button>
+    </div>
+  </div>
+
+  <script src="../../js/lib/store.js"></script>
+  <script src="../../js/lib/modal.js"></script>
+  <script src="honeycomb-3-bees.js"></script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('../../sw.js').catch(() => {});
+    }
+  </script>
+</body>
+</html>

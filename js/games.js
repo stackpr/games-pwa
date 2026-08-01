@@ -111,6 +111,13 @@ const GAMES = [
     path: 'games/somewhere-between/'
   },
   {
+    name: 'Honeycomb: 3 Bees',
+    section: 'two',
+    description: 'Shrink the comb, take the bees',
+    emoji: '\u{1F41D}',
+    path: 'games/honeycomb-3-bees/'
+  },
+  {
     name: 'Blackjack',
     section: 'other',
     description: 'Vegas rules, your own bankroll',
