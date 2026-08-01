@@ -1,4 +1,4 @@
-// Somewhere Between: guess where a hidden target sits on a scale.
+// Somewhere Between: one hidden target, one typed clue, everyone guesses.
 // See _README.md for the rules and the naming note.
 (function () {
   const STORAGE_KEY = 'games.somewhere-between.v1';
@@ -26,24 +26,19 @@
     setupBtn: pick('setup-btn', 'button'),
     modeRow: pick('mode-row'),
     countRow: pick('count-row'),
-    catGrid: pick('cat-grid'),
-    catCount: pick('cat-count'),
-    catAll: pick('cat-all', 'button'),
-    catNone: pick('cat-none', 'button'),
     begin: pick('begin', 'button'),
     nameModeRow: pick('name-mode-row'),
     nameInputs: pick('name-inputs'),
     recentList: pick('recent-list'),
-    whoGrid: pick('who-grid'),
     readyWho: pick('ready-who'),
     readySub: pick('ready-sub'),
     start: pick('start', 'button'),
     playWho: pick('play-who'),
     roundNo: pick('round-no'),
     scoreSoFar: pick('score-so-far'),
-    clueCat: pick('clue-cat'),
-    clueWord: pick('clue-word'),
-    peek: pick('peek', 'button'),
+    clueLabel: pick('clue-label'),
+    clueSaid: pick('clue-said'),
+    clueInput: pick('clue-input', 'input'),
     endLeft: pick('end-left'),
     endRight: pick('end-right'),
     track: pick('track'),
@@ -54,6 +49,7 @@
     guess: pick('guess'),
     grab: pick('grab'),
     dialHint: pick('dial-hint'),
+    tallyList: pick('tally-list'),
     newScale: pick('new-scale', 'button'),
     lock: pick('lock', 'button'),
     overLabel: pick('over-label'),
@@ -67,17 +63,26 @@
   const saved = Store.load(STORAGE_KEY) || {};
   const settings = PartySetup.shape(saved.settings, [60]);
   let party = Party.shape(saved.party);
-  let deck = [];
-  let at = 0;
   let scales = [];
   let scaleAt = 0;
   let scale = null;
-  let clue = null;
+
+  // One round's worth of state. None of it is persisted: a round caught
+  // halfway has a clue somebody has already read out and markers half the
+  // table has placed, and there is nothing honest to resume.
   let target = 50;
+  let clue = '';
+  let responders = [];    // seats that guess, in order
+  let at = 0;             // whose turn it is among them
+  let answers = [];       // { seat, value, points }
   let guess = 50;
-  // Solo mode credits a named seat alongside the clue-giver; null until
-  // somebody is picked, and reset with every scale.
-  let credited = null;
+  /*
+   * The seat that wrote this round's clue, captured rather than derived.
+   * `Party.roles()` reads the round counter, and the counter moves on at the
+   * moment the round is paid out — so everything the reveal shows would
+   * otherwise be credited to the next player.
+   */
+  let clueGiver = 0;
 
   function save() {
     Store.save(STORAGE_KEY, { settings, party });
@@ -87,14 +92,14 @@
     el.body.dataset.screen = name;
   }
 
+  function phase(name) {
+    el.body.dataset.phase = name;
+  }
+
   /**
    * Seats follow the settings the moment they change, rather than at Start.
    * A name typed into setup has to land on the party that will actually
    * play, and rebuilding at Start threw those names away.
-   *
-   * The scores start over whenever the shape changes, because a score left
-   * on a seat that moved is worse than no score. Names carry across a change
-   * of player count but not a change of mode: "Team 1" is not a person.
    */
   function syncSeats() {
     const want = settings.mode === 'teams' ? Party.TEAMS : settings.players;
@@ -108,9 +113,7 @@
 
   const setup = PartySetup.create({
     el: {
-      modeRow: el.modeRow, countRow: el.countRow,
-      catGrid: el.catGrid, catCount: el.catCount,
-      all: el.catAll, none: el.catNone, begin: el.begin,
+      modeRow: el.modeRow, countRow: el.countRow, begin: el.begin,
       nameModeRow: el.nameModeRow, nameInputs: el.nameInputs,
       recentList: el.recentList
     },
@@ -128,6 +131,20 @@
     return party.mode === 'teams' ? String(i + 1) : '';
   }
 
+  function giver() {
+    return clueGiver;
+  }
+
+  /**
+   * Everybody who is not giving the clue. `Party.guessers` returns nothing in
+   * teams mode, which is right for the games that score one named guesser —
+   * here the other team is a responder like any other, so this asks directly.
+   */
+  function responderSeats() {
+    const present = giver();
+    return party.scores.map((_, i) => i).filter(i => i !== present);
+  }
+
   /** Points for a guess: the narrowest band it falls inside, or nothing. */
   function scoreFor(g) {
     const off = Math.abs(g - target);
@@ -138,24 +155,19 @@
   }
 
   function dealScale() {
-    credited = null;
-    buildWho();
-    delete el.body.dataset.revealed;
-    el.lock.textContent = 'Lock it in';
-    el.dialHint.textContent = 'Drag the marker, then lock it in.';
     if (scaleAt >= scales.length) {
       scales = Vocab.spectrums();
       scaleAt = 0;
     }
-    if (at >= deck.length) {
-      deck = Vocab.deck(settings.categories);
-      at = 0;
-    }
     scale = scales[scaleAt++] || { left: 'Cold', right: 'Hot' };
-    clue = deck[at++] || null;
     target = EDGE + Math.random() * (100 - 2 * EDGE);
+    clue = '';
+    answers = [];
+    at = 0;
     guess = 50;
-    delete el.body.dataset.peek;
+    responders = responderSeats();
+    el.clueInput.value = '';
+    phase('clue');
     renderScale();
   }
 
@@ -166,18 +178,18 @@
   function renderScale() {
     el.endLeft.textContent = scale.left;
     el.endRight.textContent = scale.right;
-    el.clueCat.textContent = clue ? clue.category : '';
-    el.clueWord.textContent = clue ? clue.word : '';
 
     for (const band of BANDS) {
       const node = band.points === 4 ? el.band4 : band.points === 3 ? el.band3 : el.band2;
-      node.style.left = Math.max(0, target - band.half) + '%';
-      node.style.width = (Math.min(100, target + band.half)
-        - Math.max(0, target - band.half)) + '%';
+      const from = Math.max(0, target - band.half);
+      const to = Math.min(100, target + band.half);
+      node.style.left = from + '%';
+      node.style.width = (to - from) + '%';
       node.style.borderRadius = band.points === 2 ? '999px' : '0';
     }
     place(el.target, target);
     renderGuess();
+    renderPhase();
   }
 
   function renderGuess() {
@@ -199,6 +211,69 @@
     return 'hard against ' + scale.right;
   }
 
+  /** Everyone's marker, drawn only once the round is done. */
+  function renderAnswers() {
+    for (const old of el.track.querySelectorAll('.said')) old.remove();
+    if (el.body.dataset.phase !== 'reveal') return;
+    for (const answer of answers) {
+      const mark = document.createElement('span');
+      mark.className = 'said';
+      mark.dataset.seat = String(answer.seat);
+      mark.style.left = answer.value + '%';
+      const tag = document.createElement('span');
+      tag.className = 'said-tag';
+      tag.textContent = seatName(answer.seat);
+      mark.append(tag);
+      el.track.append(mark);
+    }
+  }
+
+  function renderTally() {
+    el.tallyList.textContent = '';
+    if (el.body.dataset.phase !== 'reveal') return;
+    for (const answer of answers) {
+      const li = document.createElement('li');
+      li.dataset.seat = String(answer.seat);
+      if (!answer.points) li.dataset.zero = '';
+      li.textContent = seatName(answer.seat) + ' +' + answer.points;
+      el.tallyList.append(li);
+    }
+    const total = answers.reduce((n, a) => n + a.points, 0);
+    const li = document.createElement('li');
+    li.dataset.giver = '';
+    li.textContent = seatName(giver()) + ' +' + total;
+    el.tallyList.append(li);
+  }
+
+  function renderPhase() {
+    const mode = el.body.dataset.phase;
+    el.clueSaid.textContent = clue;
+    el.playWho.textContent = mode === 'guess'
+      ? seatName(responders[at]) : seatName(giver());
+
+    if (mode === 'clue') {
+      el.clueLabel.textContent = 'Your clue';
+      el.dialHint.textContent = 'Only you can see the target.';
+      el.lock.textContent = 'Pass it on';
+      el.lock.disabled = !el.clueInput.value.trim();
+    } else if (mode === 'guess') {
+      el.clueLabel.textContent = 'The clue';
+      el.dialHint.textContent = seatName(responders[at]) + ', drag your marker.';
+      el.lock.textContent = at === responders.length - 1 ? 'Lock in and reveal' : 'Lock in';
+      el.lock.disabled = false;
+    } else {
+      el.clueLabel.textContent = 'The clue was';
+      const total = answers.reduce((n, a) => n + a.points, 0);
+      el.dialHint.textContent = total
+        ? seatName(giver()) + ' takes ' + total + ' for that clue.'
+        : 'Nobody found it.';
+      el.lock.textContent = 'Scores';
+      el.lock.disabled = false;
+    }
+    renderAnswers();
+    renderTally();
+  }
+
   function fromEvent(event) {
     const box = el.track.getBoundingClientRect();
     const x = (event.touches ? event.touches[0].clientX : event.clientX) - box.left;
@@ -207,38 +282,18 @@
 
   function drag(event) {
     if (el.body.dataset.screen !== 'play') return;
+    if (el.body.dataset.phase !== 'guess') return;
     event.preventDefault();
     guess = fromEvent(event);
     renderGuess();
   }
 
-  /** In solo mode, who placed the marker. Teams mode needs no such button. */
-  function buildWho() {
-    el.whoGrid.textContent = '';
-    if (party.mode === 'teams') return;
-    for (const seat of Party.guessers(party)) {
-      const b = document.createElement('button');
-      b.className = 'who-btn';
-      b.type = 'button';
-      b.dataset.seat = String(seat);
-      b.textContent = seatName(seat);
-      b.setAttribute('aria-pressed', credited === seat ? 'true' : 'false');
-      b.setAttribute('aria-label', seatName(seat) + ' placed the marker');
-      b.addEventListener('click', () => {
-        credited = credited === seat ? null : seat;
-        buildWho();
-      });
-      el.whoGrid.append(b);
-    }
-  }
-
   function renderBoard() {
-    const scoring = Party.scoring(party);
     el.board.textContent = '';
     for (let i = 0; i < party.scores.length; i++) {
       const li = document.createElement('li');
       li.dataset.seat = seatToken(i);
-      if (scoring.indexOf(i) !== -1) li.dataset.up = '';
+      if (i === giver()) li.dataset.up = '';
       const name = document.createElement('span');
       name.className = 'board-name';
       name.textContent = seatName(i);
@@ -251,53 +306,70 @@
   }
 
   function renderReady() {
-    const r = Party.roles(party);
-    el.readyWho.textContent = seatName(r.present);
-    el.readyWho.dataset.seat = seatToken(r.present);
-    el.readySub.textContent = party.mode === 'teams'
-      ? 'gives the clue. Everyone else guesses.'
-      : 'gives the clue. Whoever placed the marker scores, and so do they.';
-    el.playWho.textContent = seatName(r.present);
-    buildWho();
+    clueGiver = Party.roles(party).present;
+    el.readyWho.textContent = seatName(giver());
+    el.readyWho.dataset.seat = seatToken(giver());
+    const others = responderSeats().length;
+    el.readySub.textContent = 'writes the clue. '
+      + (others === 1 ? 'The other side guesses' : 'The other ' + others + ' guess')
+      + ', and ' + seatName(giver()) + ' takes whatever they score.';
     el.roundNo.textContent = '#' + (party.round + 1);
-    el.scoreSoFar.textContent = String(party.scores[r.present]);
+    el.scoreSoFar.textContent = String(party.scores[giver()]);
   }
 
   /**
-   * The first tap reveals: the bands and the target appear against the
-   * marker that is still sitting where the table put it, which is the whole
-   * payoff of the round. Leaving for the scoreboard straight away would
-   * take that away before anyone had looked at it. The second tap leaves.
+   * The one button, whatever it currently says. Three steps in a round and
+   * one control for all of them: write the clue, lock a guess in, look at
+   * the scores. A separate button per step would leave two of them dead at
+   * any moment, on the part of the screen a thumb is already resting on.
    */
-  function lockIn() {
+  function advance() {
     if (el.body.dataset.screen !== 'play') return;
-    if (el.body.dataset.revealed !== undefined) {
-      screen('over');
+    const mode = el.body.dataset.phase;
+
+    if (mode === 'clue') {
+      const typed = el.clueInput.value.trim();
+      if (!typed) return;
+      clue = typed;
+      at = 0;
+      guess = 50;
+      phase('guess');
+      renderScale();
       return;
     }
-    const points = scoreFor(guess);
-    Party.award(party, points, credited);
-    const who = party.mode === 'teams'
-      ? seatName(Party.roles(party).present)
-      : seatName(Party.roles(party).present)
-        + (credited === null ? '' : ' and ' + seatName(credited));
-    el.overLabel.textContent = points ? who : 'Missed it — ' + who;
-    el.overScore.textContent = '+' + points;
-    el.dialHint.textContent = points
-      ? '+' + points + ' to ' + who
-      : 'Nothing that time — ' + who;
-    Party.advance(party);
-    renderBoard();
-    save();
-    el.body.dataset.revealed = '';
-    el.lock.textContent = 'Scores';
+
+    if (mode === 'guess') {
+      answers.push({ seat: responders[at], value: guess, points: scoreFor(guess) });
+      at += 1;
+      if (at < responders.length) {
+        // Back to the middle, so the next player cannot read the last one's
+        // answer off the marker.
+        guess = 50;
+        renderScale();
+        return;
+      }
+      // Everyone has answered: pay out and show the lot.
+      let total = 0;
+      for (const answer of answers) {
+        party.scores[answer.seat] += answer.points;
+        total += answer.points;
+      }
+      party.scores[giver()] += total;
+      Party.advance(party);
+      save();
+      phase('reveal');
+      renderScale();
+      renderBoard();
+      el.overLabel.textContent = seatName(giver()) + ' gave "' + clue + '"';
+      el.overScore.textContent = '+' + total;
+      return;
+    }
+
+    screen('over');
   }
 
   el.begin.addEventListener('click', () => {
-    if (!Vocab.pool(settings.categories).length) return;
     syncSeats();
-    deck = Vocab.deck(settings.categories);
-    at = 0;
     scales = Vocab.spectrums();
     scaleAt = 0;
     save();
@@ -321,12 +393,11 @@
     screen('ready');
   });
   el.newScale.addEventListener('click', dealScale);
-  el.peek.addEventListener('click', () => {
-    el.body.dataset.peek = '';
-  });
-  el.lock.addEventListener('click', lockIn);
+  el.lock.addEventListener('click', advance);
+  el.clueInput.addEventListener('input', renderPhase);
 
   el.track.addEventListener('pointerdown', event => {
+    if (el.body.dataset.phase !== 'guess') return;
     el.track.setPointerCapture(event.pointerId);
     drag(event);
   });
@@ -334,6 +405,7 @@
     if (event.buttons) drag(event);
   });
   el.track.addEventListener('keydown', event => {
+    if (el.body.dataset.phase !== 'guess') return;
     const by = event.key === 'ArrowLeft' ? -2 : event.key === 'ArrowRight' ? 2 : 0;
     if (!by) return;
     event.preventDefault();
@@ -344,6 +416,7 @@
   Modal.create(el.rules, { trigger: el.rulesBtn });
 
   setup.render();
+  clueGiver = Party.roles(party).present;
   renderBoard();
   screen('setup');
 })();

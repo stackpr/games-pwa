@@ -50,8 +50,13 @@ window.PartySetup = (function () {
     const buttons = { mode: [], count: [], secs: [], cat: [], nameMode: [] };
     let inputs = [];
 
+    /**
+     * A control the game did not ask for is not missing — Somewhere Between
+     * has no categories to pick, since its clue is typed rather than dealt.
+     * Only a key that was passed and came back empty is worth a warning.
+     */
     function warn(name) {
-      console.warn('Missing element for setup control ' + name);
+      if (name in el) console.warn('Missing element for setup control ' + name);
     }
 
     function button(className, text, press) {

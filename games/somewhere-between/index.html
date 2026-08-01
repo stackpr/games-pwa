@@ -18,23 +18,44 @@
       flex: none;
       text-align: center;
       padding: 0 0.9rem 0.3rem;
+      min-height: 2.4rem;
     }
-    .clue-word {
-      font-size: clamp(1.6rem, 8vw, 2.8rem);
+    .clue-label {
+      font-size: 0.72rem;
+      letter-spacing: 0.09em;
+      text-transform: uppercase;
+      color: var(--text-dim);
+    }
+    .clue-said {
+      font-size: clamp(1.5rem, 7.5vw, 2.6rem);
       font-weight: 800;
       line-height: 1.1;
       overflow-wrap: anywhere;
     }
-    .clue-cat { font-size: 0.8rem; color: var(--text-dim); }
 
-    /* The dial. A track with two named ends, a hidden target band, and a
-       marker the players drag. No number anywhere, on purpose. */
+    /* Typed by the clue-giver, who is the only person looking at the target. */
+    .clue-box { flex: none; padding: 0 0.9rem 0.4rem; }
+    .clue-input {
+      width: 100%;
+      min-width: 0;
+      border: 1px solid var(--panel-hi);
+      border-radius: 12px;
+      background: var(--panel);
+      color: var(--text);
+      font: inherit;
+      font-size: 1.15rem;
+      font-weight: 700;
+      text-align: center;
+      padding: 0.6rem 0.7rem;
+    }
+    .clue-input:focus { outline: none; box-shadow: inset 0 0 0 2px var(--player-1); }
+
     .dial {
       flex: 1;
       display: flex;
       flex-direction: column;
       justify-content: center;
-      gap: 0.7rem;
+      gap: 0.9rem;
       min-height: 0;
       padding: 0.5rem 0.9rem;
     }
@@ -59,21 +80,13 @@
         color-mix(in srgb, var(--player-2) 45%, var(--panel)));
       box-shadow: inset 0 0 0 2px var(--panel-hi);
       touch-action: none;
-      cursor: pointer;
     }
-    /* Scoring bands, revealed only once the guess is locked in. */
-    .band {
-      position: absolute;
-      top: 0;
-      bottom: 0;
-      display: none;
-      align-items: center;
-      justify-content: center;
-      font-size: 0.75rem;
-      font-weight: 800;
-      color: var(--player-ink);
-    }
-    body[data-revealed] .band { display: flex; }
+
+    /* The bands are shown to the clue-giver, who is picking words against
+       them, and to everybody at the reveal — never to somebody guessing. */
+    .band { position: absolute; top: 0; bottom: 0; display: none; }
+    body[data-phase="clue"] .band,
+    body[data-phase="reveal"] .band { display: block; }
     .band[data-points="4"] { background: rgba(79, 191, 125, 0.85); }
     .band[data-points="3"] { background: rgba(79, 191, 125, 0.5); }
     .band[data-points="2"] { background: rgba(79, 191, 125, 0.25); }
@@ -82,14 +95,22 @@
       position: absolute;
       top: -0.4rem;
       bottom: -0.4rem;
-      width: 0.55rem;
-      margin-left: -0.275rem;
+      width: 0.5rem;
+      margin-left: -0.25rem;
       border-radius: 999px;
       background: var(--text);
       box-shadow: 0 0 0 2px var(--bg);
       pointer-events: none;
     }
-    .marker[data-target] { background: #f0b429; }
+    #target { background: #f0b429; display: none; }
+    body[data-phase="clue"] #target,
+    body[data-phase="reveal"] #target { display: block; }
+
+    /* The live marker and its thumb, only while somebody is guessing. */
+    #guess, .grab { display: none; }
+    body[data-phase="guess"] #guess,
+    body[data-phase="guess"] .grab { display: block; }
+    body[data-phase="guess"] .track { cursor: pointer; }
     .grab {
       position: absolute;
       top: 50%;
@@ -101,38 +122,74 @@
       box-shadow: 0 2px 6px rgba(0, 0, 0, 0.5);
       pointer-events: none;
     }
-    .dial-hint { text-align: center; font-size: 0.8rem; color: var(--text-dim); }
 
-    /* The clue-giver's private view of the target, behind a tap. */
-    .peek {
-      flex: none;
-      margin: 0 0.9rem;
-      border: none;
-      border-radius: 14px;
-      background: var(--panel-hi);
-      color: var(--text);
-      font-size: 1rem;
-      font-weight: 800;
-      padding: 0.8rem 0.5rem;
-      cursor: pointer;
-      touch-action: manipulation;
+    /* Everyone's answer at once, on the reveal. Each carries a name, because
+       a row of identical lines says nothing about who put it there. */
+    .said {
+      position: absolute;
+      top: -0.5rem;
+      bottom: -0.5rem;
+      width: 0.32rem;
+      margin-left: -0.16rem;
+      border-radius: 999px;
+      background: var(--text);
+      box-shadow: 0 0 0 2px var(--bg);
+      pointer-events: none;
     }
-    .peek small { display: block; font-size: 0.75rem; font-weight: 600; color: var(--text-dim); }
-    /* Once the guess is locked the scale is a result, not a control. */
-    body[data-revealed] .peek, body[data-revealed] #new-scale { display: none; }
-    body[data-revealed] .track { cursor: default; }
-    body[data-revealed] .actions.two { grid-template-columns: 1fr; }
-    body[data-peek] .peek { background: var(--panel); }
-    .target-mark { display: none; }
-    body[data-peek] .target-mark, body[data-revealed] .target-mark { display: block; }
-    /* Solo mode gives what is left to the name buttons, but this game keeps
-       its action row as well as them, and the marker still has to be an easy
-       thing to grab — so the floor covers the track, its two end labels and
-       the hint, and no more. */
-    body[data-mode="solo"] .dial { flex: 0 1 auto; min-height: clamp(6rem, 26dvh, 12rem); }
+    .said-tag {
+      position: absolute;
+      bottom: 100%;
+      left: 50%;
+      transform: translateX(-50%);
+      margin-bottom: 0.15rem;
+      font-size: 0.6rem;
+      font-weight: 800;
+      white-space: nowrap;
+      color: var(--text);
+    }
+    .dial-hint {
+      text-align: center;
+      font-size: 0.8rem;
+      color: var(--text-dim);
+      min-height: 1.1rem;
+    }
+
+    /* Who scored what, this round. */
+    .tally-list {
+      flex: none;
+      list-style: none;
+      margin: 0;
+      padding: 0 0.9rem 0.2rem;
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 0.3rem;
+    }
+    .tally-list li {
+      font-size: 0.8rem;
+      font-weight: 700;
+      border-radius: 999px;
+      background: var(--panel);
+      padding: 0.22rem 0.6rem;
+      max-width: 100%;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .tally-list li[data-zero] { color: var(--text-dim); }
+    .tally-list li[data-giver] { box-shadow: inset 0 0 0 2px var(--player-1); }
+    body:not([data-phase="reveal"]) .tally-list { display: none; }
+
+    body[data-phase="clue"] .clue-said { display: none; }
+    body[data-phase="guess"] .clue-box,
+    body[data-phase="reveal"] .clue-box { display: none; }
+    body[data-phase="guess"] #new-scale,
+    body[data-phase="reveal"] #new-scale { display: none; }
+    body[data-phase="guess"] .actions,
+    body[data-phase="reveal"] .actions { grid-template-columns: 1fr; }
   </style>
 </head>
-<body data-screen="setup">
+<body data-screen="setup" data-phase="clue">
   <div class="topbar">
     <a href="../../">&larr; Games</a>
     <div class="topbar-actions">
@@ -144,8 +201,8 @@
   <main class="setup" id="setup">
     <h1 class="setup-title">Somewhere Between</h1>
     <p class="setup-blurb">
-      One player sees a hidden spot on a sliding scale and gives a one-word
-      clue. Everyone else drags the marker to where they think it is.
+      One player sees a hidden spot on a sliding scale and writes a clue.
+      Everyone else places their own marker and scores their own guess.
     </p>
 
     <div class="field">
@@ -171,25 +228,14 @@
       <div class="recent-wrap" id="recent-list"></div>
     </div>
 
-    <div class="field">
-      <span class="field-label">
-        Clue words from <span class="field-note" id="cat-count"></span>
-      </span>
-      <div class="cat-grid" id="cat-grid"></div>
-      <div class="cat-actions">
-        <button class="chip small" id="cat-all" type="button">All</button>
-        <button class="chip small" id="cat-none" type="button">None</button>
-      </div>
-    </div>
-
     <button class="go" id="begin" type="button">Start playing</button>
   </main>
 
   <section class="ready" id="ready">
-    <span class="ready-label">Up next</span>
+    <span class="ready-label">Giving the clue</span>
     <span class="ready-who" id="ready-who"></span>
     <span class="ready-sub" id="ready-sub"></span>
-    <button class="go" id="start" type="button">Deal a scale</button>
+    <button class="go" id="start" type="button">Show me the target</button>
   </section>
 
   <section class="play" id="play">
@@ -200,14 +246,15 @@
     </div>
 
     <div class="clue">
-      <span class="clue-cat" id="clue-cat"></span>
-      <div class="clue-word" id="clue-word"></div>
+      <span class="clue-label" id="clue-label"></span>
+      <div class="clue-said" id="clue-said"></div>
     </div>
 
-    <button class="peek" id="peek" type="button">
-      Show me the target
-      <small>clue-giver only &mdash; keep the screen to yourself</small>
-    </button>
+    <div class="clue-box">
+      <input class="clue-input" id="clue-input" type="text" maxlength="24"
+             autocomplete="off" autocapitalize="none" spellcheck="false"
+             placeholder="one clue" aria-label="Your clue">
+    </div>
 
     <div class="dial">
       <div class="ends">
@@ -219,21 +266,19 @@
            aria-valuenow="50" aria-valuetext="halfway">
         <span class="band" id="band-2" data-points="2"></span>
         <span class="band" id="band-3" data-points="3"></span>
-        <span class="band" id="band-4" data-points="4">4</span>
-        <span class="marker target-mark" id="target" data-target></span>
+        <span class="band" id="band-4" data-points="4"></span>
+        <span class="marker" id="target"></span>
         <span class="marker" id="guess"></span>
         <span class="grab" id="grab"></span>
       </div>
-      <span class="dial-hint" id="dial-hint">Drag the marker, then lock it in.</span>
+      <span class="dial-hint" id="dial-hint"></span>
     </div>
 
-    <div class="who-row" id="who-row">
-      <div class="who-grid" id="who-grid"></div>
-    </div>
+    <ol class="tally-list" id="tally-list"></ol>
 
     <div class="actions two keeps-actions">
       <button class="act" id="new-scale" type="button">New scale<small>same clue-giver</small></button>
-      <button class="act good" id="lock" type="button">Lock it in<small>score</small></button>
+      <button class="act good" id="lock" type="button">Pass it on<small>hides the target</small></button>
     </div>
   </section>
 
@@ -251,28 +296,23 @@
         <li>The scale runs between two opposites &mdash; <em>Cold</em> to
           <em>Hot</em>, <em>Trash</em> to <em>Treasure</em>. A hidden target
           sits somewhere along it.</li>
-        <li>The clue-giver taps <strong>Show me the target</strong>, keeps the
-          screen private, and gives <strong>one clue</strong>: the word on the
-          card, judged against the scale.</li>
-        <li>Everyone else argues, then <strong>drags the marker</strong> to
-          where they think the target is and locks it in.</li>
+        <li>The clue-giver looks at the target, <strong>types one clue</strong>
+          and passes the phone on. They are the only person who ever sees
+          where the target is.</li>
+        <li><strong>Everyone else guesses in turn</strong>, one at a time.
+          Nobody sees anyone else's marker until the end, so nobody can just
+          copy.</li>
         <li><strong>4, 3 or 2 points</strong> depending on which band you land
-          in, and nothing outside them. The bands are only revealed after the
-          guess.</li>
+          in, and nothing outside them.</li>
+        <li>The clue-giver scores <strong>everything the others scored, added
+          together</strong> &mdash; so a clue that lands for one person and
+          loses everybody else is a bad clue.</li>
       </ul>
       <h3 class="rules-sub">Why there is no number</h3>
       <ul class="rules-list">
         <li>The marker has no percentage on it, on purpose. A number turns the
           argument into arithmetic &mdash; "sixty-two, not sixty-five" &mdash;
           when the interesting part is <em>more that way, less that way</em>.</li>
-      </ul>
-      <h3 class="rules-sub">Scoring</h3>
-      <ul class="rules-list">
-        <li><strong>Two teams</strong> &mdash; the teams alternate and the
-          whole team keeps the round.</li>
-        <li><strong>Each player scores</strong> &mdash; tap who placed the
-          marker before locking in, and they take the points alongside the
-          clue-giver. Name nobody and the clue-giver takes them alone.</li>
       </ul>
       <button class="modal-close" type="button" data-close>Close</button>
     </div>
