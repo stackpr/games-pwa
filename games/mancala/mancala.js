@@ -13,9 +13,15 @@
   const AXES = {
     store: ['again', 'end'],       // last seed in your store
     empty: ['capture', 'none'],    // last seed in an empty pit of yours
+    // Whether that same landing also earns another turn. Its own axis, not
+    // a third value on `empty`, because it is orthogonal: a table can want
+    // the extra turn with or without the capture. See _README.md.
+    emptyAgain: ['no', 'again'],
     full: ['end', 'sow']           // last seed in an occupied pit
   };
-  const DEFAULTS = { store: 'again', empty: 'capture', full: 'end' };
+  const DEFAULTS = {
+    store: 'again', empty: 'capture', emptyAgain: 'no', full: 'end'
+  };
   // 0-5 are player 1's pits, 6 their store; 7-12 player 2's, 13 theirs.
   const STORE = { 1: 6, 2: 13 };
   const PITS = { 1: [0, 1, 2, 3, 4, 5], 2: [7, 8, 9, 10, 11, 12] };
@@ -159,14 +165,21 @@
       // next[i] === 1 means the pit held nothing before this seed.
       const wasEmpty = next[i] === 1;
       if (wasEmpty) {
-        if (rules.empty === 'capture' && owner(i) === player
-          && next[opposite(i)] > 0) {
+        const mine = owner(i) === player;
+        if (rules.empty === 'capture' && mine && next[opposite(i)] > 0) {
           const taken = next[i] + next[opposite(i)];
           next[STORE[player]] += taken;
           next[i] = 0;
           next[opposite(i)] = 0;
           touched.push(STORE[player]);
           notes.push('Captured ' + taken);
+        }
+        // The extra turn is settled separately, and on the same "your own
+        // side" test as the capture — landing in one of the opponent's
+        // empty pits has never earned anything.
+        if (rules.emptyAgain === 'again' && mine) {
+          again = true;
+          notes.push('Extra turn');
         }
         break;
       }

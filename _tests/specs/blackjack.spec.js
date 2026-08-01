@@ -145,6 +145,45 @@ test.describe('playing a hand', () => {
     await expect(page.locator('#hit')).toBeHidden();
   });
 
+  test('a bust says so, rather than only naming the money', async ({ page }) => {
+    // Us 10,6 then 10. "You lose $10" alone reads as though the dealer beat
+    // you, when the dealer never drew.
+    await stack(page, ['TS', '9D', '6H', '7C', 'TD']);
+    await table(page);
+    await page.locator('#deal').click();
+    await page.locator('#hit').click();
+
+    await expect(status(page)).toHaveText('Bust! You lose $10.');
+    await expect(page.locator('.seat[data-me] .seat-out')).toHaveText('Bust 26');
+  });
+
+  test('a dealer bust says so too', async ({ page }) => {
+    // Us 18, dealer 16 drawing a ten.
+    await stack(page, ['TS', '9D', '8H', '7C', 'TD']);
+    await table(page);
+    await page.locator('#deal').click();
+    await page.locator('#stand').click();
+    await expect(status(page)).toHaveText('Dealer busts. You win $10.');
+  });
+
+  test('one busted hand of two is named as one', async ({ page }) => {
+    // Split eights: the first draws a ten and stands, the second busts.
+    await stack(page, ['8S', '9D', '8H', '7C', '3D', 'TC', 'KD', '9H']);
+    await table(page);
+    await page.locator('#deal').click();
+    await page.locator('#split').click();
+    await page.locator('#hit').click();       // 8,3 -> 8,3,K = 21
+    await page.locator('#hit').click();       // 8,T -> 8,T,9 = 27, bust
+    await expect(status(page)).toContainText('hand bust');
+  });
+
+  test('a blackjack still leads with the blackjack', async ({ page }) => {
+    await stack(page, ['AS', '9D', 'KH', '7C']);
+    await table(page);
+    await page.locator('#deal').click();
+    await expect(status(page)).toHaveText('Blackjack! You win $15.');
+  });
+
   test('hitting past 21 busts and pays nothing', async ({ page }) => {
     // Us 10,6 then 10. Dealer 9,7.
     await stack(page, ['TS', '9D', '6H', '7C', 'TD']);

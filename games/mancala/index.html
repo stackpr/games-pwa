@@ -239,6 +239,14 @@
       font-weight: 700;
       padding-bottom: 0.3rem;
     }
+    /* A follow-up to the question above it, indented so it reads as one
+       rule with two parts rather than as a fourth question. */
+    .axis-q.sub {
+      font-weight: 600;
+      color: var(--text-dim);
+      padding: 0.4rem 0 0.3rem 0.7rem;
+    }
+    .axis-q.sub + .pick-row { margin-left: 0.7rem; }
     .pick-row {
       display: grid;
       grid-template-columns: 1fr 1fr;
@@ -324,6 +332,14 @@
             <button class="pick" id="pick-empty-none" type="button"
                     data-axis="empty" data-value="none">Nothing happens</button>
           </div>
+          <span class="axis-q sub">&hellip; and take another turn?</span>
+          <div class="pick-row" role="group"
+               aria-label="Another turn after landing in an empty pit of yours">
+            <button class="pick" id="pick-again-no" type="button"
+                    data-axis="emptyAgain" data-value="no">No</button>
+            <button class="pick" id="pick-again-yes" type="button"
+                    data-axis="emptyAgain" data-value="again">Yes, go again</button>
+          </div>
         </div>
         <div class="axis">
           <span class="axis-q">In a pit that already had seeds</span>
@@ -338,8 +354,9 @@
       </div>
 
       <p class="rules-note">
-        A capture takes nothing if the facing pit is already empty. Changing
-        any of these starts a new game.
+        A capture takes nothing if the facing pit is already empty, and
+        neither half of the empty-pit rule applies on your opponent's side.
+        Changing any of these starts a new game.
       </p>
       <button class="modal-close" type="button" data-close>Close</button>
     </div>

@@ -295,7 +295,7 @@
     render();
   }
 
-  function removeRing(k) {
+  function removeCell(k) {
     if (state.phase !== 'remove' || !removable(k)) return;
     delete state.cells[k];
     claimIsolated();
@@ -326,8 +326,13 @@
 
   function tap(k) {
     if (state.winner) return;
-    const jumps = allJumps();
+    // The owed cell comes first. A placement can hand the mover a jump, and
+    // asking about jumps here would swallow the half-finished move — the
+    // cell would never come off and the turn would never end. Jumps belong
+    // to the START of a turn, which is the only time phase is 'move'.
+    if (state.phase === 'remove') return removeCell(k);
 
+    const jumps = allJumps();
     if (jumps.length) {
       if (selected) {
         const move = jumps.find(m => m.from === selected && m.to === k);
@@ -341,7 +346,6 @@
       return;
     }
 
-    if (state.phase === 'remove') return removeRing(k);
     place(k);
   }
 
@@ -385,7 +389,9 @@
   }
 
   function render() {
-    const jumps = state.winner ? [] : allJumps();
+    // Same reason as tap(): while a cell is owed, the board is not offering
+    // jumps even if one is now available.
+    const jumps = state.winner || state.phase === 'remove' ? [] : allJumps();
     const jumpFrom = new Set(jumps.map(m => m.from));
     const targets = new Set(
       selected ? jumps.filter(m => m.from === selected).map(m => m.to) : []);
