@@ -292,6 +292,33 @@ running everything — so it is never the reason something went untested.
 **Run the full `npm test` once before merging to `gh-pages`**, and quote
 the real number in the PR. The segments are a working aid, not the gate.
 
+### Turning the full run off for a thread
+
+Some iterations do not warrant eight minutes. Saying any of these **stands
+for the rest of the conversation**, not just the next reply:
+
+| Say | Means |
+| --- | --- |
+| "partial test only" / "no full test" / "affected only" | run `npm run affected` or a named segment; **do not** run `npm test`, including before a merge or a PR |
+| "no tests" | run nothing; commit and push on the strength of the change alone |
+| "full test" / "run everything" | back to the default |
+
+Two things do not change when it is off:
+
+- **Never claim a run that did not happen.** Quote what actually ran —
+  *"43 passing (`npm run game mancala`); full suite not run this thread at
+  your request"* — in the reply and in the PR body. A number in a PR is
+  read as the whole suite unless it says otherwise, and inventing one is
+  worse than skipping the run.
+- **Say when the skip starts to matter.** A one-line CSS tweak is a fine
+  thing to skip a full run on; touching `js/lib/`, `sw.js` or
+  `js/games.js` reaches every game, and the segments already cover that
+  breadth — so say what a full run would have added, once, and carry on.
+  It is the repo owner's call, not a decision to re-litigate each time.
+
+Do not infer the opt-out from impatience, from a short deadline, or from
+having run the suite recently. It has to be asked for.
+
 **Segmenting is about which specs a run needs, never about dropping a
 viewport.** Both projects — phone and desktop — run everything that
 renders. The one exception is `{ tag: '@nodom' }`, carried by the five
