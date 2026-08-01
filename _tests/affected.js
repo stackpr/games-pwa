@@ -10,7 +10,7 @@
  * time rather than coverage. See "Segments" in README.md.
  */
 const { execFileSync, spawnSync } = require('child_process');
-const { specsFor, ROOT } = require('./segments');
+const { specsFor, porcelainPaths, ROOT } = require('./segments');
 
 const argv = process.argv.slice(2);
 const listOnly = argv.includes('--list');
@@ -33,10 +33,7 @@ function git(args) {
 // Committed changes against the base, plus whatever is not committed yet —
 // the second half is the point, since this runs mid-edit.
 const committed = git(['diff', '--name-only', `${since}...HEAD`]);
-const working = git(['status', '--porcelain']) || [];
-// ` M path`, `?? path`, `R  old -> new`: two status columns, a space, then
-// the path, and a rename carries the name it now has on the right.
-const uncommitted = working.map(line => line.slice(3).split(' -> ').pop());
+const uncommitted = porcelainPaths(git(['status', '--porcelain']) || []);
 
 if (committed === null) {
   console.error(`affected: cannot diff against ${since} — running everything.`);

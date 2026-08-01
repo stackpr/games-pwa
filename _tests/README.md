@@ -96,6 +96,12 @@ Unrecognised paths run the whole suite on purpose. A wrong "nothing to run"
 is silent and a wrong "run everything" costs a few minutes, so the fallback
 goes the expensive way.
 
+That fallback also hides bugs in the mapping — the first version read `git
+status` with the two status columns trimmed off the front along with two
+characters of every path, and the symptom was a run that looked cautious
+rather than broken. `specs/segments.spec.js` covers both halves: the
+mapping, and the parse that feeds it.
+
 **Run the whole suite before merging to `gh-pages`.** The segments are a
 working aid, not the gate.
 
@@ -165,6 +171,7 @@ specs/scorekeeper.spec.js  Scoring, tap grouping, undo, reset, persistence,
 specs/counter.spec.js      Counting, keyboard, persistence, H/V reflow
 specs/publishing.spec.js   Deploy surface: exclude rules, CNAME, no .nojekyll
 specs/tagging.spec.js      Guards the @layout split between the two projects
+specs/segments.spec.js     Guards the change → spec mapping and the git parse
 ```
 
 ## Adding tests for a new game

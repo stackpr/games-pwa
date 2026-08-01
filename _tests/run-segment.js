@@ -28,7 +28,10 @@ let files;
 let args = rest;
 
 if (segment === 'shell') {
-  files = ['specs/shell.spec.js', 'specs/publishing.spec.js', 'specs/tagging.spec.js'];
+  // The deploy surface, plus the two specs that guard the suite's own
+  // machinery — both cheap, and both about whether a run means anything.
+  files = ['specs/shell.spec.js', 'specs/publishing.spec.js',
+    'specs/tagging.spec.js', 'specs/segments.spec.js'];
 } else if (segment === 'lib') {
   files = libSpecs();
 } else if (segment === 'game') {

@@ -170,4 +170,21 @@ function specsFor(changed) {
   return [...want].sort();
 }
 
-module.exports = { MEASURES, describeBlocks, specFiles, specsFor, slugs, ROOT };
+/**
+ * Repo-relative paths out of `git status --porcelain` lines.
+ *
+ * Two status columns, a space, then the path — so the line must not be
+ * trimmed first, or an unstaged ` M games/x/y.js` loses two characters off
+ * the front and stops matching anything. That failure is invisible without
+ * a test: an unrecognised path falls through to "run everything", which
+ * looks like caution rather than a bug.
+ */
+function porcelainPaths(lines) {
+  return lines
+    .filter(line => line.length > 3)
+    .map(line => line.slice(3).split(' -> ').pop());
+}
+
+module.exports = {
+  MEASURES, describeBlocks, specFiles, specsFor, slugs, porcelainPaths, ROOT
+};
