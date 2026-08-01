@@ -31,6 +31,14 @@ async function setTricks(page, tricks) {
   for (let seat = 0; seat < 4; seat++) await nudge(page, 'tricks', seat, tricks[seat]);
 }
 
+/** A whole hand: bid, lock, enter what was taken, score. */
+async function playRound(page, bids, tricks) {
+  await setBids(page, bids);
+  await page.locator('#commit').click();
+  await setTricks(page, tricks);
+  await page.locator('#commit').click();
+}
+
 test.beforeEach(async ({ page }) => {
   await page.goto(URL);
   await clearState(page);
@@ -45,9 +53,7 @@ test.describe('the sheet', () => {
   });
 
   test('a scored round becomes a row showing both teams', async ({ page }) => {
-    await setBids(page, [4, 2, 3, 4]);
-    await setTricks(page, [4, 2, 3, 4]);
-    await page.locator('#score-round').click();
+    await playRound(page, [4, 2, 3, 4], [4, 2, 3, 4]);
 
     await expect(page.locator('#rows tr')).toHaveCount(1);
     // Partners sit across: team 1 is seats 1 and 3.
@@ -58,9 +64,7 @@ test.describe('the sheet', () => {
 
   test('totals accumulate across rounds', async ({ page }) => {
     for (let r = 0; r < 2; r++) {
-      await setBids(page, [4, 2, 3, 4]);
-      await setTricks(page, [4, 2, 3, 4]);
-      await page.locator('#score-round').click();
+      await playRound(page, [4, 2, 3, 4], [4, 2, 3, 4]);
     }
     await expect(page.locator('#rows tr')).toHaveCount(2);
     await expect(total(page, 1)).toHaveText('140');   // 70 twice
@@ -68,12 +72,8 @@ test.describe('the sheet', () => {
   });
 
   test('undo removes the last round only', async ({ page }) => {
-    await setBids(page, [4, 2, 3, 4]);
-    await setTricks(page, [4, 2, 3, 4]);
-    await page.locator('#score-round').click();
-    await setBids(page, [1, 1, 1, 1]);
-    await setTricks(page, [1, 1, 1, 1]);
-    await page.locator('#score-round').click();
+    await playRound(page, [4, 2, 3, 4], [4, 2, 3, 4]);
+    await playRound(page, [1, 1, 1, 1], [1, 1, 1, 1]);
 
     await expect(page.locator('#rows tr')).toHaveCount(2);
     await page.locator('#undo').click();
@@ -101,10 +101,58 @@ test.describe('bidding', () => {
     await expect(step(page, 'bid', 0, 'up')).toBeDisabled();
   });
 
-  test('tricks run zero to thirteen', async ({ page }) => {
+  test('tricks run zero to thirteen, once the bids are locked', async ({ page }) => {
+    await page.locator('#commit').click();
     await expect(step(page, 'tricks', 0, 'down')).toBeDisabled();
     await nudge(page, 'tricks', 0, 13);
     await expect(step(page, 'tricks', 0, 'up')).toBeDisabled();
+  });
+});
+
+test.describe('the two phases', () => {
+  test('tricks are hidden until the bids are locked', async ({ page }) => {
+    await expect(page.locator('#entry')).toHaveAttribute('data-phase', 'bidding');
+    await expect(page.locator('.stepper[data-row="took"]').first()).toBeHidden();
+    await expect(page.locator('#commit')).toHaveText('Lock bids');
+
+    await page.locator('#commit').click();
+    await expect(page.locator('#entry')).toHaveAttribute('data-phase', 'playing');
+    await expect(page.locator('.stepper[data-row="took"]').first()).toBeVisible();
+    await expect(page.locator('#commit')).toHaveText('Score round');
+  });
+
+  test('locking the bids freezes them', async ({ page }) => {
+    await setBids(page, [5, 3, 3, 3]);
+    await page.locator('#commit').click();
+    await expect(step(page, 'bid', 0, 'up')).toBeDisabled();
+    await expect(step(page, 'bid', 0, 'down')).toBeDisabled();
+    await expect(bidValue(page, 0)).toHaveText('5');
+  });
+
+  test('Edit bids reopens them without losing them', async ({ page }) => {
+    await setBids(page, [5, 3, 3, 3]);
+    await page.locator('#commit').click();
+    await page.locator('#edit-bids').click();
+
+    await expect(page.locator('#entry')).toHaveAttribute('data-phase', 'bidding');
+    await expect(bidValue(page, 0)).toHaveText('5');
+    await expect(step(page, 'bid', 0, 'up')).toBeEnabled();
+    await expect(page.locator('.stepper[data-row="took"]').first()).toBeHidden();
+  });
+
+  test('Edit bids is offered only while playing', async ({ page }) => {
+    await expect(page.locator('#edit-bids')).toBeHidden();
+    await page.locator('#commit').click();
+    await expect(page.locator('#edit-bids')).toBeVisible();
+  });
+
+  test('scoring returns to bidding for the next round', async ({ page }) => {
+    await playRound(page, [4, 2, 3, 4], [4, 2, 3, 4]);
+    await expect(page.locator('#entry')).toHaveAttribute('data-phase', 'bidding');
+    await expect(page.locator('#commit')).toHaveText('Lock bids');
+    // A fresh hand, not the last one left on screen.
+    await expect(bidValue(page, 0)).toHaveText('3');
+    await expect(page.locator('.value[data-kind="tricks"][data-seat="0"]')).toHaveText('0');
   });
 });
 
@@ -138,18 +186,14 @@ test.describe('scoring', () => {
 
   for (const c of cases) {
     test(c.name, async ({ page }) => {
-      await setBids(page, c.bids);
-      await setTricks(page, c.tricks);
-      await page.locator('#score-round').click();
+      await playRound(page, c.bids, c.tricks);
       await expect(total(page, 1)).toHaveText(c.t1);
       await expect(total(page, 2)).toHaveText(c.t2);
     });
   }
 
   test('a negative round is marked as a loss', async ({ page }) => {
-    await setBids(page, [5, 2, 3, 4]);
-    await setTricks(page, [2, 3, 2, 5]);
-    await page.locator('#score-round').click();
+    await playRound(page, [5, 2, 3, 4], [2, 3, 2, 5]);
     await expect(cell(page, 1, 'pts')).toHaveAttribute('data-sign', 'down');
     await expect(cell(page, 2, 'pts')).not.toHaveAttribute('data-sign', 'down');
   });
@@ -163,9 +207,7 @@ test.describe('the deal', () => {
 
     expect(await dealer()).toBe(0);
     for (const expected of [1, 2, 3, 0]) {
-      await setBids(page, [3, 3, 3, 3]);
-      await setTricks(page, [3, 3, 3, 3]);
-      await page.locator('#score-round').click();
+      await playRound(page, [3, 3, 3, 3], [3, 3, 3, 3]);
       expect(await dealer()).toBe(expected);
     }
   });
@@ -173,21 +215,32 @@ test.describe('the deal', () => {
 
 test.describe('persistence', () => {
   test('rounds survive a reload', async ({ page }) => {
-    await setBids(page, [4, 2, 3, 4]);
-    await setTricks(page, [4, 2, 3, 4]);
-    await page.locator('#score-round').click();
+    await playRound(page, [4, 2, 3, 4], [4, 2, 3, 4]);
     await page.reload();
     await expect(page.locator('#rows tr')).toHaveCount(1);
     await expect(total(page, 1)).toHaveText('70');
   });
 
-  test('only the rounds are stored', async ({ page }) => {
-    await setBids(page, [4, 2, 3, 4]);
-    await setTricks(page, [4, 2, 3, 4]);
-    await page.locator('#score-round').click();
+  test('scored rounds and the hand in progress are both stored', async ({ page }) => {
+    await playRound(page, [4, 2, 3, 4], [4, 2, 3, 4]);
     const saved = await page.evaluate(() =>
       JSON.parse(localStorage.getItem('games.spades.v1')));
-    expect(saved).toEqual({ rounds: [{ bids: [4, 2, 3, 4], tricks: [4, 2, 3, 4] }] });
+    expect(saved.rounds).toEqual([{ bids: [4, 2, 3, 4], tricks: [4, 2, 3, 4] }]);
+    expect(saved.draft).toEqual({ phase: 'bidding', bids: [3, 3, 3, 3], tricks: [0, 0, 0, 0] });
+  });
+
+  test('locked bids survive a reload mid-hand', async ({ page }) => {
+    // The hand is played away from the phone, so losing the bids to a screen
+    // lock would be the whole point of the app failing.
+    await setBids(page, [5, 'nil', 2, 4]);
+    await page.locator('#commit').click();
+    await nudge(page, 'tricks', 0, 3);
+
+    await page.reload();
+    await expect(page.locator('#entry')).toHaveAttribute('data-phase', 'playing');
+    await expect(bidValue(page, 0)).toHaveText('5');
+    await expect(bidValue(page, 1)).toHaveText('Nil');
+    await expect(page.locator('.value[data-kind="tricks"][data-seat="0"]')).toHaveText('3');
   });
 
   test('corrupt saved state falls back to an empty sheet', async ({ page }) => {
