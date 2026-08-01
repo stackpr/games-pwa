@@ -1,145 +1,97 @@
-# Honeycomb: 3 Bees
+# Blackjack
 
-Two players, one shared pool of bees, and a comb that gets smaller every
-turn. Take three light, four mid, five dark, or two of each, and you win.
+Vegas rules, one seat that matters, a bankroll that carries over.
 
-## The name
+## The table
 
-This is a fresh build of a published game whose **own name is a registered
-trademark**. Game rules are not copyrightable and this implementation is
-original; the name is the owned part, so it appears nowhere — not in the
-slug, the storage key, the precache list, the specs or the commits.
-*Honeycomb: 3 Bees* was chosen by the repo owner. See "Naming a game" in
-`CLAUDE.md`.
+**You always sit in the middle.** The other players are set in settings (0
+to 4), and your seat is `floor(total / 2)` — so three at the table puts you
+in the middle, five puts you in the middle, and an even table puts you just
+right of centre. Your seat is the wide one, ringed in chip gold; theirs are
+narrow.
 
-The theme is not decoration: the board really is a hex comb of cells, and
-the win condition really is three of a kind, so the name says what the game
-is. The code uses the same words as the rules — cells and bees, never rings
-and marbles — because a file whose comments disagree with its UI is a file
-that gets half-edited later.
+The other players exist for **the cards they use up**, which is the whole
+reason the setting is there: a shoe dealt to five is a different shoe from
+one dealt heads-up. Their money is not tracked and they do not talk. They
+play a fixed, simple line — stand on hard 17, stand on 13–16 against a
+dealer 2–6, hit soft totals under 18 — rather than full basic strategy,
+because a bot playing a *slightly* wrong hand is not something anyone at
+this table can act on, and pretending otherwise would invite blame for
+losses it did not cause.
 
-## Nobody owns the bees
+## House rules
 
-That is the thing to understand before anything else, and it is why the two
-players' colours never touch the pieces. There are no white bees and black
-bees here: there are **thirty-seven cells and twenty-four bees**, and both
-players take from the same pile. `--player-1` and `--player-2` mark whose
-turn it is and whose tray is whose; the bees get their own scale.
+- **Blackjack pays 3 to 2**, rounded down on an odd bet. A win pays even
+  money; a push returns the stake.
+- **Dealer stands on all 17s**, soft ones included.
+- **Double** on any two cards, including after a split. Exactly one card.
+- **Split** any pair, once. Split aces get one card each, and 21 after a
+  split is a plain 21 rather than a blackjack — the usual rule and the one
+  that stops a split into aces paying 3:2 twice.
+- **The dealer peeks** on a 21, so a dealer blackjack ends the hand before
+  anybody has doubled into it.
+- The dealer **does not draw at all** when every one of your hands has
+  already busted. There is nothing left to resolve and drawing would only
+  burn cards.
 
-**The three bees differ by value, not hue** — light, mid, dark. That is
-deliberate: a lightness ramp survives any colour vision, where three hues
-would not. It is also why the rules modal calls them light/mid/dark rather
-than naming colours.
+## Saying why, before saying how much
 
-An **empty cell sits below the darkest bee** on that same ramp. Get that
-ordering wrong — make the empty cell lighter than the dark bee — and a dark
-bee reads as an empty cell, which is the one confusion that would make the
-board unplayable.
+A hand that ends says what happened before it says what it cost:
+*"Bust! You lose $10."* — not *"You lose $10."* on its own, which reads as
+though the dealer beat you when in fact you beat yourself and the dealer
+never drew a card. That is a real confusion here, because of the rule above:
+bust every hand and the dealer stands on whatever it was showing, so the
+board offers no explanation of its own.
 
-## A turn
+The line names, in order of what a player wants to know: a blackjack, a
+dealer blackjack, your bust (**Bust!**, or *One hand bust* after a split
+where only one went over), then a dealer bust. The seat itself carries the
+total that did it — `Bust 26` rather than a bare *Lose* — so a split shows
+which half went where.
 
-**Jumping is compulsory.** If any bee on the comb can jump an adjacent bee
-into the empty cell directly beyond it, the player must jump, and must keep
-jumping with that same bee while it can. The jumped bee goes to the jumper.
-Mid-chain the bee is locked — `state.chain` holds it, and tapping anything
-else does nothing.
+Not offered, deliberately: insurance, surrender, and resplitting past two
+hands. Each is a rule most tables skip, and each costs a decision point
+mid-hand for a small edge.
 
-Otherwise the turn is **put a bee in a cell and take a cell away**, in that
-order, as one move:
+## Betting
 
-1. Pick a bee from the pool, then tap an empty cell.
-2. Tap a cell to remove. Only cells at the **edge** come off.
+Six buttons — ±1, ±5, ±25 — around the bet. That is "any number" without a
+keypad, which would mean a keyboard covering the table on every hand. Each
+button disables itself when it would take the bet below 1 or above the
+bankroll, so the bet can never exceed what is there to lose.
 
-If no cell can be removed, the placement is the whole move. The turn does
-not end between the two halves, which is why `phase` is `'remove'` rather
-than the turn having already passed — an undo takes back the pair.
+**The stake leaves the bankroll the moment the hand is dealt**, and payouts
+return the stake plus the winnings. That ordering matters: it means the
+balance on screen is always money you actually have, and a double or a split
+can be refused honestly because the bankroll has already been debited.
 
-### What "at the edge" means
+The bankroll starts at $500 and persists. There is a reset in settings; it
+is not automatic, because a bankroll that quietly refills is not a bankroll.
 
-A cell comes off if it is empty and has **two neighbouring positions next to
-each other** with no cell in them. Two *consecutive* open sides, not two
-anywhere: a cell with gaps on opposite sides is wedged and would have to
-slide past its neighbours to get out. That is the one rule most likely to be
-misread, and it is why `DIRS` is written as a cycle — the check walks the
-six directions round and looks for an adjacent pair.
+## Cards
 
-### Cutting a piece of comb off
+`js/lib/deck.js` and `css/cards.css` are new and shared-by-intent. A card is
+a rounded rectangle with a rank and a suit pip drawn in CSS — one rule set
+rather than fifty-two images, and it scales without density variants. See
+Images in `CLAUDE.md`.
 
-Remove a cell and the comb can fall into pieces. **Any piece that comes away
-from the rest and is full of bees is claimed whole** by the player who cut
-it off, and those cells leave the board with it. A piece that still has an
-empty cell in it stays put and is played on normally.
+The shoe **never reshuffles itself.** It deals until empty and exposes
+`needsShuffle()`; the game asks between hands and calls `shuffle()` itself.
+That shape exists to make a mid-hand reshuffle impossible, which is the bug
+a self-managing shoe invites.
 
-The check skips the case where the "piece" is the entire remaining comb,
-because a full comb is a finished game rather than an isolation.
-
-### When the pool runs out
-
-You place from **what you have taken**. This is not a footnote: late on, the
-only way to keep playing is to spend the bees you are trying to collect, and
-a player one bee from winning may have nothing safe to put down. A player
-with no jump, no bee and no empty cell **loses**.
-
-## The comb, in percentages
-
-Thirty-seven cells on an axial hex grid, radius 3. Each cell is placed with
-
-```css
-left: calc(50% + var(--x) * 14.286%);
-top:  calc(50% + var(--y) * 13.977%);
-```
-
-where `--x` is `q + r/2` and `--y` is `r * 0.866` — the axial-to-pixel
-conversion, in units of one step. **No JavaScript measures anything and
-there is no resize handler**, which is the point: the comb is correct at
-every width for free.
-
-The two percentages differ because one resolves against the board's width
-and the other against its height. `aspect-ratio: 7 / 6.196` is what makes
-them describe the same physical distance — 7 steps across, 6.196 down for a
-hexagon of radius 3 with half a cell of padding. **Change the aspect and
-both numbers have to change with it.**
-
-### Turned thirty degrees in portrait
-
-A hex comb laid out flat across is wider than it is tall, which leaves most
-of a phone empty. Turning the whole grid **30°** stands it on a vertex:
-same comb, now 6.196 steps across and 7 down, and about a quarter more area
-on a 390px phone.
-
-Every cell therefore carries a second pair of coordinates — `--fx` =
-`q * 0.866`, `--fy` = `r + q/2` — and a media query swaps which pair is
-used, along with the aspect ratio and both step percentages. Both sets are
-written by the same loop in `build()`, so **nothing runs on a rotation**:
-the stylesheet picks. The media query sits *after* the base rules, because a
-media query adds no specificity and source order is what decides.
-
-Thirty degrees turns the comb's rows into columns: the seven ranks of
-4-5-6-7-6-5-4 run down `--y` in landscape and across `--fx` in portrait,
-which is what the geometry spec checks. A spec also asserts that neighbours
-are exactly one step apart under *both* coordinate sets — the cheap way to
-catch a squashed board, since a typo in either conversion still renders
-something that looks roughly like a comb.
-
-A removed cell is `display: none`, so the comb really does develop holes
-rather than showing a ghost.
+Cards overlap by a negative margin so a six-card hand still fits the seat it
+was dealt to, and the whole row is sized from one `font-size` on `.hand`.
 
 ## Persisted state
 
-`localStorage` key `games.honeycomb-3-bees.v1`:
+`localStorage` key `games.blackjack.v1`:
 
 ```json
-{ "cells": "----...www.-...", "pool": { "w": 4, "g": 8, "b": 9 },
-  "caps": [{ "w": 1, "g": 0, "b": 1 }, { "w": 1, "g": 0, "b": 0 }],
-  "turn": 2, "phase": "move", "chain": null, "winner": 0 }
+{ "decks": 6, "others": 2, "bank": 480, "bet": 10 }
 ```
 
-`cells` is 37 characters in a fixed order — `-` removed, `.` an empty cell,
-or the bee in it.
-
-A restored game is rejected unless **the bees add up**: comb plus both trays
-plus the pool must equal 6 light, 8 mid, 10 dark. Every legal move conserves
-them, so a save that does not balance is not a position this game could have
-reached, and starting fresh beats resuming an impossible one.
-
-Undo is in memory only, like the other board games here.
+**The hand in play is deliberately not saved.** A shoe is rebuilt on load, so
+a resumed hand would be finished against cards that had nothing to do with
+the ones it was dealt from — worse than losing it. A reload returns to
+betting with the bankroll intact, which is the honest resting state.

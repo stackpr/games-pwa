@@ -193,6 +193,50 @@ test.describe('placing and removing', () => {
     });
 });
 
+test.describe('the owed cell', () => {
+  test('a placement that sets up a jump still owes a cell', async ({ page }) => {
+    // Dropping a bee next to a lone one creates a jump on the spot. The
+    // move is only half done, so the board must keep asking for the cell.
+    await position(page, { bees: { '1,0': 'g' } });
+    await page.locator('#pick-w').click();
+    await cell(page, '0,0').click();
+
+    await expect(hint(page)).toHaveText('Now take a cell off the edge.');
+    await expect(label(page)).toHaveText(/^Player 1 to move/);
+    const marks = await live(page);
+    expect(marks.every(m => m.endsWith(':take'))).toBe(true);
+    expect(marks.length).toBeGreaterThan(0);
+  });
+
+  test('the jump it set up belongs to the other player', async ({ page }) => {
+    await position(page, { bees: { '1,0': 'g' } });
+    await page.locator('#pick-w').click();
+    await cell(page, '0,0').click();
+    await cell(page, '3,-3').click();
+
+    await expect(label(page)).toHaveText(/^Player 2 to move/);
+    await expect(hint(page)).toHaveText('A jump is on — you have to take it.');
+  });
+
+  test('a jump turn takes no cell off', async ({ page }) => {
+    await position(page, { bees: { '0,0': 'w', '1,0': 'g' } });
+    const before = await onBoard(page);
+    await cell(page, '0,0').click();
+    await cell(page, '2,0').click();
+    // One cell goes, and it is the jumped bee's — not a removal.
+    expect(await onBoard(page)).toBe(before - 1);
+    await expect(label(page)).toHaveText(/^Player 2 to move/);
+    await expect(hint(page)).not.toHaveText('Now take a cell off the edge.');
+  });
+
+  test('a chain is not interrupted by the removal step', async ({ page }) => {
+    await position(page, { bees: { '-2,0': 'w', '-1,0': 'g', '1,0': 'b' } });
+    await cell(page, '-2,0').click();
+    await cell(page, '0,0').click();
+    await expect(hint(page)).toHaveText('Keep jumping with that bee.');
+  });
+});
+
 test.describe('jumping', () => {
   test('a jump is compulsory and placing is refused', async ({ page }) => {
     await position(page, { bees: { '0,0': 'w', '1,0': 'g' } });

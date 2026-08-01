@@ -344,6 +344,7 @@
 
       if (mine > 21) {
         payout = 0;
+        text = 'Bust ' + mine;
       } else if (isBlackjack(hand) && !dealerBJ) {
         // 3:2, plus the stake back.
         payout = hand.bet + Math.floor(hand.bet * 3 / 2);
@@ -368,9 +369,22 @@
     }
 
     save();
+    // Why the hand went the way it did, before the money. A bust is the one
+    // outcome a player wants named: "you lose $10" reads like the dealer
+    // beat you, when in fact you beat yourself and the dealer never drew.
+    const hands = myHands();
+    const busted = hands.filter(h => value(h.cards).total > 21).length;
+    let why = prefix || '';
+    if (!why && busted) {
+      why = busted === hands.length
+        ? (hands.length > 1 ? 'Both hands bust.' : 'Bust!')
+        : 'One hand bust.';
+    }
+    if (!why && dealer > 21) why = 'Dealer busts.';
+
     const tail = net > 0 ? 'You win $' + net + '.'
       : net < 0 ? 'You lose $' + (-net) + '.' : 'Push.';
-    say((prefix ? prefix + ' ' : '') + tail);
+    say((why ? why + ' ' : '') + tail);
     render();
   }
 
