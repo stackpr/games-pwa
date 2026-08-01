@@ -17,7 +17,7 @@ test.beforeEach(async ({ page }) => {
   await clearState(page);
 });
 
-test.describe('scoring', { tag: '@layout' }, () => {
+test.describe('scoring', () => {
   test('starts at zero with no history', async ({ page }) => {
     await expect(score(page, 0)).toHaveText('0');
     await expect(score(page, 1)).toHaveText('0');
@@ -86,7 +86,7 @@ test.describe('scoring', { tag: '@layout' }, () => {
   });
 });
 
-test.describe('the +5 button', { tag: '@layout' }, () => {
+test.describe('the +5 button', () => {
   test('adds five and records one entry', async ({ page }) => {
     await page.locator('#plus5-0').click();
     await expect(score(page, 0)).toHaveText('5');
@@ -338,7 +338,7 @@ test.describe('persistence', () => {
   });
 });
 
-test.describe('more players', { tag: '@layout' }, () => {
+test.describe('more players', () => {
   const setCount = async (page, n) => {
     await page.locator('#settings-btn').click();
     await page.locator(`.count[data-count="${n}"]`).click();
@@ -451,7 +451,7 @@ test.describe('more players', { tag: '@layout' }, () => {
   });
 });
 
-test.describe('history line layout', { tag: '@layout' }, () => {
+test.describe('history line layout', () => {
   test('stays on one line, newest right, older clipped left', async ({ page }) => {
     for (let i = 0; i < 25; i++) {
       await tap(page, 0, 1);

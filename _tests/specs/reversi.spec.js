@@ -172,7 +172,7 @@ test.describe('persistence', () => {
   });
 });
 
-test.describe('presentation', { tag: '@layout' }, () => {
+test.describe('presentation', () => {
   test('the rules modal names Reversi as the original name', async ({ page }) => {
     await page.locator('#rules-btn').click();
     await expect(page.locator('#rules')).toBeVisible();

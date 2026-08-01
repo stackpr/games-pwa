@@ -53,7 +53,7 @@ test.beforeEach(async ({ page }) => {
   await clearState(page);
 });
 
-test.describe('the opening board', { tag: '@layout' }, () => {
+test.describe('the opening board', () => {
   test('thirty-seven empty cells and the full pool', async ({ page }) => {
     expect(await onBoard(page)).toBe(37);
     await expect(page.locator('.cell[data-c]')).toHaveCount(0);
@@ -425,7 +425,7 @@ test.describe('undo, reset and persistence', () => {
   });
 });
 
-test.describe('presentation', { tag: '@layout' }, () => {
+test.describe('presentation', () => {
   test('the rules modal states the four ways to win', async ({ page }) => {
     await page.locator('#rules-btn').click();
     await expect(page.locator('#rules')).toContainText('three light');

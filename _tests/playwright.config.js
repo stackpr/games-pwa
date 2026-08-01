@@ -27,14 +27,14 @@ module.exports = defineConfig({
   projects: [
     // The phone is the device this site is for, so it runs everything.
     { name: 'mobile-portrait', use: { ...devices['Pixel 7'] } },
-    // Desktop runs only what a wider window can actually change: anything
-    // that measures the page. Rules, scoring and persistence read the same
-    // DOM at any width, and running them twice cost about half the suite's
-    // wall clock for no signal. `tagging.spec.js` keeps the tag honest —
-    // see "The two projects" in README.md.
+    // Desktop runs everything too, minus the blocks tagged `@nodom` — the
+    // ones that never render anything, so a second viewport is running the
+    // identical work twice. Nothing that touches the page is skipped here;
+    // `tagging.spec.js` is what enforces that. See "The two projects" in
+    // README.md.
     {
       name: 'desktop',
-      grep: /@layout/,
+      grepInvert: /@nodom/,
       use: { ...devices['Desktop Chrome'], viewport: { width: 1280, height: 800 } },
     },
   ],

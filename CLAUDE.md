@@ -292,13 +292,14 @@ running everything — so it is never the reason something went untested.
 **Run the full `npm test` once before merging to `gh-pages`**, and quote
 the real number in the PR. The segments are a working aid, not the gate.
 
-Tests are split across two projects: the phone runs everything, and desktop
-runs only `describe` blocks tagged `@layout` — the ones that measure the
-rendered page, which is all a wider window can change. Adding a block that
-calls `boundingBox`, `getComputedStyle`, `setViewportSize` or friends means
-adding `{ tag: '@layout' }`; `specs/tagging.spec.js` fails the suite if you
-forget, because the alternative is a block that silently stops being
-checked at desktop width.
+**Segmenting is about which specs a run needs, never about dropping a
+viewport.** Both projects — phone and desktop — run everything that
+renders. The one exception is `{ tag: '@nodom' }`, carried by the five
+specs with no UI at all (`deck`, `vocab`, `publishing`, and the suite's own
+`segments` and `tagging`), where a second viewport repeats identical work.
+`specs/tagging.spec.js` fails the suite if a tagged block so much as calls
+`locator`, and the config uses `grepInvert` so running at both widths stays
+the default. Do not tag a spec to make it faster.
 
 Use `npm ci`, never `npm install`, and never run `npx playwright install`.
 The `@playwright/test` version is pinned to match a browser build that is

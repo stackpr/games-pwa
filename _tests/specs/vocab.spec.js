@@ -10,7 +10,7 @@ test.beforeEach(async ({ page }) => {
   await page.goto(URL);
 });
 
-test.describe('the vocabulary library', () => {
+test.describe('the vocabulary library', { tag: '@nodom' }, () => {
   test('thirty categories of fifty terms', async ({ page }) => {
     const shape = await vocab(page, () => {
       const cats = Vocab.categories();

@@ -214,7 +214,7 @@ test.describe('persistence', () => {
   });
 });
 
-test.describe('presentation', { tag: '@layout' }, () => {
+test.describe('presentation', () => {
   test('the rules modal explains the forced jump', async ({ page }) => {
     await page.locator('#rules-btn').click();
     await expect(page.locator('#rules')).toBeVisible();

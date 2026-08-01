@@ -9,7 +9,7 @@ const { specsFor, porcelainPaths, slugs, ROOT } = require('../segments');
  * being worth using. Neither shows up as a failure anywhere else, so it is
  * checked here. See "Segments" in README.md.
  */
-test.describe('picking the specs a change affects', () => {
+test.describe('picking the specs a change affects', { tag: '@nodom' }, () => {
   test('a game change runs that game and nothing else', () => {
     expect(specsFor(['games/mancala/mancala.js'])).toEqual(['specs/mancala.spec.js']);
     expect(specsFor(['games/mancala/index.html'])).toEqual(['specs/mancala.spec.js']);
@@ -85,7 +85,7 @@ test.describe('picking the specs a change affects', () => {
   });
 });
 
-test.describe('reading git status', () => {
+test.describe('reading git status', { tag: '@nodom' }, () => {
   test('the two status columns come off, and nothing else', () => {
     // The bug this exists for: trimming the line first ate two characters
     // of an unstaged path, and the "unrecognised → run everything" fallback

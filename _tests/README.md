@@ -107,30 +107,40 @@ working aid, not the gate.
 
 ## The two projects
 
-Every test runs on `mobile-portrait` (Pixel 7). The `desktop` project runs
-only blocks tagged `@layout`:
+Every test runs on `mobile-portrait` (Pixel 7) and again on `desktop`
+(1280×800). **Both projects run everything that renders.** The only
+exception is blocks tagged `@nodom`:
 
 ```js
-test.describe('presentation', { tag: '@layout' }, () => { … });
+test.describe('the card library', { tag: '@nodom' }, () => { … });
 ```
 
-A wider window can only change assertions that **measure the rendered
-page** — `boundingBox`, `scrollWidth`, `getComputedStyle`,
-`setViewportSize`, a media query. Rules, scoring, persistence and
-storage-shape assertions read the same DOM at any width, and running them a
-second time was costing about a third of the suite's wall clock for no
-signal.
+Five specs carry it, and only because they render nothing at all:
 
-`specs/tagging.spec.js` is what keeps that honest. It reads every other
-spec and fails if a block that measures the page is missing the tag — the
-failure mode being invisible otherwise, since an untagged block does not
-error, it just quietly stops being checked at desktop width. It also fails
-on a tag that measures nothing (a pointless second run), on a tag written
-into a title instead of the options object, and on a config that no longer
-greps for it.
+| Spec | Why a viewport cannot change it |
+| --- | --- |
+| `deck`, `vocab` | the browser is used as a JavaScript engine — `page.evaluate` over library data, no markup |
+| `publishing` | reads files off disk; no page is ever opened |
+| `segments`, `tagging` | the same, for the suite's own machinery |
 
-When in doubt, tag it. An unnecessary tag costs a few seconds; a missing
-one costs the coverage.
+That is 28 of the original tests, run once instead of twice. Everything
+else — every game, the shell, `names` (which drives the recent-name UI) —
+still runs at both widths, because a wider window moves layout and a click
+that lands on the wrong element is a real failure a phone-only run would
+miss.
+
+`specs/tagging.spec.js` keeps the tag honest, and it is deliberately strict
+about it. The rule is not "does it measure the page" but **"does it touch
+the page at all"** — one `locator`, `click`, `toBeVisible` or
+`querySelector` inside a tagged block fails the suite. It also checks that
+the config uses `grepInvert` and not `grep`: the default has to be *run at
+both widths*, with the tag as the narrow exception, because the other way
+round is how coverage goes missing by omission rather than by decision.
+
+**Do not reach for this tag to make a slow spec faster.** It exists for
+code that has no UI, and its cost when wrong is silent — a tagged block
+still passes at phone width, it just quietly stops being checked at
+desktop.
 
 ## Installing
 
@@ -170,7 +180,8 @@ specs/scorekeeper.spec.js  Scoring, tap grouping, undo, reset, persistence,
                            history-line layout
 specs/counter.spec.js      Counting, keyboard, persistence, H/V reflow
 specs/publishing.spec.js   Deploy surface: exclude rules, CNAME, no .nojekyll
-specs/tagging.spec.js      Guards the @layout split between the two projects
+specs/tagging.spec.js      Guards the @nodom tag, and that desktop skips
+                           nothing else
 specs/segments.spec.js     Guards the change → spec mapping and the git parse
 ```
 

@@ -18,7 +18,7 @@ test.beforeEach(async ({ page }) => {
   await clearState(page);
 });
 
-test.describe('the disclosed category', { tag: '@layout' }, () => {
+test.describe('the disclosed category', () => {
   test('the card shows the category and the word at once', async ({ page }) => {
     await oneCategory(page);
     await page.locator('#begin').click();
@@ -120,7 +120,7 @@ test.describe('rounds and scoring', () => {
     });
 });
 
-test.describe('presentation', { tag: '@layout' }, () => {
+test.describe('presentation', () => {
   test('the how-to modal says the category is disclosed', async ({ page }) => {
     await page.locator('#rules-btn').click();
     await expect(page.locator('#rules')).toContainText('category is disclosed');

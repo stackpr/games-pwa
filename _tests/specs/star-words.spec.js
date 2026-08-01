@@ -19,7 +19,7 @@ test.beforeEach(async ({ page }) => {
   await clearState(page);
 });
 
-test.describe('the covered card', { tag: '@layout' }, () => {
+test.describe('the covered card', () => {
   test('a dealt card is covered until the drawer asks', async ({ page }) => {
     await oneCategory(page);
     await page.locator('#begin').click();
@@ -132,7 +132,7 @@ test.describe('rounds and scoring', () => {
   });
 });
 
-test.describe('presentation', { tag: '@layout' }, () => {
+test.describe('presentation', () => {
   test('the how-to modal bans letters and names the trademark', async ({ page }) => {
     await page.locator('#rules-btn').click();
     await expect(page.locator('#rules')).toContainText('No letters');

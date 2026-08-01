@@ -7,7 +7,7 @@ const read = f => fs.readFileSync(path.join(repoRoot, f), 'utf8');
 
 // These guard the deploy surface: what reaches games.payne.run, and what
 // must not. They are static checks, so they need no browser page.
-test.describe('what gets published', () => {
+test.describe('what gets published', { tag: '@nodom' }, () => {
   test('the test suite is excluded from the Pages build', async () => {
     const config = read('_config.yml');
     // Belt and braces: Jekyll skips "_"-prefixed paths anyway, but the

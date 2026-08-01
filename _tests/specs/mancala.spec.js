@@ -337,7 +337,7 @@ test.describe('persistence', () => {
   });
 });
 
-test.describe('presentation', { tag: '@layout' }, () => {
+test.describe('presentation', () => {
   test('the rules modal offers all three axes', async ({ page }) => {
     await page.locator('#rules-btn').click();
     await expect(page.locator('#rules')).toBeVisible();

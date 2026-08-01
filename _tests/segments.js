@@ -8,7 +8,7 @@
  * README.md for when to trust it and when to run everything.
  *
  * Used by `affected.js` (picking specs) and by `specs/tagging.spec.js`
- * (checking the @layout tag), which is why the describe-block parser lives
+ * (checking the @nodom tag), which is why the describe-block parser lives
  * here rather than in either of them.
  */
 const fs = require('fs');
@@ -62,7 +62,7 @@ function describeBlocks(src) {
       const head = lines[start];
       out.push({
         title: (head.match(/test\.describe\('([^']*)'/) || [, '?'])[1],
-        tagged: /@layout/.test(head),
+        tagged: /@nodom/.test(head),
         body: lines.slice(start, i + 1).join('\n')
       });
       start = null;
