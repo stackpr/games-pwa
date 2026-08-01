@@ -50,6 +50,12 @@ The per-player buttons are why **names matter here** in a way they do not in
 the board games: a row reading "Player 3, Player 4, Player 5" is unusable
 across a table. Hence the name editor, and hence the shared recent list.
 
+They also take **every pixel the card can spare**, since they are the whole
+scoring interface under a running clock. This card is one word and a reveal
+overlay, so its solo-mode floor is the smallest of the four party games —
+`32dvh` — and the buttons get the rest. See
+`games/forbidden-words/_README.md` for the shared mechanism.
+
 Naming the guesser at the moment of scoring — rather than pairing people up
 in advance — is what makes the drawer's job a real one. Getting through
 to *anybody* scores, so there is no partner to specialise with, and the

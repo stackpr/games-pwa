@@ -33,13 +33,39 @@ so the two cannot drift apart.
 | **Total** | **10** | **13** |
 
 If your table plays a different set, it is one edit: `POINT_SETS` at the top
-of `pitch.js`. Add or remove an entry and the entry panel, the maximum bid
-and the rules modal all follow. That was the point of driving the whole game
-off a table rather than hard-coding eight checkboxes.
+of `pitch.js`. Add or remove an entry and the hand total, the maximum bid and
+the rules modal all follow, because all three read the same table.
+
+Note that the totals here are the two the settings screen offers, 10 and 13.
+A set whose values sum to something else is fine, but the version it is
+filed under is what the entry panel counts to — keep the two in step.
+
+## Two phases, like Spades
+
+A hand runs in the order the table plays it, and the panel only ever shows
+the half that is live:
+
+1. **Bidding** — tap who bid, step the bid, press **Lock bid**.
+2. **Playing** — count each side's points, press **Score the hand**.
+
+**Edit bid** goes back to the first phase without losing the counts already
+entered. This is the same shape as the Spades sheet next door, deliberately:
+the two games sit beside each other on the home page and a table that has
+used one should not have to learn the other.
+
+### The panel does not name individual points
+
+An earlier version had a row per point at stake — High, Low, Jack, the
+Three — and asked which side took each one. That is more bookkeeping than a
+Pitch table wants from a scorepad: **players can count their own tricks**,
+and a phone that makes them re-declare each card is slower than the paper it
+replaced. So the entry is one number per side and the point list moved to
+the **Points** modal, where it is reference rather than data entry.
+
+`POINT_SETS` still drives that modal and still decides the hand total, which
+is the only thing the scoring needs from it.
 
 ## Scoring a hand
-
-Tap the bidder, step the bid, then tap a side for each point that was taken.
 
 - Every side keeps the points it actually took.
 - The bidder is the exception: **take at least the bid or lose it**. Falling
@@ -51,38 +77,58 @@ Bids run from 2 to the version total. No minimum-bid rule, no shoot-the-moon
 bonus, no game-end target — the sheet records what happened rather than
 refereeing it, which is the same call Spades makes next door.
 
-**Unassigned points score for nobody.** A half-filled hand is worth less
-rather than being rejected, and the entry panel says how many points are
-still to place instead of blocking the button. A table that forgets to
-record Game should get a slightly wrong number, not a locked app.
+**The points have to add up before a hand will score.** Every point in a
+Pitch hand is taken by somebody, so a sheet that accepts nine of ten is
+recording an arithmetic slip rather than a game. Two things enforce it
+without an error message ever appearing:
 
-Tapping the side already chosen for a point **clears it**, so a mis-tap costs
-one more tap rather than a reset.
+- The **+** steppers stop at the hand total, so a side can never be given a
+  point that does not exist. An entry is therefore either short or exactly
+  right, never over.
+- **Score the hand** is disabled while it is short, and the panel says how
+  many are still to place.
+
+That is a deliberate reversal of the earlier behaviour, which let unassigned
+points score for nobody. Being told the count is wrong the moment it is wrong
+beats finding a hand worth 9 three rounds later.
+
+A saved hand that does not add up — from a half-finished entry, or from a
+point version changed underneath it — is **kept, not zeroed**. The Score
+button stays off until the table fixes it, which is a repair they can see.
+
+## The buttons take the screen
+
+The entry panel is the half of the page that gets tapped, so it is the
+greedy one: it claims what the sheet can spare up to `max-height: 64dvh`,
+and everything inside it stretches to fill what it gets. The bidder buttons,
+the bid stepper and the point steppers have no fixed height at all — they
+divide the panel. Five sides on a phone still leaves each column a full-height
+**+** and **−**.
 
 ## Persisted state
 
-`localStorage` key `games.pitch.v1`:
+`localStorage` key `games.pitch.v2`. The `v1` key held the per-point map the
+entry panel no longer collects; there is no migration, because a `taken` map
+cannot be turned into per-side counts without knowing the point set it was
+recorded under, and a half-played hand is not worth that.
 
 ```json
 {
   "players": 4,
   "points": 10,
-  "rounds": [ { "bidder": 0, "bid": 6,
-                "taken": { "high": 0, "low": 1, "jack": 0, "offjack": null,
-                           "hijoker": 0, "lojoker": 1, "three": 0, "game": 1 } } ],
-  "draft": { "bidder": 0, "bid": 4, "taken": { "high": null } }
+  "rounds": [ { "bidder": 0, "bid": 6, "took": [7, 3] } ],
+  "draft": { "phase": "playing", "bidder": 0, "bid": 4, "took": [2, 1] }
 }
 ```
 
 `draft` is the hand in progress and is saved on **every tap**, because the
-gap between setting the bid and scoring the hand is the hand itself: the
+gap between locking the bid and scoring the hand is the hand itself: the
 phone goes down, the screen locks, and coming back to a lost bid would be
-the app failing at its one job.
+the app failing at its one job. `phase` is part of it for the same reason.
 
 Round scores and totals are **derived**, never stored, so the sheet cannot
 disagree with itself. A round whose shape does not check out is repaired
-field by field against the current point set rather than dropped — a saved
-`taken` key that no longer exists simply goes unread.
+field by field rather than dropped.
 
 Changing the player count or the point version **clears the sheet**, behind
 a confirm when there is anything to lose. A half-played four-handed game is

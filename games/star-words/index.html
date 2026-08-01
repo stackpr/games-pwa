@@ -59,6 +59,10 @@
     .card { position: relative; }
     .card[data-hidden] .reveal { display: flex; }
     .reveal small { font-size: 0.8rem; font-weight: 600; color: var(--text-dim); }
+    /* Solo mode gives the rest of the screen to the name buttons. One word
+       and nothing else, so this card has the smallest floor of the four —
+       it still has to be big enough to hold the reveal overlay. */
+    body[data-mode="solo"] .card { flex: 0 1 auto; min-height: clamp(6rem, 32dvh, 15rem); }
   </style>
 </head>
 <body data-screen="setup">

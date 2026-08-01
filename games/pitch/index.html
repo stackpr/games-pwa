@@ -62,7 +62,7 @@
     .chip:disabled { opacity: 0.4; }
     .chip.icon { padding: 0.3rem 0.6rem; font-size: 1rem; line-height: 1; }
 
-    .sheet { flex: 1; min-height: 0; overflow-y: auto; padding: 0 0.5rem; }
+    .sheet { flex: 1 1 auto; min-height: 3rem; overflow-y: auto; padding: 0 0.5rem; }
     table.rounds {
       width: 100%;
       border-collapse: collapse;
@@ -128,78 +128,51 @@
       font-variant-numeric: tabular-nums;
     }
 
+    /*
+     * The entry panel is the half of the screen that gets tapped, so it is
+     * the greedy one: it takes what the sheet can spare, up to a cap, and
+     * every button inside it stretches to fill what it gets. Nothing in here
+     * has a fixed height except the label lines and the commit button.
+     */
     .entry {
-      flex: none;
+      flex: 3 1 auto;
+      min-height: 0;
+      max-height: 64dvh;
+      display: flex;
+      flex-direction: column;
+      gap: 0.3rem;
       background: var(--panel);
       border-top: 1px solid var(--panel-hi);
       padding: 0.4rem 0.5rem calc(0.5rem + env(safe-area-inset-bottom));
-      max-height: 62dvh;
-      overflow-y: auto;
     }
     .entry-head {
+      flex: none;
       display: flex;
-      align-items: baseline;
-      justify-content: space-between;
+      align-items: center;
       gap: 0.5rem;
-      padding-bottom: 0.3rem;
+      min-height: 1.5rem;
     }
     .entry-title { font-size: 0.8rem; font-weight: 700; color: var(--text-dim); }
-    .entry-left { font-size: 0.75rem; color: var(--text-dim); }
+    .entry-left { margin-left: auto; font-size: 0.75rem; color: var(--text-dim); }
+    .chip.small { padding: 0.2rem 0.6rem; font-size: 0.76rem; }
 
-    .row-label { font-size: 0.72rem; color: var(--text-dim); }
-    .bid-line {
-      display: grid;
-      grid-template-columns: auto 1fr;
-      align-items: center;
-      gap: 0.5rem;
-      padding: 0.25rem 0 0.4rem;
-    }
-    .stepper { display: flex; align-items: center; gap: 0.3rem; }
-    .step {
-      border: 1px solid var(--panel-hi);
-      background: var(--bg);
-      color: var(--text);
-      border-radius: 8px;
-      font-size: 1rem;
-      line-height: 1;
-      padding: 0.35rem 0.7rem;
-      cursor: pointer;
-      touch-action: manipulation;
-    }
-    .step:disabled { opacity: 0.3; cursor: default; }
-    .bid-value {
-      min-width: 2.2rem;
-      text-align: center;
-      font-size: 1.25rem;
-      font-weight: 800;
-      font-variant-numeric: tabular-nums;
-    }
+    /* One stage per phase; only one is ever on screen. */
+    .stage { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 0.25rem; }
+    .entry[data-phase="bidding"] .took-stage { display: none; }
+    .entry[data-phase="playing"] .bid-stage { display: none; }
+    .entry[data-phase="bidding"] #edit-bid { visibility: hidden; }
 
-    /* One row per point at stake; the buttons are the sides. */
-    .item {
-      display: grid;
-      grid-template-columns: 6.4rem 1fr;
-      align-items: center;
-      gap: 0.4rem;
-      padding: 0.16rem 0;
-    }
-    .item-name {
-      font-size: 0.78rem;
-      font-weight: 600;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-    .item-name b { color: var(--text-dim); font-weight: 600; }
-    .sides { display: grid; gap: 0.25rem; }
+    .row-label { flex: none; font-size: 0.72rem; color: var(--text-dim); }
+    .sides { flex: 1; min-height: 0; display: grid; gap: 0.3rem; }
     .side {
+      height: 100%;
       border: 1px solid var(--panel-hi);
       background: var(--bg);
       color: var(--text-dim);
-      border-radius: 8px;
-      font-size: 0.8rem;
+      border-radius: 10px;
+      font-size: clamp(0.85rem, 4vw, 1.4rem);
       font-weight: 700;
-      padding: 0.34rem 0;
+      padding: 0.2rem 0.15rem;
       cursor: pointer;
       touch-action: manipulation;
       min-width: 0;
@@ -214,16 +187,80 @@
     .side[data-side="3"][aria-pressed="true"] { background: var(--side-4); border-color: var(--side-4); }
     .side[data-side="4"][aria-pressed="true"] { background: var(--side-5); border-color: var(--side-5); }
 
+    .bid-line {
+      flex: 1;
+      min-height: 0;
+      display: grid;
+      grid-template-columns: 1fr 4.5rem 1fr;
+      gap: 0.3rem;
+    }
+    .step {
+      height: 100%;
+      border: 1px solid var(--panel-hi);
+      background: var(--bg);
+      color: var(--text);
+      border-radius: 10px;
+      font-size: clamp(1.2rem, 6vw, 2.2rem);
+      line-height: 1;
+      padding: 0;
+      cursor: pointer;
+      touch-action: manipulation;
+    }
+    .step:disabled { opacity: 0.3; cursor: default; }
+    .step:not(:disabled):active { background: var(--panel-hi); }
+    .bid-value {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: clamp(1.5rem, 8vw, 2.6rem);
+      font-weight: 800;
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* Points taken: one column per side, stepped up and down. Nobody names
+       which card was which — a table can count its own tricks. */
+    .took { flex: 1; min-height: 0; display: grid; gap: 0.3rem; }
+    .took-cell {
+      display: flex;
+      flex-direction: column;
+      gap: 0.2rem;
+      min-height: 0;
+      min-width: 0;
+    }
+    .took-cell .step { flex: 1; min-height: 0; }
+    .took-name {
+      flex: none;
+      text-align: center;
+      font-size: 0.72rem;
+      font-weight: 700;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .took-cell[data-side="0"] .took-name { color: var(--side-1); }
+    .took-cell[data-side="1"] .took-name { color: var(--side-2); }
+    .took-cell[data-side="2"] .took-name { color: var(--side-3); }
+    .took-cell[data-side="3"] .took-name { color: var(--side-4); }
+    .took-cell[data-side="4"] .took-name { color: var(--side-5); }
+    .took-value {
+      flex: none;
+      text-align: center;
+      font-size: clamp(1.3rem, 7.5vw, 2.4rem);
+      font-weight: 800;
+      line-height: 1.1;
+      font-variant-numeric: tabular-nums;
+    }
+
     .go {
+      flex: none;
       width: 100%;
-      margin-top: 0.5rem;
       border: none;
       border-radius: 12px;
       background: #2f6f5a;
       color: var(--text);
-      font-size: 1.05rem;
+      font-size: 1.1rem;
       font-weight: 700;
-      padding: 0.6rem 0;
+      padding: 0.75rem 0;
       cursor: pointer;
       touch-action: manipulation;
     }
@@ -274,29 +311,30 @@
 
   <div class="totals" id="totals"></div>
 
-  <div class="entry" id="entry">
+  <div class="entry" id="entry" data-phase="bidding">
     <div class="entry-head">
       <span class="entry-title" id="entry-title">Hand 1</span>
       <span class="entry-left" id="entry-left"></span>
+      <button id="edit-bid" class="chip small" type="button">Edit bid</button>
     </div>
 
-    <div class="bid-line">
+    <div class="stage bid-stage">
+      <span class="row-label">Who bid</span>
+      <div class="sides" id="bidder-row" role="group" aria-label="Who bid"></div>
       <span class="row-label">Bid</span>
-      <div class="stepper">
+      <div class="bid-line">
         <button class="step" id="bid-down" type="button" aria-label="Lower the bid">&minus;</button>
         <span class="bid-value" id="bid-value">4</span>
         <button class="step" id="bid-up" type="button" aria-label="Raise the bid">+</button>
       </div>
     </div>
 
-    <div class="item">
-      <span class="item-name">Bidder</span>
-      <div class="sides" id="bidder-row" role="group" aria-label="Who bid"></div>
+    <div class="stage took-stage">
+      <span class="row-label" id="took-label">Points taken</span>
+      <div class="took" id="took" role="group" aria-label="Points taken"></div>
     </div>
 
-    <div id="items"></div>
-
-    <button class="go" id="score" type="button">Score the hand</button>
+    <button class="go" id="score" type="button">Lock bid</button>
   </div>
 
   <div class="modal" id="settings">
@@ -330,6 +368,10 @@
       <ul class="rules-list" id="points-list"></ul>
       <h3 class="rules-sub">Scoring a hand</h3>
       <ul class="rules-list">
+        <li>Lock the bidder and the bid first, then count each side's points
+          at the end of the hand.</li>
+        <li>Every point is taken by somebody, so the hand does not score
+          until the sides <strong>add up to the whole total</strong>.</li>
         <li>Every side keeps the points it actually took.</li>
         <li>The bidder is the exception: <strong>take at least the bid or
           lose it</strong>. Falling short scores &minus;bid instead of what

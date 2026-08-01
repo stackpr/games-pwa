@@ -125,6 +125,11 @@
     body[data-peek] .peek { background: var(--panel); }
     .target-mark { display: none; }
     body[data-peek] .target-mark, body[data-revealed] .target-mark { display: block; }
+    /* Solo mode gives what is left to the name buttons, but this game keeps
+       its action row as well as them, and the marker still has to be an easy
+       thing to grab — so the floor covers the track, its two end labels and
+       the hint, and no more. */
+    body[data-mode="solo"] .dial { flex: 0 1 auto; min-height: clamp(6rem, 26dvh, 12rem); }
   </style>
 </head>
 <body data-screen="setup">

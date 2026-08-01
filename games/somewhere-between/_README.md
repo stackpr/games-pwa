@@ -69,6 +69,12 @@ This game scores **once a round** rather than once a card, so it keeps its
 own action row in both modes rather than swapping it for the name buttons.
 That is what the `.keeps-actions` opt-out in `css/party.css` is for.
 
+It is also why its solo-mode name buttons get less height than the other
+three party games'. They share the screen with an action row here, and the
+marker still has to be an easy thing to grab, so the floor sits on `.dial`
+at `26dvh` — the track, its two end labels and the hint, and no more. See
+`games/forbidden-words/_README.md` for the shared mechanism.
+
 See `games/forbidden-words/_README.md` for the name editor and the shared
 recent list.
 
