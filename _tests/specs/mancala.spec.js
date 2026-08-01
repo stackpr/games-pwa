@@ -15,8 +15,11 @@ const board = page => page.evaluate(() =>
 const playable = page => page.evaluate(() =>
   [...document.querySelectorAll('.cell[data-play]')].map(c => Number(c.dataset.i)));
 
+const CAPTURE = { store: 'again', empty: 'capture', full: 'end' };
+const AVALANCHE = { store: 'end', empty: 'none', full: 'sow' };
+
 /** Seeds an exact board. Anything omitted is empty. */
-async function position(page, pits, turn = 1, rules = 'capture') {
+async function position(page, pits, turn = 1, rules = CAPTURE) {
   await page.evaluate(([list, t, r]) => {
     const seeds = new Array(14).fill(0);
     for (const [i, n] of list) seeds[i] = n;
@@ -132,50 +135,91 @@ test.describe('capture rules', () => {
   });
 });
 
-test.describe('avalanche rules', () => {
+test.describe('scoop and keep sowing', () => {
   test('landing in an occupied pit scoops it and keeps sowing', async ({ page }) => {
     // 1 seed from pit 0 lands on pit 1 which holds 2, so 3 are picked back
     // up and sown onward into 2, 3 and 4.
-    await position(page, padded({ 0: 1, 1: 2, 7: 1 }), 1, 'avalanche');
+    await position(page, padded({ 0: 1, 1: 2, 7: 1 }), 1, AVALANCHE);
     await cell(page, 0).click();
     const after = await board(page);
     expect(after[0]).toBe(0);
     expect(after[1]).toBe(0);
     expect(after.slice(2, 5)).toEqual([1, 1, 1]);
-    await expect(note(page)).toHaveText('Avalanche of 2');
+    await expect(note(page)).toHaveText('Sowed 2 times');
   });
 
-  test('landing in your store ends the turn rather than repeating it',
+  test('with the store set to end, landing there passes the turn',
     async ({ page }) => {
-      await position(page, padded({ 0: 1, 5: 1, 7: 1 }), 1, 'avalanche');
+      await position(page, padded({ 0: 1, 5: 1, 7: 1 }), 1, AVALANCHE);
       await cell(page, 5).click();
       await expect(label(page)).toHaveText(/^Player 2 to move/);
     });
 
-  test('nothing is ever captured', async ({ page }) => {
-    // The same setup that captures six under the other rule set.
-    await position(page, padded({ 0: 1, 3: 2, 11: 5, 7: 1 }), 1, 'avalanche');
+  test('with captures off, nothing is ever captured', async ({ page }) => {
+    // The same setup that captures six with captures on.
+    await position(page, padded({ 0: 1, 3: 2, 11: 5, 7: 1 }), 1, AVALANCHE);
     await cell(page, 0).click();
     const after = await board(page);
     expect(after[11]).toBe(5);
     await expect(note(page)).toBeEmpty();
   });
+});
 
-  test('choosing a rule set restarts the game', async ({ page }) => {
+test.describe('the three rule axes', () => {
+  const pressed = page => page.evaluate(() =>
+    [...document.querySelectorAll('.pick[aria-pressed="true"]')]
+      .map(b => b.dataset.axis + ':' + b.dataset.value).sort());
+
+  test('every axis shows exactly one option chosen', async ({ page }) => {
+    await page.locator('#rules-btn').click();
+    expect(await pressed(page)).toEqual(['empty:capture', 'full:end', 'store:again']);
+  });
+
+  test('the axes are independent — the extra turn survives dropping captures',
+    async ({ page }) => {
+      await page.locator('#rules-btn').click();
+      await page.locator('#pick-empty-none').click();
+      expect(await pressed(page)).toEqual(['empty:none', 'full:end', 'store:again']);
+
+      // Store still grants another turn, with no capture on the empty pit.
+      await position(page, padded({ 0: 1, 4: 2, 11: 5 }), 1,
+        { store: 'again', empty: 'none', full: 'end' });
+      await cell(page, 4).click();
+      await expect(note(page)).toHaveText('Extra turn');
+      await expect(label(page)).toHaveText(/^Player 1 to move/);
+    });
+
+  test('turning the extra turn off leaves captures alone', async ({ page }) => {
+    await position(page, padded({ 0: 1, 3: 2, 11: 5, 7: 1 }), 1,
+      { store: 'end', empty: 'capture', full: 'end' });
+    await cell(page, 0).click();
+    await expect(note(page)).toHaveText('Captured 6');
+    await expect(label(page)).toHaveText(/^Player 2 to move/);
+  });
+
+  test('changing an axis restarts the game', async ({ page }) => {
     await cell(page, 3).click();
     await page.locator('#rules-btn').click();
-    await page.locator('#pick-avalanche').click();
-    await expect(page.locator('#pick-avalanche')).toHaveAttribute('aria-pressed', 'true');
-    await expect(page.locator('#pick-capture')).toHaveAttribute('aria-pressed', 'false');
+    await page.locator('#pick-full-sow').click();
     expect(await board(page)).toEqual([4, 4, 4, 4, 4, 4, 0, 4, 4, 4, 4, 4, 4, 0]);
     await expect(label(page)).toHaveText('Player 1 to move, 0 to 0');
   });
 
-  test('the rule set survives a reload', async ({ page }) => {
+  test('the choices survive a reload', async ({ page }) => {
     await page.locator('#rules-btn').click();
-    await page.locator('#pick-avalanche').click();
+    await page.locator('#pick-store-end').click();
+    await page.locator('#pick-full-sow').click();
     await page.reload();
-    await expect(page.locator('#pick-avalanche')).toHaveAttribute('aria-pressed', 'true');
+    expect(await pressed(page)).toEqual(['empty:capture', 'full:sow', 'store:end']);
+  });
+
+  test('one bad axis in a save falls back on its own', async ({ page }) => {
+    await page.evaluate(() => localStorage.setItem('games.mancala.v1', JSON.stringify({
+      board: [4, 4, 4, 4, 4, 4, 0, 4, 4, 4, 4, 4, 4, 0], turn: 1, over: false,
+      rules: { store: 'nonsense', empty: 'none', full: 'sow' },
+    })));
+    await page.reload();
+    expect(await pressed(page)).toEqual(['empty:none', 'full:sow', 'store:again']);
   });
 });
 
@@ -242,7 +286,8 @@ test.describe('persistence', () => {
 
   test('a board whose seeds do not add up is rejected', async ({ page }) => {
     await page.evaluate(() => localStorage.setItem('games.mancala.v1', JSON.stringify({
-      board: new Array(14).fill(1), turn: 1, over: false, rules: 'capture',
+      board: new Array(14).fill(1), turn: 1, over: false,
+      rules: { store: 'again', empty: 'capture', full: 'end' },
     })));
     await page.reload();
     expect(await board(page)).toEqual([4, 4, 4, 4, 4, 4, 0, 4, 4, 4, 4, 4, 4, 0]);
@@ -250,14 +295,11 @@ test.describe('persistence', () => {
 });
 
 test.describe('presentation', () => {
-  test('the rules modal covers both rule sets', async ({ page }) => {
+  test('the rules modal offers all three axes', async ({ page }) => {
     await page.locator('#rules-btn').click();
     await expect(page.locator('#rules')).toBeVisible();
-    await expect(page.locator('.r-capture')).toBeVisible();
-    await expect(page.locator('.r-avalanche')).toBeHidden();
-    await page.locator('#pick-avalanche').click();
-    await expect(page.locator('.r-avalanche')).toBeVisible();
-    await expect(page.locator('.r-capture')).toBeHidden();
+    await expect(page.locator('#picks .axis')).toHaveCount(3);
+    await expect(page.locator('#picks .pick')).toHaveCount(6);
     await page.keyboard.press('Escape');
     await expect(page.locator('#rules')).toBeHidden();
   });

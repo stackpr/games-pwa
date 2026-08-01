@@ -57,9 +57,33 @@ const GAMES = [
   },
   {
     name: 'Mancala',
-    description: 'Sow seeds — two rule sets',
+    description: 'Sow seeds — pick your house rules',
     emoji: '\u{1F330}',
     path: 'games/mancala/'
+  },
+  {
+    name: 'Forbidden Words',
+    description: 'Describe it without the banned words',
+    emoji: '\u{1F6AB}',
+    path: 'games/forbidden-words/'
+  },
+  {
+    name: 'Star Words',
+    description: 'Draw it — no letters, no talking',
+    emoji: '\u{270F}\uFE0F',
+    path: 'games/star-words/'
+  },
+  {
+    name: 'What Am I?',
+    description: 'The room can see it, you cannot',
+    emoji: '\u{1F914}',
+    path: 'games/what-am-i/'
+  },
+  {
+    name: 'Pitch',
+    description: 'Scoresheet for four or five hands',
+    emoji: '\u{1F0CF}',
+    path: 'games/pitch/'
   }
 ];
 

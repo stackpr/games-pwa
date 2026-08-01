@@ -4,7 +4,18 @@
   const CELLS = 14;
   const PER_PIT = 4;
   const MAX_PIPS = 12;       // past this the pit shows a number instead
-  const RULES = ['capture', 'avalanche'];
+  /*
+   * Three independent choices rather than two bundled rule sets, because
+   * that is how tables actually differ: they argue about the store and about
+   * the empty pit separately. Each key is one axis, each value one option.
+   * See _README.md.
+   */
+  const AXES = {
+    store: ['again', 'end'],       // last seed in your store
+    empty: ['capture', 'none'],    // last seed in an empty pit of yours
+    full: ['end', 'sow']           // last seed in an occupied pit
+  };
+  const DEFAULTS = { store: 'again', empty: 'capture', full: 'end' };
   // 0-5 are player 1's pits, 6 their store; 7-12 player 2's, 13 theirs.
   const STORE = { 1: 6, 2: 13 };
   const PITS = { 1: [0, 1, 2, 3, 4, 5], 2: [7, 8, 9, 10, 11, 12] };
@@ -31,7 +42,7 @@
     reset: pick('reset', 'button'),
     rules: pick('rules'),
     rulesBtn: pick('rules-btn', 'button'),
-    pickRow: pick('pick-row')
+    picks: pick('picks')
   };
 
   let state = load();
@@ -66,9 +77,19 @@
     return { board: startBoard(), turn: 1, over: false, rules };
   }
 
+  /** Each axis falls back on its own, so one bad key does not reset the rest. */
+  function shapeRules(saved) {
+    const rules = {};
+    for (const axis of Object.keys(AXES)) {
+      const value = saved && saved[axis];
+      rules[axis] = AXES[axis].indexOf(value) !== -1 ? value : DEFAULTS[axis];
+    }
+    return rules;
+  }
+
   function load() {
     const p = Store.load(STORAGE_KEY);
-    const rules = p && RULES.indexOf(p.rules) !== -1 ? p.rules : RULES[0];
+    const rules = shapeRules(p && p.rules);
     if (!p || !Array.isArray(p.board) || p.board.length !== CELLS) return fresh(rules);
     const board = p.board.map(n => Number.isInteger(n) && n >= 0 ? n : -1);
     // A count that never adds up is a save worth abandoning rather than
@@ -107,44 +128,54 @@
   /**
    * Play `start` for `player` on a copy of the board. Returns the new board,
    * whether the player moves again, the pits touched, and a line of prose
-   * for the note. Rule differences live here and nowhere else.
+   * for the note.
+   *
+   * The three rule axes all fire on the same event — where the last seed
+   * landed — so they are read in one place: sow, look at the landing cell,
+   * ask the axis that owns that kind of cell what happens next.
    */
   function play(board, start, player, rules) {
     const next = board.slice();
     const touched = [];
+    const notes = [];
     let again = false;
-    let text = '';
+    let laps = 0;
+    let i = start;
 
-    if (rules === 'avalanche') {
-      let laps = 0;
-      let i = start;
-      for (;;) {
-        const seeds = next[i];
-        next[i] = 0;
-        i = drop(next, i, seeds, player, touched);
-        laps++;
-        // Your store ends it, and so does a pit that was empty before this
-        // seed. Anything else is scooped up and sown onward.
-        if (i === STORE[player] || next[i] === 1) break;
+    for (;;) {
+      const seeds = next[i];
+      next[i] = 0;
+      i = drop(next, i, seeds, player, touched);
+      laps++;
+
+      if (i === STORE[player]) {
+        if (rules.store === 'again') {
+          again = true;
+          notes.push('Extra turn');
+        }
+        break;
       }
-      if (laps > 1) text = 'Avalanche of ' + laps;
-    } else {
-      const seeds = next[start];
-      next[start] = 0;
-      const last = drop(next, start, seeds, player, touched);
-      if (last === STORE[player]) {
-        again = true;
-        text = 'Extra turn';
-      } else if (owner(last) === player && next[last] === 1
-        && next[opposite(last)] > 0) {
-        const taken = next[last] + next[opposite(last)];
-        next[STORE[player]] += taken;
-        next[last] = 0;
-        next[opposite(last)] = 0;
-        touched.push(STORE[player]);
-        text = 'Captured ' + taken;
+
+      // next[i] === 1 means the pit held nothing before this seed.
+      const wasEmpty = next[i] === 1;
+      if (wasEmpty) {
+        if (rules.empty === 'capture' && owner(i) === player
+          && next[opposite(i)] > 0) {
+          const taken = next[i] + next[opposite(i)];
+          next[STORE[player]] += taken;
+          next[i] = 0;
+          next[opposite(i)] = 0;
+          touched.push(STORE[player]);
+          notes.push('Captured ' + taken);
+        }
+        break;
       }
+
+      // Landed on an occupied pit: scoop it up and keep going, or stop.
+      if (rules.full !== 'sow') break;
     }
+    if (laps > 1) notes.unshift('Sowed ' + laps + ' times');
+    let text = notes.join('. ');
 
     // Either side running dry ends it, and the seeds still on the board go
     // to whoever owns the pits holding them.
@@ -237,6 +268,7 @@
 
     el.note.textContent = note;
     el.undo.disabled = undoStack.length === 0;
+    renderRules();
     renderTurn();
   }
 
@@ -276,13 +308,27 @@
     render();
   }
 
-  function setRules(rules) {
-    if (RULES.indexOf(rules) === -1) return;
-    for (const b of el.pickRow.children) {
-      b.setAttribute('aria-pressed', b.dataset.rules === rules ? 'true' : 'false');
+  /** Reflect the current rules onto the pickers and the modal's attributes. */
+  function renderRules() {
+    for (const btn of el.picks.querySelectorAll('.pick')) {
+      const on = state.rules[btn.dataset.axis] === btn.dataset.value;
+      btn.setAttribute('aria-pressed', on ? 'true' : 'false');
     }
-    el.rules.dataset.rules = rules;
-    if (state.rules === rules) return;
+    for (const axis of Object.keys(AXES)) {
+      el.rules.dataset[axis] = state.rules[axis];
+    }
+  }
+
+  /**
+   * Changing an axis starts a new game: a position halfway through one rule
+   * set is not a meaningful position under another, and quietly carrying it
+   * over would let a player change the rules to escape a bad board.
+   */
+  function setAxis(axis, value) {
+    if (!AXES[axis] || AXES[axis].indexOf(value) === -1) return;
+    if (state.rules[axis] === value) return;
+    const rules = Object.assign({}, state.rules);
+    rules[axis] = value;
     state = fresh(rules);
     undoStack = [];
     hits = [];
@@ -312,13 +358,12 @@
     render();
   });
 
-  for (const b of el.pickRow.children) {
-    b.addEventListener('click', () => setRules(b.dataset.rules));
+  for (const btn of el.picks.querySelectorAll('.pick')) {
+    btn.addEventListener('click', () => setAxis(btn.dataset.axis, btn.dataset.value));
   }
 
   Modal.create(el.rules, { trigger: el.rulesBtn });
 
   build();
-  setRules(state.rules);
   render();
 })();

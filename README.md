@@ -21,7 +21,11 @@ installable PWA at **https://games.payne.run**.
 | [Spades](games/spades/) | Scoresheet for four-handed partners, with nil and blind nil |
 | [Checkers](games/checkers/) | Two players on one phone, jumps forced |
 | [Reversi](games/reversi/) | Trap a line of discs and flip them |
-| [Mancala](games/mancala/) | Sow seeds round the board — Capture or Avalanche rules |
+| [Mancala](games/mancala/) | Sow seeds round the board — three house rules to set |
+| [Forbidden Words](games/forbidden-words/) | Describe the word without saying any of its clues |
+| [Star Words](games/star-words/) | Draw the word — no letters, no numbers, no talking |
+| [What Am I?](games/what-am-i/) | Hold the phone up; you get the category, they give the clues |
+| [Pitch](games/pitch/) | Scoresheet for four- or five-handed Pitch, 10 or 13 point |
 
 ## Development
 

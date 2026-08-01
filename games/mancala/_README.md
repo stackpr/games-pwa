@@ -28,34 +28,40 @@ facing `i` is `12 - i`, which falls out of the same ordering.
 Four seeds per pit, stores empty. **Player 1 moves first**, the site-wide
 rule.
 
-## The two rule sets
+## The rules are three independent choices
 
-Both share the sowing direction, the skipped store, the end condition and
-the win condition. Everything that differs happens when the *last* seed
-lands, and lives in `play()` and nowhere else.
+Every house rule worth arguing about fires on the same event — **where the
+last seed landed** — and there are only three kinds of cell it can land in.
+So rather than two bundled, named rule sets, the game offers one choice per
+kind of cell, and any combination of the three is a legal way to play:
 
-**Capture**
+| Your last seed lands… | Options | Default |
+| --- | --- | --- |
+| in **your own store** | Go again / Turn ends | Go again |
+| in an **empty pit of yours** | Capture it and the pit facing it / Nothing | Capture |
+| in a pit that **already had seeds** | Turn ends / Scoop it up and keep sowing | Turn ends |
 
-- Last seed in your own store → **you go again**.
-- Last seed in an **empty pit on your own side** → you take it and the
-  contents of the facing pit into your store. If the facing pit is already
-  empty nothing is captured, and the turn simply passes. (Some houses let
-  you capture the lone seed anyway; this one does not, which is the more
-  common reading.)
-- Anything else → the turn passes.
+That is eight combinations from three toggles, and it covers the two sets
+this game shipped with: *Capture* is `again / capture / end`, and
+*Avalanche* is `end / none / sow`. Bundling them hid the fact that a table
+usually disagrees about **one** of these, not all of them — someone wants
+the extra turn but no captures, and a named pair cannot express that.
 
-**Avalanche**
+A capture takes nothing when the facing pit is already empty. Some houses
+let you take the lone seed anyway; this one does not, which is the more
+common reading, and it is the one edge case the modal spells out.
 
-- Last seed in an **occupied** pit → scoop that pit up and keep sowing from
-  there. Repeat until it stops.
-- Last seed in your store, or in a pit that was empty → the turn passes.
-- No captures, and never an extra turn.
+Because all three fire on the landing cell, `play()` reads as one loop:
+sow, look at where the last seed landed, ask the axis that owns that kind
+of cell what happens next. Adding a fourth axis means adding a branch there
+and an entry in `AXES` — nowhere else.
 
-Avalanche always terminates, which is not obvious. Count the total distance
-every seed still has to travel to reach the mover's store. Every dropped
-seed reduces that by one, and a seed never passes the mover's store without
-being deposited in it — so the count strictly falls and the chain cannot
-cycle. The note line reports the lap count when it took more than one.
+**Scoop-and-keep-sowing always terminates**, which is not obvious. Count the
+total distance every seed still has to travel to reach the mover's store.
+Every dropped seed reduces that by one, and a seed never passes the mover's
+store without being deposited in it — so the count strictly falls and the
+chain cannot cycle. The note line reports the lap count when it took more
+than one.
 
 ## Ending
 
@@ -96,7 +102,7 @@ number, because the store total is the score and that is what gets read.
 
 ```json
 { "board": [4,4,4,4,4,4,0,4,4,4,4,4,4,0], "turn": 1, "over": false,
-  "rules": "capture" }
+  "rules": { "store": "again", "empty": "capture", "full": "end" } }
 ```
 
 A restored board is rejected unless the seeds still total 48, because every
@@ -104,6 +110,10 @@ legal move conserves them — a save that does not add up is corrupt, and
 starting fresh beats resuming a position that cannot have happened. Undo is
 in memory only, like the other board games here.
 
-Changing the rule set **starts a new game**: the two sets diverge enough
-that a position halfway through one is not a meaningful position in the
-other.
+Each rule axis is validated **on its own** when a save is read, so one
+unrecognised value falls back to its own default rather than resetting the
+other two.
+
+Changing any axis **starts a new game**: a position halfway through one set
+of rules is not a meaningful position under another, and quietly carrying it
+over would let a player change the rules to escape a bad board.
