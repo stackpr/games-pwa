@@ -57,11 +57,40 @@ selection, since neither can be formed from fewer.
   turn score carried forward. There is no limit on how long a turn runs.
 - You must keep at least one scoring die before rolling on or stopping, so
   both buttons stay disabled until the selection is legal.
-- **Stop!** banks the turn score plus the current selection. Reaching 10,000
-  ends the game there and then — there is no "everyone gets a last turn"
-  round, which some house rules add.
+- **Stop!** banks the turn score plus the current selection.
 - The game does not enforce a minimum to get on the board; some variants
   require 500 before your first bank.
+
+### The last lap
+
+**Reaching 10,000 does not end the game — it starts the last lap.** The seat
+that got there is recorded as `closer`, play carries on round the table, and
+the game ends when the turn comes back to that seat. Everyone else gets
+exactly one turn to pass them.
+
+**Highest score wins**, not whoever crossed the line first, so a last-lap
+player who banks 10,400 takes it from the 10,100 that opened the lap. A tie
+goes to the `closer`, which is the natural reading: they got there first and
+nobody beat them.
+
+Two consequences worth knowing:
+
+- The winner is **not** `state.current` when the game ends — the turn has
+  rolled past everybody by then. `leader()` computes it, and the status line
+  and the spec both read it from there. Printing the current seat is the
+  bug this rule introduces if you are not looking for it.
+- On the last lap the status line **leads with the number to beat**
+  (*"Last turn — beat 10,100."*) rather than trailing it. That figure is
+  what the player is deciding against on every roll, so it goes first and
+  the turn total follows.
+
+A bust on the last lap is an ordinary bust: the turn is lost and play moves
+on, closing the lap in its own time.
+
+`closer` is persisted and validated as a seat index, so a game paused
+mid-lap resumes with the lap still open. It resets to `null` on a new game
+and whenever the player count changes, since the seat it pointed at may not
+exist any more.
 
 ## The dice tray
 

@@ -103,15 +103,21 @@ test.describe('rounds and scoring', () => {
     ]);
   });
 
-  test('pairs mode names the guesser and the clue-giver', async ({ page }) => {
-    await page.locator('#mode-pairs').click();
-    await page.locator('.count[data-count="5"]').click();
-    await oneCategory(page);
-    await page.locator('#begin').click();
-    await expect(page.locator('#ready-sub'))
-      .toHaveText('guesses, Player 2 gives the clues. Both of them score.');
-    expect((await board(page)).length).toBe(5);
-  });
+  test('solo mode credits the clue that landed and the guesser',
+    async ({ page }) => {
+      await page.locator('#mode-solo').click();
+      await page.locator('.count[data-count="5"]').click();
+      await oneCategory(page);
+      await page.locator('#begin').click();
+      await expect(page.locator('#ready-sub'))
+        .toHaveText('guesses. Whoever gave the clue that landed scores, and so do they.');
+      expect((await board(page)).length).toBe(5);
+
+      await page.locator('#start').click();
+      await expect(page.locator('.who-btn')).toHaveCount(4);
+      await page.locator('.who-btn[data-seat="4"]').click();
+      expect((await board(page)).map(r => r.score)).toEqual([1, 0, 0, 0, 1]);
+    });
 });
 
 test.describe('presentation', () => {

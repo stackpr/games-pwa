@@ -82,13 +82,23 @@
       <span class="field-label">Scoring</span>
       <div class="pick-row" id="mode-row" role="group" aria-label="Scoring mode">
         <button class="pick" id="mode-teams" type="button" data-mode="teams">Two teams</button>
-        <button class="pick" id="mode-pairs" type="button" data-mode="pairs">Presenter and guesser</button>
+        <button class="pick" id="mode-solo" type="button" data-mode="solo">Each player scores</button>
       </div>
     </div>
 
     <div class="field" id="players-field">
       <span class="field-label">Players</span>
       <div class="count-row" id="count-row"></div>
+    </div>
+
+    <div class="field" id="names-field">
+      <span class="field-label">Names</span>
+      <div class="pick-row" id="name-mode-row" role="group" aria-label="How to set names">
+        <button class="pick" id="name-mode-pick" type="button" data-name-mode="pick">Pick who's here</button>
+        <button class="pick" id="name-mode-type" type="button" data-name-mode="type">Type them</button>
+      </div>
+      <div class="name-inputs" id="name-inputs"></div>
+      <div class="recent-wrap" id="recent-list"></div>
     </div>
 
     <div class="field">
@@ -132,6 +142,14 @@
       </ul>
     </div>
 
+    <div class="who-row" id="who-row">
+      <div class="who-top">
+        <button class="who-skip" id="who-skip" type="button">Skip</button>
+        <button class="who-skip bad" id="who-foul" type="button">Foul &minus;1</button>
+      </div>
+      <div class="who-grid" id="who-grid"></div>
+    </div>
+
     <div class="actions three">
       <button class="act bad" id="foul" type="button">Foul<small>&minus;1</small></button>
       <button class="act" id="skip" type="button">Skip<small>0</small></button>
@@ -165,10 +183,10 @@
       <ul class="rules-list">
         <li><strong>Two teams</strong> &mdash; the teams alternate and the
           whole team keeps what its describer earns.</li>
-        <li><strong>Presenter and guesser</strong> &mdash; nobody is on a
-          team. Each round pairs one describer with one guesser and they
-          <em>both</em> take every point, so it pays to be good with
-          everybody.</li>
+        <li><strong>Each player scores</strong> &mdash; nobody is on a team.
+          One person describes and the buttons are everyone else's names:
+          tap whoever got it and they take the point, as does the describer.
+          The same tap deals the next card.</li>
       </ul>
       <button class="modal-close" type="button" data-close>Close</button>
     </div>
@@ -178,6 +196,7 @@
   <script src="../../js/lib/modal.js"></script>
   <script src="../../js/lib/vocab.js"></script>
   <script src="../../js/lib/timer.js"></script>
+  <script src="../../js/lib/names.js"></script>
   <script src="../../js/lib/party.js"></script>
   <script src="../../js/lib/setup.js"></script>
   <script src="forbidden-words.js"></script>

@@ -51,19 +51,19 @@ test.describe('setup', () => {
 
   test('the player count only applies to the pairs mode', async ({ page }) => {
     await expect(page.locator('#players-field')).toBeHidden();
-    await page.locator('#mode-pairs').click();
+    await page.locator('#mode-solo').click();
     await expect(page.locator('#players-field')).toBeVisible();
-    await expect(page.locator('#mode-pairs')).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.locator('#mode-solo')).toHaveAttribute('aria-pressed', 'true');
   });
 
   test('settings survive a reload', async ({ page }) => {
-    await page.locator('#mode-pairs').click();
+    await page.locator('#mode-solo').click();
     await page.locator('.count[data-count="6"]').click();
     await page.locator('.count[data-seconds="90"]').click();
     await oneCategory(page, 'Space');
     await page.reload();
 
-    await expect(page.locator('#mode-pairs')).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.locator('#mode-solo')).toHaveAttribute('aria-pressed', 'true');
     await expect(page.locator('.count[data-count="6"]')).toHaveAttribute('aria-pressed', 'true');
     await expect(page.locator('.count[data-seconds="90"]')).toHaveAttribute('aria-pressed', 'true');
     await expect(page.locator('.cat[aria-pressed="true"]')).toHaveCount(1);
@@ -168,54 +168,82 @@ test.describe('scoring', () => {
     expect((await board(page))[0].score).toBe(-2);
   });
 
-  test('pairs mode gives the point to both seats', async ({ page }) => {
-    await page.clock.install();
-    await page.goto(URL);
-    await page.locator('#mode-pairs').click();
-    await page.locator('.count[data-count="4"]').click();
-    await page.locator('.count[data-seconds="45"]').click();
+  /** Sets up a solo table with the given names. */
+  async function soloTable(page, names) {
+    await page.locator('#mode-solo').click();
+    await page.locator(`.count[data-count="${names.length}"]`).click();
+    await page.locator('#name-mode-type').click();
+    for (let i = 0; i < names.length; i++) {
+      await page.locator('#name-' + i).fill(names[i]);
+    }
     await oneCategory(page);
     await page.locator('#begin').click();
+  }
+
+  test('solo mode offers a button per player, never the presenter',
+    async ({ page }) => {
+      await soloTable(page, ['Ari', 'Bo', 'Cass', 'Dee']);
+      await page.locator('#start').click();
+
+      const who = await page.evaluate(() =>
+        [...document.querySelectorAll('.who-btn')].map(b => b.textContent));
+      expect(who).toEqual(['Bo', 'Cass', 'Dee']);
+      await expect(page.locator('#ready-who')).toHaveText('Ari');
+    });
+
+  test('the point goes to the named guesser and the presenter',
+    async ({ page }) => {
+      await soloTable(page, ['Ari', 'Bo', 'Cass', 'Dee']);
+      await page.locator('#start').click();
+      await page.locator('.who-btn[data-seat="2"]').click();
+
+      // Cass got it, Ari presented; nobody else moves.
+      const rows = await board(page);
+      expect(rows.map(r => r.score)).toEqual([1, 0, 1, 0]);
+      expect(rows.map(r => r.name)).toEqual(['Ari', 'Bo', 'Cass', 'Dee']);
+    });
+
+  test('naming a guesser deals the next word', async ({ page }) => {
+    await soloTable(page, ['Ari', 'Bo', 'Cass']);
     await page.locator('#start').click();
-    await page.locator('#got').click();
-    await page.locator('#got').click();
-    await page.clock.fastForward('00:50');
-
-    const rows = await board(page);
-    expect(rows.map(r => r.score)).toEqual([2, 2, 0, 0]);
+    const first = await word(page).textContent();
+    await page.locator('.who-btn[data-seat="1"]').click();
+    await expect(word(page)).not.toHaveText(first);
+    await expect(tally(page)).toHaveText('1');
   });
 
-  test('pairs mode pairs everyone up over the rounds', async ({ page }) => {
-    // Four players: the presenter walks a seat a round and the guesser
-    // slides an extra seat each lap, so nobody is stuck with one partner.
-    const pairs = await page.evaluate(() => {
-      const state = Party.blank('pairs', 4);
-      const out = [];
-      for (let r = 0; r < 8; r++) {
-        state.round = r;
-        const roles = Party.roles(state);
-        out.push(roles.present + '-' + roles.guess);
-      }
-      return out;
-    });
-    expect(new Set(pairs.slice(0, 4)).size).toBe(4);
-    expect(pairs.slice(0, 4)).not.toEqual(pairs.slice(4, 8));
+  test('skip and foul cost the presenter alone', async ({ page }) => {
+    await soloTable(page, ['Ari', 'Bo', 'Cass']);
+    await page.locator('#start').click();
+    await page.locator('#who-skip').click();
+    expect((await board(page)).map(r => r.score)).toEqual([0, 0, 0]);
+    await page.locator('#who-foul').click();
+    expect((await board(page)).map(r => r.score)).toEqual([-1, 0, 0]);
   });
 
-  test('pairs mode never pairs a player with themselves', async ({ page }) => {
-    const bad = await page.evaluate(() => {
-      const out = [];
-      for (let n = Party.MIN_PLAYERS; n <= Party.MAX_PLAYERS; n++) {
-        const state = Party.blank('pairs', n);
-        for (let r = 0; r < n * n; r++) {
-          state.round = r;
-          const roles = Party.roles(state);
-          if (roles.present === roles.guess) out.push(n + '@' + r);
-        }
-      }
-      return out;
-    });
-    expect(bad).toEqual([]);
+  test('the buttons follow the presenter round the table', async ({ page }) => {
+    await page.clock.install();
+    await page.goto(URL);
+    await soloTable(page, ['Ari', 'Bo', 'Cass']);
+    await page.locator('#start').click();
+    await page.clock.fastForward('02:10');
+    await page.locator('#next').click();
+    await expect(page.locator('#ready-who')).toHaveText('Bo');
+    await page.locator('#start').click();
+    const who = await page.evaluate(() =>
+      [...document.querySelectorAll('.who-btn')].map(b => b.textContent));
+    expect(who).toEqual(['Ari', 'Cass']);
+  });
+
+  test('solo scores survive a reload mid-game', async ({ page }) => {
+    await soloTable(page, ['Ari', 'Bo', 'Cass']);
+    await page.locator('#start').click();
+    await page.locator('.who-btn[data-seat="1"]').click();
+    await page.reload();
+    // The round is gone, but the points and the names are not.
+    expect((await board(page)).map(r => ({ n: r.name, s: r.score }))).toEqual([
+      { n: 'Ari', s: 1 }, { n: 'Bo', s: 1 }, { n: 'Cass', s: 0 },
+    ]);
   });
 
   test('changing the mode starts the scores over', async ({ page }) => {
@@ -224,7 +252,7 @@ test.describe('scoring', () => {
     expect((await board(page)).map(r => r.name)).toEqual(['Team 1', 'Team 2']);
 
     await page.locator('#setup-btn').click();
-    await page.locator('#mode-pairs').click();
+    await page.locator('#mode-solo').click();
     await page.locator('.count[data-count="5"]').click();
     await page.locator('#begin').click();
     expect((await board(page)).length).toBe(5);

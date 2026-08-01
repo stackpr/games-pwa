@@ -1630,6 +1630,116 @@ window.Vocab = (function () {
     TERMS[category] = DATA[category].map(line => parse(line, category));
   }
 
+
+  /*
+   * Opposite pairs for Somewhere Between: a left end, a right end, and a
+   * line between them. Same sixth-grade bar as the terms — an axis nobody
+   * can place things on is a dead round.
+   *
+   * Written as 'left|right'. The order matters and is not arbitrary: the
+   * left end is the one that reads as "less" or "smaller", so a player who
+   * has not read the labels closely still guesses the right way round.
+   */
+  const SPECTRUM_DATA = [
+    'Cold|Hot',
+    'Tiny|Huge',
+    'Quiet|Loud',
+    'Slow|Fast',
+    'Cheap|Expensive',
+    'Easy|Hard',
+    'Boring|Exciting',
+    'Ugly|Beautiful',
+    'Weak|Strong',
+    'Sad|Happy',
+    'Dirty|Clean',
+    'Dark|Bright',
+    'Soft|Hard to the touch',
+    'Light|Heavy',
+    'Near|Far',
+    'Old|New',
+    'Rare|Common',
+    'Simple|Complicated',
+    'Useless|Useful',
+    'Safe|Dangerous',
+    'Rude|Polite',
+    'Messy|Tidy',
+    'Silly|Serious',
+    'Empty|Full',
+    'Short|Tall',
+    'Narrow|Wide',
+    'Shallow|Deep',
+    'Smooth|Rough',
+    'Dry|Wet',
+    'Sour|Sweet',
+    'Bland|Spicy',
+    'Unhealthy|Healthy',
+    'Indoors|Outdoors',
+    'Alone|Crowded',
+    'Calm|Scary',
+    'Forgettable|Memorable',
+    'Fragile|Tough',
+    'Cheap to make|Costly to make',
+    'Everyday|Once in a lifetime',
+    'Kid stuff|Grown-up stuff',
+    'Unpopular|Popular',
+    'Ordinary|Strange',
+    'Quick to learn|Takes years',
+    'Messy to eat|Neat to eat',
+    'Cold weather|Hot weather',
+    'Country|City',
+    'Morning|Night',
+    'Work|Play',
+    'Modern|Old-fashioned',
+    'Man-made|Natural',
+    'Loud clothes|Plain clothes',
+    'Junk food|Real food',
+    'Bad smell|Good smell',
+    'Underrated|Overrated',
+    'Hard to find|Everywhere',
+    'Cheap gift|Fancy gift',
+    'Uncomfortable|Comfortable',
+    'Waste of time|Worth it',
+    'Team thing|Solo thing',
+    'Needs practice|Anyone can do it',
+    'Painful|Pleasant',
+    'Temporary|Permanent',
+    'Small problem|Big problem',
+    'Nobody knows it|Everybody knows it',
+    'Rough sport|Gentle sport',
+    'Trash|Treasure',
+    'Warm colour|Cool colour',
+    'Bad idea|Good idea',
+    'Fake|Real',
+    'Guilty pleasure|Something to brag about',
+    'Boring job|Exciting job',
+    'Sits still|Always moving',
+    'Cheap to keep|Costly to keep',
+    'Under the ground|Up in the sky',
+    'Very close|Very far away',
+    'Ancient|Brand new',
+    'Made by hand|Made by machine',
+    'Whisper|Shout',
+    'Snack|Full meal',
+    'A chore|A treat'
+  ];
+
+  const SPECTRUMS = SPECTRUM_DATA.map(line => {
+    const cut = line.indexOf('|');
+    return { left: line.slice(0, cut), right: line.slice(cut + 1) };
+  });
+
+  /** A shuffled run of spectrums, dealt the way a deck of terms is. */
+  function spectrums() {
+    const out = SPECTRUMS.slice();
+    for (let i = out.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      const t = out[i];
+      out[i] = out[j];
+      out[j] = t;
+    }
+    return out;
+  }
+
   function categories() {
     return CATEGORIES.slice();
   }
@@ -1687,5 +1797,5 @@ window.Vocab = (function () {
     return names.filter(n => CATEGORIES.indexOf(n) !== -1);
   }
 
-  return { categories, terms, pool, deck, known };
+  return { categories, terms, pool, deck, known, spectrums, SPECTRUMS };
 })();

@@ -68,13 +68,23 @@
       <span class="field-label">Scoring</span>
       <div class="pick-row" id="mode-row" role="group" aria-label="Scoring mode">
         <button class="pick" id="mode-teams" type="button" data-mode="teams">Two teams</button>
-        <button class="pick" id="mode-pairs" type="button" data-mode="pairs">Guesser and clue-giver</button>
+        <button class="pick" id="mode-solo" type="button" data-mode="solo">Each player scores</button>
       </div>
     </div>
 
     <div class="field" id="players-field">
       <span class="field-label">Players</span>
       <div class="count-row" id="count-row"></div>
+    </div>
+
+    <div class="field" id="names-field">
+      <span class="field-label">Names</span>
+      <div class="pick-row" id="name-mode-row" role="group" aria-label="How to set names">
+        <button class="pick" id="name-mode-pick" type="button" data-name-mode="pick">Pick who's here</button>
+        <button class="pick" id="name-mode-type" type="button" data-name-mode="type">Type them</button>
+      </div>
+      <div class="name-inputs" id="name-inputs"></div>
+      <div class="recent-wrap" id="recent-list"></div>
     </div>
 
     <div class="field">
@@ -116,6 +126,11 @@
       <span class="card-hint">the room can see this &mdash; you cannot</span>
     </div>
 
+    <div class="who-row" id="who-row">
+      <button class="who-skip" id="who-skip" type="button">Skip this word</button>
+      <div class="who-grid" id="who-grid"></div>
+    </div>
+
     <div class="actions two">
       <button class="act" id="skip" type="button">Pass<small>0</small></button>
       <button class="act good" id="got" type="button">Got it<small>+1</small></button>
@@ -147,9 +162,8 @@
       <ul class="rules-list">
         <li><strong>Two teams</strong> &mdash; the teams alternate and the
           whole team keeps what its guesser earns.</li>
-        <li><strong>Guesser and clue-giver</strong> &mdash; each round pairs
-          one guesser with one clue-giver and they <em>both</em> take every
-          point.</li>
+        <li><strong>Each player scores</strong> &mdash; tap whoever gave the
+          clue that landed. They take the point and so does the guesser.</li>
       </ul>
       <button class="modal-close" type="button" data-close>Close</button>
     </div>
@@ -159,6 +173,7 @@
   <script src="../../js/lib/modal.js"></script>
   <script src="../../js/lib/vocab.js"></script>
   <script src="../../js/lib/timer.js"></script>
+  <script src="../../js/lib/names.js"></script>
   <script src="../../js/lib/party.js"></script>
   <script src="../../js/lib/setup.js"></script>
   <script src="what-am-i.js"></script>

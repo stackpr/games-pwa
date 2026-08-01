@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Blackjack</title>
+  <meta name="theme-color" content="#10141f">
+  <link rel="manifest" href="../../manifest.webmanifest">
+  <link rel="icon" href="../../icons/favicon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="../../icons/apple-touch-icon.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="stylesheet" href="../../css/players.css">
+  <link rel="stylesheet" href="../../css/modal.css">
+  <link rel="stylesheet" href="../../css/cards.css">
+  <style>
+    :root {
+      --bg: #0d1b14;
+      --felt: #14432f;
+      --felt-line: #1d6144;
+      --text: #eef1f8;
+      --text-dim: #93a89c;
+      --panel: #12261c;
+      --panel-hi: #1d4432;
+      --chip: #d8b34a;
+      --win: #4fbf7d;
+      --lose: #e0806f;
+      color-scheme: dark;
+    }
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    html, body { margin: 0; padding: 0; height: 100%; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      display: flex;
+      flex-direction: column;
+      height: 100dvh;
+      overflow: hidden;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.4rem;
+      padding: calc(0.4rem + env(safe-area-inset-top)) 0.6rem 0.4rem;
+      flex: none;
+    }
+    .topbar a { color: var(--text-dim); text-decoration: none; font-size: 0.95rem; }
+    .topbar-actions { display: flex; gap: 0.35rem; align-items: center; }
+    .chip-btn {
+      border: 1px solid var(--panel-hi);
+      background: var(--panel);
+      color: var(--text);
+      border-radius: 999px;
+      padding: 0.3rem 0.75rem;
+      font-size: 0.85rem;
+      cursor: pointer;
+      touch-action: manipulation;
+    }
+    .chip-btn.icon { padding: 0.3rem 0.6rem; font-size: 1rem; line-height: 1; }
+    .balance {
+      font-size: 1.05rem;
+      font-weight: 800;
+      color: var(--chip);
+      font-variant-numeric: tabular-nums;
+    }
+
+    .table {
+      flex: 1;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 0.4rem;
+      background:
+        radial-gradient(120% 80% at 50% 0%, var(--felt-line), var(--felt) 70%);
+      border-radius: 18px 18px 0 0;
+      margin: 0 0.4rem;
+      padding: 0.5rem 0.4rem;
+      overflow: hidden;
+    }
+    .seat-label {
+      font-size: 0.7rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--text-dim);
+      text-align: center;
+      /* Five seats on a 320px phone: the label must give way rather than
+         set the seat's minimum width. */
+      max-width: 100%;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .dealer { flex: none; display: flex; flex-direction: column; gap: 0.2rem; align-items: center; }
+
+    /* Other players either side of us; ours is the one that grows. */
+    .seats {
+      flex: 1;
+      min-height: 0;
+      display: flex;
+      align-items: flex-end;
+      justify-content: center;
+      gap: 0.35rem;
+    }
+    .seat {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.15rem;
+      min-width: 0;
+      flex: 1 1 0;
+      padding: 0.25rem 0.15rem;
+      border-radius: 10px;
+    }
+    .seat[data-me] {
+      flex: 1.9 1 0;
+      background: rgba(255, 255, 255, 0.07);
+      box-shadow: inset 0 0 0 2px rgba(216, 179, 74, 0.55);
+    }
+    .seat[data-active] { box-shadow: inset 0 0 0 2px var(--chip); }
+    .seat-bet { font-size: 0.72rem; color: var(--chip); font-variant-numeric: tabular-nums; }
+    .seat-out { font-size: 0.72rem; font-weight: 800; }
+    .seat-out[data-r="win"] { color: var(--win); }
+    .seat-out[data-r="lose"] { color: var(--lose); }
+    .seat-out[data-r="push"] { color: var(--text-dim); }
+
+    .status {
+      flex: none;
+      min-height: 1.5rem;
+      text-align: center;
+      font-size: 1rem;
+      font-weight: 700;
+      padding: 0 0.5rem;
+    }
+
+    .pad {
+      flex: none;
+      background: var(--panel);
+      border-top: 1px solid var(--panel-hi);
+      padding: 0.45rem 0.5rem calc(0.5rem + env(safe-area-inset-bottom));
+    }
+    .bet-line {
+      display: grid;
+      grid-template-columns: auto 1fr auto;
+      align-items: center;
+      gap: 0.4rem;
+      padding-bottom: 0.4rem;
+    }
+    .bet-value {
+      text-align: center;
+      min-width: 0;
+      font-size: clamp(1.2rem, 6.5vw, 1.7rem);
+      font-weight: 800;
+      color: var(--chip);
+      font-variant-numeric: tabular-nums;
+    }
+    .bet-steps { display: flex; gap: 0.25rem; min-width: 0; }
+    /* Six steppers and a figure share one row down to a 320px phone, so the
+       buttons are sized from their text rather than given a floor. */
+    .step {
+      border: 1px solid var(--panel-hi);
+      background: var(--bg);
+      color: var(--text);
+      border-radius: 8px;
+      font-size: clamp(0.72rem, 3.4vw, 0.85rem);
+      font-weight: 700;
+      padding: 0.45rem 0.4rem;
+      cursor: pointer;
+      touch-action: manipulation;
+      min-width: 0;
+      white-space: nowrap;
+    }
+    .step:disabled { opacity: 0.3; cursor: default; }
+
+    .actions { display: grid; gap: 0.35rem; grid-auto-flow: column; }
+    .act {
+      border: none;
+      border-radius: 12px;
+      background: var(--panel-hi);
+      color: var(--text);
+      font-size: 1rem;
+      font-weight: 800;
+      padding: 0.7rem 0.3rem;
+      cursor: pointer;
+      touch-action: manipulation;
+    }
+    .act.primary { background: #2f6f5a; }
+    .act:disabled { opacity: 0.35; }
+    .act[hidden] { display: none; }
+
+    .set-field { margin-bottom: 0.8rem; }
+    .set-label { display: block; font-size: 0.8rem; font-weight: 700; padding-bottom: 0.3rem; }
+    .count-row { display: flex; flex-wrap: wrap; gap: 0.3rem; }
+    .count {
+      background: var(--bg);
+      border: 1px solid var(--panel-hi);
+      border-radius: 8px;
+      color: var(--text);
+      font-size: 0.9rem;
+      font-weight: 700;
+      padding: 0.4rem 0.8rem;
+      cursor: pointer;
+      touch-action: manipulation;
+    }
+    .count[aria-pressed="true"] { background: var(--panel-hi); box-shadow: inset 0 0 0 2px var(--chip); }
+    .rules-list { margin: 0; padding-left: 1.1rem; font-size: 0.85rem;
+      color: var(--text-dim); line-height: 1.45; }
+    .rules-list li + li { margin-top: 0.3rem; }
+    .rules-note { margin: 0.9rem 0 0; font-size: 0.78rem; color: var(--text-dim); }
+  </style>
+</head>
+<body data-phase="betting">
+  <div class="topbar">
+    <a href="../../">&larr; Games</a>
+    <div class="topbar-actions">
+      <span class="balance" id="balance">$500</span>
+      <button id="settings-btn" class="chip-btn icon" type="button"
+              aria-label="Settings" aria-expanded="false">&#10043;</button>
+      <button id="rules-btn" class="chip-btn" type="button" aria-expanded="false">Rules</button>
+    </div>
+  </div>
+
+  <main class="table">
+    <div class="dealer">
+      <span class="seat-label" id="dealer-label">Dealer</span>
+      <div class="hand" id="dealer-hand"></div>
+    </div>
+    <div class="seats" id="seats"></div>
+  </main>
+
+  <div class="status" id="status">Place your bet.</div>
+
+  <div class="pad">
+    <div class="bet-line" id="bet-line">
+      <div class="bet-steps">
+        <button class="step" id="bet-minus-25" type="button" data-by="-25">&minus;25</button>
+        <button class="step" id="bet-minus-5" type="button" data-by="-5">&minus;5</button>
+        <button class="step" id="bet-minus-1" type="button" data-by="-1">&minus;1</button>
+      </div>
+      <span class="bet-value" id="bet-value">$10</span>
+      <div class="bet-steps">
+        <button class="step" id="bet-plus-1" type="button" data-by="1">+1</button>
+        <button class="step" id="bet-plus-5" type="button" data-by="5">+5</button>
+        <button class="step" id="bet-plus-25" type="button" data-by="25">+25</button>
+      </div>
+    </div>
+
+    <div class="actions" id="actions">
+      <button class="act primary" id="deal" type="button">Deal</button>
+      <button class="act" id="hit" type="button" hidden>Hit</button>
+      <button class="act" id="stand" type="button" hidden>Stand</button>
+      <button class="act" id="double" type="button" hidden>Double</button>
+      <button class="act" id="split" type="button" hidden>Split</button>
+      <button class="act primary" id="next" type="button" hidden>Next hand</button>
+    </div>
+  </div>
+
+  <div class="modal" id="settings">
+    <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="settings-title">
+      <h2 class="modal-title" id="settings-title">Table</h2>
+      <div class="set-field">
+        <span class="set-label">Decks in the shoe</span>
+        <div class="count-row" id="decks-row" role="group" aria-label="Decks in the shoe"></div>
+      </div>
+      <div class="set-field">
+        <span class="set-label">Other players at the table</span>
+        <div class="count-row" id="others-row" role="group" aria-label="Other players"></div>
+      </div>
+      <button class="chip-btn" id="rebuy" type="button">Reset the bankroll to $500</button>
+      <p class="rules-note">
+        You always sit in the middle. Changing the table reshuffles and
+        starts the next hand fresh; the bankroll carries over.
+      </p>
+      <button class="modal-close" type="button" data-close>Close</button>
+    </div>
+  </div>
+
+  <div class="modal" id="rules">
+    <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="rules-title">
+      <h2 class="modal-title" id="rules-title">House rules</h2>
+      <ul class="rules-list">
+        <li><strong>Blackjack pays 3 to 2.</strong> A win pays even money, a
+          push returns the bet.</li>
+        <li>The <strong>dealer stands on all 17s</strong>, soft ones
+          included, and draws to 16.</li>
+        <li><strong>Double</strong> on any two cards, and after a split. You
+          get exactly one more card.</li>
+        <li><strong>Split</strong> any pair, once per hand. Split aces get one
+          card each. Twenty-one after a split is a plain 21, not a
+          blackjack.</li>
+        <li>The dealer <strong>peeks</strong> on an ace or a ten, so a dealer
+          blackjack ends the hand before you have put more money out.</li>
+      </ul>
+      <h3 class="rules-sub" style="margin:0.9rem 0 0.4rem;font-size:0.9rem;">Not offered</h3>
+      <ul class="rules-list">
+        <li>No insurance, no surrender, no resplitting past two hands.</li>
+        <li>The other players at the table are there for the cards they use
+          up. They play a simple, fixed strategy and their money is not
+          tracked.</li>
+      </ul>
+      <button class="modal-close" type="button" data-close>Close</button>
+    </div>
+  </div>
+
+  <script src="../../js/lib/store.js"></script>
+  <script src="../../js/lib/modal.js"></script>
+  <script src="../../js/lib/deck.js"></script>
+  <script src="blackjack.js"></script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('../../sw.js').catch(() => {});
+    }
+  </script>
+</body>
+</html>

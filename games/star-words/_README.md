@@ -16,10 +16,14 @@ is the game rather than the brand.
 
 ## How a round runs
 
-Every card starts **covered**. The phone sits face-up next to whoever is
-drawing, and a word that simply appeared would be read by the room before
-the drawer had a chance to cover it. Tapping **Show me the word** uncovers
-it; the next card covers itself again.
+**Only the first card of a round is covered.** The phone has just been
+handed over and the room is still looking at it, so that one word waits
+behind a tap. After that every card arrives face up: by then the drawer has
+the screen to themselves, and a tap-to-reveal between every word buys
+nothing and costs seconds off a running clock.
+
+That is also why naming the guesser deals the next card in the same tap.
+A turn should be one tap per word, not three.
 
 The card carries its **category**, which the drawer may say out loud. That
 is deliberate: it narrows fifteen hundred words to fifty, which is the
@@ -32,14 +36,56 @@ drawing rather than costing a point, and the table can just say no.
 Rounds run longer than the other two word games — 60 to 180 seconds — because
 drawing is slower than talking.
 
-## Scoring
+## Scoring, and the two modes
 
-Identical to the other two, and it lives in `js/lib/party.js`:
+- **Two teams** — the teams alternate rounds and the whole team banks what
+  its drawer earned. Exactly two sides, so the shared `--player-1` and
+  `--player-2` identities apply.
+- **Each player scores** — nobody is on a team. One player presents, and the
+  action row becomes **one button per player**. Tapping a name gives the
+  point to that player *and* to the drawer, and deals the next card in
+  the same tap.
 
-- **Two teams** — the teams alternate and the whole team banks the round.
-- **Drawer and guesser** — each round pairs one drawer with one guesser and
-  **both** take every point. See Forbidden Words' `_README.md` for why the
-  guesser is fixed rather than being whoever shouted first.
+The per-player buttons are why **names matter here** in a way they do not in
+the board games: a row reading "Player 3, Player 4, Player 5" is unusable
+across a table. Hence the name editor, and hence the shared recent list.
+
+Naming the guesser at the moment of scoring — rather than pairing people up
+in advance — is what makes the drawer's job a real one. Getting through
+to *anybody* scores, so there is no partner to specialise with, and the
+player who is quickest all evening genuinely earns it.
+
+Two consequences in the code:
+
+- **Solo pays out per card; teams banks at the end of the round.** The point
+  belongs to the seat that was named at that moment, so it cannot wait; a
+  team round has only one side it could ever have gone to. `score()` branches
+  on exactly that and nothing else.
+- **Skip and a foul name nobody**, so they land on the drawer alone. A
+  foul is the drawer's mistake by definition.
+
+### Setting names
+
+Two input modes, switched in setup:
+
+- **Type them** — one box per seat. A name is committed on every keystroke
+  and **remembered when the box loses focus**, not on every keystroke, or the
+  recent list would fill with every half-typed prefix.
+- **Pick who's here** — tap names from the list of everyone who has played.
+  The **player count follows the ticks**, which is the point: the table sets
+  itself up by tapping who turned up. Ticking fills the first unnamed seat
+  rather than adding a seat beside it, which is why an unnamed seat holds an
+  empty string rather than "Player 3" — the numbered version is a display
+  fallback (`Party.nameAt`), never data.
+
+A first run finds the list empty, so it is put into the typing mode rather
+than shown a panel it cannot use.
+
+The recent list lives under `games.party-names.v1`, **shared by every party
+game**, because the people at the table are the same people whichever game
+they are playing. It is the one cross-game key in the tree. A name already
+on the list is promoted rather than duplicated, so the regulars stay at the
+top and it never needs managing; it keeps the newest twenty.
 
 ## Shared with its neighbours
 

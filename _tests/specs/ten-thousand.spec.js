@@ -264,6 +264,94 @@ test.describe('banking and turns', () => {
   });
 });
 
+
+test.describe('the last lap', () => {
+  /** Seeds scores so a bank can cross the target in one turn. */
+  async function scores(page, list, current = 0, closer = null) {
+    await page.evaluate(([sc, cur, cl]) => {
+      localStorage.setItem('games.ten-thousand.v1', JSON.stringify({
+        count: sc.length, scores: sc, current: cur, turnScore: 0,
+        dice: Array.from({ length: 6 }, () => ({ face: 1, state: 'idle' })),
+        phase: 'idle', closer: cl,
+      }));
+    }, [list, current, closer]);
+    await page.reload();
+  }
+
+  test('reaching the target does not end the game', async ({ page }) => {
+    await scores(page, [9500, 0]);
+    await forceFaces(page, [1, 1, 1, 2, 3, 4]);
+    await roll(page);
+    for (const i of [0, 1, 2]) await die(page, i).click();
+    await page.locator('#stop').click();
+
+    await expect(seatScore(page, 0)).toHaveText('10500');
+    await expect(body(page)).toHaveAttribute('data-phase', 'idle');
+    await expect(status(page)).toHaveText('Last turn — beat 10500. P2 to roll');
+  });
+
+  test('the lap closes when the turn comes back round', async ({ page }) => {
+    // P2 is the last seat before the lap closes on P1.
+    await scores(page, [10500, 0], 1, 0);
+    await forceFaces(page, [1, 2, 3, 4, 6, 2]);
+    await roll(page);
+    await die(page, 0).click();
+    await page.locator('#stop').click();
+
+    await expect(body(page)).toHaveAttribute('data-phase', 'over');
+    await expect(status(page)).toHaveText('P1 wins with 10500!');
+  });
+
+  test('the highest score wins, not whoever got there first', async ({ page }) => {
+    await scores(page, [10100, 9800], 1, 0);
+    await forceFaces(page, [1, 1, 1, 2, 3, 4]);
+    await roll(page);
+    for (const i of [0, 1, 2]) await die(page, i).click();
+    await page.locator('#stop').click();
+
+    await expect(seatScore(page, 1)).toHaveText('10800');
+    await expect(status(page)).toHaveText('P2 wins with 10800!');
+  });
+
+  test('a tie goes to whoever opened the lap', async ({ page }) => {
+    await scores(page, [10000, 9900], 1, 0);
+    await forceFaces(page, [1, 2, 3, 4, 6, 2]);
+    await roll(page);
+    await die(page, 0).click();
+    await page.locator('#stop').click();
+    await expect(seatScore(page, 1)).toHaveText('10000');
+    await expect(status(page)).toHaveText('P1 wins with 10000!');
+  });
+
+  test('a bust on the last lap simply passes the turn', async ({ page }) => {
+    await scores(page, [10200, 0, 0], 1, 0);
+    // No 1, no 5, no triple, no straight, not three pairs: a genuine bust.
+    await forceFaces(page, [2, 2, 3, 4, 4, 6]);
+    await roll(page);
+    await expect(body(page)).toHaveAttribute('data-phase', 'bust');
+    await expect(status(page)).toHaveText('Last turn — beat 10200. Bust!');
+
+    await page.locator('#next').click();
+    await expect(status(page)).toHaveText('Last turn — beat 10200. P3 to roll');
+    await expect(body(page)).toHaveAttribute('data-phase', 'idle');
+  });
+
+  test('an open lap survives a reload', async ({ page }) => {
+    await scores(page, [10500, 0], 1, 0);
+    await expect(status(page)).toHaveText('Last turn — beat 10500. P2 to roll');
+    await page.reload();
+    await expect(status(page)).toHaveText('Last turn — beat 10500. P2 to roll');
+  });
+
+  test('a new game clears the lap', async ({ page }) => {
+    await scores(page, [10500, 0], 1, 0);
+    await page.locator('#settings-btn').click();
+    await page.locator('.count[data-count="3"]').click();
+    await expect(status(page)).toHaveText('P1 to roll');
+    await expect(seatScore(page, 0)).toHaveText('0');
+  });
+});
+
 test.describe('settings', () => {
   test('the panel is closed until the button is tapped', async ({ page }) => {
     await expect(page.locator('#settings')).toBeHidden();

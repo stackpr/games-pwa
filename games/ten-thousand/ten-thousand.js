@@ -47,7 +47,10 @@
       current: 0,
       turnScore: 0,
       dice: Array.from({ length: DICE }, () => ({ face: 1, state: 'idle' })),
-      phase: 'idle'
+      phase: 'idle',
+      // The seat that first reached the target. Once it is set, everyone
+      // else has one turn left. See _README.md.
+      closer: null
     };
   }
 
@@ -70,7 +73,9 @@
     const phase = ['idle', 'picking', 'bust', 'over'].indexOf(p.phase) >= 0 ? p.phase : 'idle';
     const current = Number.isInteger(p.current) && p.current >= 0 && p.current < count ? p.current : 0;
     const turnScore = Number.isFinite(p.turnScore) && p.turnScore >= 0 ? Math.floor(p.turnScore) : 0;
-    return { count, scores, current, turnScore, dice, phase };
+    const closer = Number.isInteger(p.closer) && p.closer >= 0 && p.closer < count
+      ? p.closer : null;
+    return { count, scores, current, turnScore, dice, phase, closer };
   }
 
   function save() {
@@ -184,15 +189,22 @@
   function renderStatus() {
     const name = 'P' + (state.current + 1);
     if (state.phase === 'over') {
-      el.status.textContent = name + ' wins with ' + state.scores[state.current] + '!';
-    } else if (state.phase === 'bust') {
-      el.status.textContent = 'Bust!';
+      const who = leader();
+      el.status.textContent = 'P' + (who + 1) + ' wins with ' + state.scores[who] + '!';
+      return;
+    }
+    // On the last lap the number to beat matters more than the turn total,
+    // so it leads and everything else follows it.
+    const chase = state.closer === null ? ''
+      : 'Last turn — beat ' + state.scores[leader()] + '. ';
+    if (state.phase === 'bust') {
+      el.status.textContent = chase + 'Bust!';
     } else if (state.phase === 'rolling') {
-      el.status.textContent = name + ' rolling…';
+      el.status.textContent = chase + name + ' rolling…';
     } else if (state.phase === 'idle') {
-      el.status.textContent = name + ' to roll';
+      el.status.textContent = chase + name + ' to roll';
     } else {
-      el.status.textContent = name + ': ' + (state.turnScore + selection().score);
+      el.status.textContent = chase + name + ': ' + (state.turnScore + selection().score);
     }
   }
 
@@ -271,14 +283,21 @@
 
     state.scores[state.current] += state.turnScore + sel.score;
     state.turnScore = 0;
-    if (state.scores[state.current] >= TARGET) {
-      state.dice.forEach(d => { d.state = 'idle'; });
-      setPhase('over');
-      save();
-      render();
-      return;
+    // Reaching the target does not end the game: it starts the last lap.
+    // Everyone after you gets one turn to pass you. See _README.md.
+    if (state.closer === null && state.scores[state.current] >= TARGET) {
+      state.closer = state.current;
     }
     nextPlayer();
+  }
+
+  /** Highest score; a tie goes to whoever reached the target first. */
+  function leader() {
+    let best = state.closer === null ? 0 : state.closer;
+    for (let i = 0; i < state.count; i++) {
+      if (state.scores[i] > state.scores[best]) best = i;
+    }
+    return best;
   }
 
   function nextPlayer() {
@@ -289,7 +308,12 @@
     state.turnScore = 0;
     state.current = (state.current + 1) % state.count;
     state.dice.forEach(d => { d.state = 'idle'; });
-    setPhase('idle');
+    // The lap closes when the turn comes back round to whoever opened it.
+    if (state.closer !== null && state.current === state.closer) {
+      setPhase('over');
+    } else {
+      setPhase('idle');
+    }
     save();
     render();
   }

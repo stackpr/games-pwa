@@ -26,18 +26,21 @@ table, not the app, in keeping with the rest of the site.
 
 ## Scoring
 
-The same two modes as its neighbours, from `js/lib/party.js`:
+The same two modes as its neighbours, from `js/lib/party.js` — but note
+which way round the roles sit here. In Forbidden Words and Star Words the
+person holding the phone *gives* information; here they receive it. So:
 
 - **Two teams** — the teams alternate and the whole team banks what its
   guesser earned.
-- **Guesser and clue-giver** — each round pairs one guesser with one
-  clue-giver and **both** take every point.
+- **Each player scores** — the buttons name **whoever gave the clue that
+  landed**, and that player scores alongside the guesser holding the phone.
+  Everywhere else the buttons name the guesser; the mechanic is identical
+  and only the label changes.
 
-Note which way round the roles sit here: in Forbidden Words and Star Words
-the person holding the phone is the one *giving* information, and here they
-are the one receiving it. The `Party` model calls the phone-holder
-`present` either way and each game words it for itself, which is why the
-model exposes seats rather than job titles.
+The `Party` model calls the phone-holder `present` either way and each game
+words it for itself, which is why the model exposes seats rather than job
+titles. See `games/forbidden-words/_README.md` for the name editor and the
+shared recent list, which work the same here.
 
 ## Persisted state
 
