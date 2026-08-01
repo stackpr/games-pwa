@@ -1,12 +1,14 @@
 // Pitch scoresheet for four or five players. See _README.md.
 (function () {
-  const STORAGE_KEY = 'games.pitch.v1';
+  const STORAGE_KEY = 'games.pitch.v2';
   const MIN_BID = 2;
 
   /*
-   * What is at stake in a hand, per point version. Pitch point sets vary a
-   * lot from table to table; this is the one table to edit if yours differs,
-   * and the rules modal is generated from it so the two cannot disagree.
+   * What a hand is made of, per point version. Pitch point sets vary a lot
+   * from table to table; this is the one table to edit if yours differs, and
+   * the rules modal is generated from it so the two cannot disagree. The
+   * entry panel no longer names the individual points — a table can count
+   * its own tricks — so this decides the hand total and nothing else.
    */
   const POINT_SETS = {
     10: [
@@ -46,13 +48,16 @@
     rows: pick('rows'),
     empty: pick('empty'),
     totals: pick('totals'),
+    entry: pick('entry'),
     entryTitle: pick('entry-title'),
     entryLeft: pick('entry-left'),
+    editBid: pick('edit-bid', 'button'),
     bidValue: pick('bid-value'),
     bidUp: pick('bid-up', 'button'),
     bidDown: pick('bid-down', 'button'),
     bidderRow: pick('bidder-row'),
-    items: pick('items'),
+    took: pick('took'),
+    tookLabel: pick('took-label'),
     score: pick('score', 'button'),
     undo: pick('undo', 'button'),
     newGame: pick('new-game', 'button'),
@@ -68,8 +73,8 @@
   // Initialised before load() runs, because load() validates against the
   // player count and point version it has just read.
   let state = { players: 4, points: 10, rounds: [], draft: null };
-  const sideBtns = {};   // key -> [button per side]
   let bidderBtns = [];
+  const tookCells = [];   // side -> { value, up, down }
 
   /*
    * Four players is two partnerships; five is every player for themselves.
@@ -93,25 +98,33 @@
   }
 
   function freshDraft() {
-    const taken = {};
-    for (const item of items()) taken[item.key] = null;
-    return { bidder: 0, bid: Math.min(4, maxBid()), taken };
+    return {
+      phase: 'bidding',
+      bidder: 0,
+      bid: Math.min(4, maxBid()),
+      took: Array(sideCount()).fill(0)
+    };
   }
 
   function validDraft(d) {
     const sides = sideCount();
     const draft = freshDraft();
     if (!d) return draft;
+    if (d.phase === 'playing') draft.phase = 'playing';
     if (Number.isInteger(d.bidder) && d.bidder >= 0 && d.bidder < sides) {
       draft.bidder = d.bidder;
     }
     if (Number.isInteger(d.bid) && d.bid >= MIN_BID && d.bid <= maxBid()) {
       draft.bid = d.bid;
     }
-    for (const item of items()) {
-      const v = d.taken && d.taken[item.key];
-      draft.taken[item.key] = Number.isInteger(v) && v >= 0 && v < sides ? v : null;
+    const took = Array.isArray(d.took) ? d.took : [];
+    for (let i = 0; i < sides; i++) {
+      const v = took[i];
+      draft.took[i] = Number.isInteger(v) && v >= 0 && v <= state.points ? v : 0;
     }
+    // A saved hand that no longer adds up is kept rather than zeroed: the
+    // Score button will not fire until it does, which is a repair the table
+    // can see rather than one made behind their back.
     return draft;
   }
 
@@ -123,7 +136,12 @@
     const raw = Array.isArray(p.rounds) ? p.rounds : [];
     const rounds = raw
       .filter(r => r && Number.isInteger(r.bid) && Number.isInteger(r.bidder))
-      .map(r => validDraft(r));
+      // Scored hands carry no phase; a draft's validation is reused for the
+      // fields they do share and the rest is dropped.
+      .map(r => {
+        const d = validDraft(r);
+        return { bidder: d.bidder, bid: d.bid, took: d.took };
+      });
     return { players, points, rounds, draft: validDraft(p.draft) };
   }
 
@@ -133,18 +151,12 @@
 
   /**
    * A hand's value to each side: what they took, except that the bidder
-   * either makes the bid or loses it outright. Unassigned points score for
-   * nobody, so a half-filled hand is simply worth less rather than wrong.
+   * either makes the bid or loses it outright.
    */
   function scoreRound(round) {
     const sides = sideCount();
-    const took = Array(sides).fill(0);
-    for (const item of items()) {
-      const side = round.taken[item.key];
-      if (side != null && side < sides) took[side] += item.value;
-    }
-    const out = took.slice();
-    out[round.bidder] = took[round.bidder] >= round.bid ? took[round.bidder] : -round.bid;
+    const out = Array.from({ length: sides }, (_, i) => round.took[i] || 0);
+    out[round.bidder] = out[round.bidder] >= round.bid ? out[round.bidder] : -round.bid;
     return out;
   }
 
@@ -158,63 +170,66 @@
     return sum;
   }
 
-  function assigned() {
-    return items().reduce((n, item) =>
-      n + (state.draft.taken[item.key] == null ? 0 : item.value), 0);
+  function placed() {
+    return state.draft.took.reduce((a, b) => a + b, 0);
   }
 
-  function buildSideRow(container, name, onPick) {
-    container.textContent = '';
-    container.style.gridTemplateColumns = 'repeat(' + sideCount() + ', 1fr)';
-    const made = [];
+  function buildEntry() {
+    el.bidderRow.textContent = '';
+    el.bidderRow.style.gridTemplateColumns = 'repeat(' + sideCount() + ', 1fr)';
+    bidderBtns = [];
     for (let i = 0; i < sideCount(); i++) {
       const b = document.createElement('button');
       b.className = 'side';
       b.type = 'button';
       b.dataset.side = String(i);
       b.textContent = sideName(i);
-      b.setAttribute('aria-label', name + ': ' + sideName(i));
-      b.addEventListener('click', () => onPick(i));
-      container.append(b);
-      made.push(b);
-    }
-    return made;
-  }
-
-  function buildEntry() {
-    bidderBtns = buildSideRow(el.bidderRow, 'Bidder', i => {
-      state.draft.bidder = i;
-      save();
-      render();
-    });
-
-    el.items.textContent = '';
-    for (const key of Object.keys(sideBtns)) delete sideBtns[key];
-    for (const item of items()) {
-      const row = document.createElement('div');
-      row.className = 'item';
-      row.dataset.item = item.key;
-
-      const name = document.createElement('span');
-      name.className = 'item-name';
-      name.append(document.createTextNode(item.name + ' '));
-      const worth = document.createElement('b');
-      worth.textContent = item.value > 1 ? '(' + item.value + ')' : '';
-      name.append(worth);
-
-      const sides = document.createElement('div');
-      sides.className = 'sides';
-      row.append(name, sides);
-      el.items.append(row);
-
-      // Tapping the side already chosen clears it, so a mis-tap needs one
-      // more tap rather than a reset.
-      sideBtns[item.key] = buildSideRow(sides, item.name, i => {
-        state.draft.taken[item.key] =
-          state.draft.taken[item.key] === i ? null : i;
+      b.setAttribute('aria-label', sideName(i) + ' bid');
+      b.addEventListener('click', () => {
+        if (state.draft.phase !== 'bidding') return;
+        state.draft.bidder = i;
         save();
         render();
       });
+      el.bidderRow.append(b);
+      bidderBtns.push(b);
+    }
+
+    el.took.textContent = '';
+    el.took.style.gridTemplateColumns = 'repeat(' + sideCount() + ', 1fr)';
+    tookCells.length = 0;
+    for (let i = 0; i < sideCount(); i++) {
+      const cell = document.createElement('div');
+      cell.className = 'took-cell';
+      cell.dataset.side = String(i);
+
+      const name = document.createElement('span');
+      name.className = 'took-name';
+      name.textContent = sideName(i);
+
+      const up = document.createElement('button');
+      up.className = 'step';
+      up.type = 'button';
+      up.id = 'took-up-' + i;
+      up.textContent = '+';
+      up.setAttribute('aria-label', 'Add a point to ' + sideName(i));
+      up.addEventListener('click', () => bumpTook(i, +1));
+
+      const value = document.createElement('span');
+      value.className = 'took-value';
+      value.id = 'took-' + i;
+
+      const down = document.createElement('button');
+      down.className = 'step';
+      down.type = 'button';
+      down.id = 'took-down-' + i;
+      down.textContent = '−';
+      down.setAttribute('aria-label', 'Take a point off ' + sideName(i));
+      down.addEventListener('click', () => bumpTook(i, -1));
+
+      cell.append(name, up, value, down);
+      el.took.append(cell);
+      tookCells.push({ value, up, down });
     }
 
     el.totals.style.gridTemplateColumns = 'repeat(' + sideCount() + ', 1fr)';
@@ -294,27 +309,40 @@
   }
 
   function renderEntry() {
-    el.entryTitle.textContent = 'Hand ' + (state.rounds.length + 1);
-    el.bidValue.textContent = String(state.draft.bid);
-    el.bidUp.disabled = state.draft.bid >= maxBid();
-    el.bidDown.disabled = state.draft.bid <= MIN_BID;
+    const bidding = state.draft.phase === 'bidding';
+    el.entry.dataset.phase = state.draft.phase;
+    el.entryTitle.textContent = bidding
+      ? 'Hand ' + (state.rounds.length + 1) + ' · bidding'
+      : 'Hand ' + (state.rounds.length + 1) + ' · '
+        + sideName(state.draft.bidder) + ' bid ' + state.draft.bid;
 
+    el.bidValue.textContent = String(state.draft.bid);
+    el.bidUp.disabled = !bidding || state.draft.bid >= maxBid();
+    el.bidDown.disabled = !bidding || state.draft.bid <= MIN_BID;
     for (let i = 0; i < bidderBtns.length; i++) {
       bidderBtns[i].setAttribute('aria-pressed',
         state.draft.bidder === i ? 'true' : 'false');
     }
-    for (const item of items()) {
-      const chosen = state.draft.taken[item.key];
-      const btns = sideBtns[item.key] || [];
-      for (let i = 0; i < btns.length; i++) {
-        btns[i].setAttribute('aria-pressed', chosen === i ? 'true' : 'false');
-      }
+
+    // The steppers cannot overshoot the hand total, so an entry is either
+    // short or exactly right — never wrong in a way that needs an error.
+    const left = state.points - placed();
+    for (let i = 0; i < tookCells.length; i++) {
+      const cell = tookCells[i];
+      cell.value.textContent = String(state.draft.took[i]);
+      cell.up.disabled = bidding || left <= 0;
+      cell.down.disabled = bidding || state.draft.took[i] <= 0;
     }
 
-    const left = state.points - assigned();
-    el.entryLeft.textContent = left === 0
-      ? 'all ' + state.points + ' points placed'
-      : left + ' of ' + state.points + ' still to place';
+    el.tookLabel.textContent = 'Points taken · ' + state.points + ' in the hand';
+    el.entryLeft.textContent = bidding
+      ? ''
+      : left === 0
+        ? 'all ' + state.points + ' placed'
+        : left + ' of ' + state.points + ' still to place';
+
+    el.score.textContent = bidding ? 'Lock bid' : 'Score the hand';
+    el.score.disabled = !bidding && left !== 0;
     el.undo.disabled = state.rounds.length === 0;
   }
 
@@ -324,11 +352,43 @@
   }
 
   function bumpBid(by) {
+    if (state.draft.phase !== 'bidding') return;
     const next = state.draft.bid + by;
     if (next < MIN_BID || next > maxBid()) return;
     state.draft.bid = next;
     save();
     renderEntry();
+  }
+
+  function bumpTook(side, by) {
+    if (state.draft.phase !== 'playing') return;
+    const next = state.draft.took[side] + by;
+    if (next < 0 || placed() + by > state.points) return;
+    state.draft.took[side] = next;
+    // The hand in progress is persisted on every tap: the gap between
+    // locking the bid and scoring is the hand itself. See _README.md.
+    save();
+    renderEntry();
+  }
+
+  function commit() {
+    if (state.draft.phase === 'bidding') {
+      state.draft.phase = 'playing';
+      save();
+      render();
+      return;
+    }
+    if (placed() !== state.points) return;
+    state.rounds.push({
+      bidder: state.draft.bidder,
+      bid: state.draft.bid,
+      took: state.draft.took.slice()
+    });
+    state.draft = freshDraft();
+    save();
+    render();
+    const sheet = document.querySelector('.sheet');
+    if (sheet) sheet.scrollTop = sheet.scrollHeight;
   }
 
   function reshape(players, points) {
@@ -357,14 +417,13 @@
 
   el.bidUp.addEventListener('click', () => bumpBid(1));
   el.bidDown.addEventListener('click', () => bumpBid(-1));
+  el.score.addEventListener('click', commit);
 
-  el.score.addEventListener('click', () => {
-    state.rounds.push(state.draft);
-    state.draft = freshDraft();
+  el.editBid.addEventListener('click', () => {
+    if (state.draft.phase !== 'playing') return;
+    state.draft.phase = 'bidding';
     save();
     render();
-    const sheet = document.querySelector('.sheet');
-    if (sheet) sheet.scrollTop = sheet.scrollHeight;
   });
 
   el.undo.addEventListener('click', () => {

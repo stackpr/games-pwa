@@ -319,6 +319,37 @@ body[data-name-mode="pick"] .name-inputs { display: none; }
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/*
+ * In solo mode those name buttons are the entire scoring interface — every
+ * card ends with one tap on one of them — so they take every pixel the card
+ * can spare rather than sitting at a fixed height. The row grows, the grid
+ * splits what it gets into equal rows, and the buttons stretch into them.
+ *
+ * How much there is to take varies by game, so the floor is not set here:
+ * a forehead card being read across a room needs more of the screen than a
+ * bare word does. Each game gives its own card face a min-height in solo
+ * mode and the buttons get the remainder. See the games' _README.md.
+ */
+body[data-mode="solo"] .who-row {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+body[data-mode="solo"] .who-grid { flex: 1; min-height: 0; grid-auto-rows: 1fr; }
+/* The skip sits above the names at its own size. It carries flex: 1 for the
+   row it shares with a foul button in Forbidden Words; in the games where it
+   is a direct child of the column it must not grow into the names' space. */
+body[data-mode="solo"] .who-row > .who-skip { flex: none; }
+body[data-mode="solo"] .who-btn {
+  height: 100%;
+  padding: 0.4rem;
+  font-size: clamp(1rem, 4.5vw, 1.5rem);
+}
+/* An odd number of guessers leaves a hole; the last button fills it instead,
+   which is both tidier and one more wide target. */
+body[data-mode="solo"] .who-btn:last-child:nth-child(odd) { grid-column: 1 / -1; }
 .who-btn:active { filter: brightness(1.2); }
 .who-top { display: flex; gap: 0.35rem; }
 .who-skip {

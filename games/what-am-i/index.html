@@ -46,6 +46,10 @@
       overflow-wrap: anywhere;
     }
     .card-hint { font-size: 0.8rem; color: var(--text-dim); }
+    /* Solo mode gives the rest of the screen to the name buttons. This card
+       keeps the largest floor of the four games: it is held up facing the
+       room and has to stay legible from across a table. */
+    body[data-mode="solo"] .card { flex: 0 1 auto; min-height: clamp(7rem, 44dvh, 20rem); }
   </style>
 </head>
 <body data-screen="setup">

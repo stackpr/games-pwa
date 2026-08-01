@@ -42,6 +42,13 @@ words it for itself, which is why the model exposes seats rather than job
 titles. See `games/forbidden-words/_README.md` for the name editor and the
 shared recent list, which work the same here.
 
+In solo mode the name buttons take every pixel the card can spare, since
+they are the whole scoring interface under a running clock. This card keeps
+the **largest floor of the four party games** — `44dvh` — because it is held
+up facing the room and has to stay legible from across a table; the buttons
+get what is below it. See `games/forbidden-words/_README.md` for the shared
+mechanism.
+
 ## Persisted state
 
 `localStorage` key `games.what-am-i.v1`. Same shape as the other two word

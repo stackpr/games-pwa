@@ -60,6 +60,10 @@
       color: var(--text-dim);
       padding-bottom: 0.2rem;
     }
+    /* Solo mode gives the rest of the screen to the name buttons. The floor
+       here is set by the banned list — four words plus the big word is the
+       most content any of the four cards carries. */
+    body[data-mode="solo"] .card { flex: 0 1 auto; min-height: clamp(7rem, 42dvh, 19rem); }
   </style>
 </head>
 <body data-screen="setup">

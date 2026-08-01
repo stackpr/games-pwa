@@ -57,6 +57,26 @@ Two consequences in the code:
 - **Skip and a foul name nobody**, so they land on the presenter alone. A
   foul is the presenter's mistake by definition.
 
+### How tall the name buttons are
+
+In solo mode those buttons are the *entire* scoring interface — every card
+ends with one tap on one of them, under a running clock — so they are sized
+for speed rather than tidiness. `css/party.css` gives `.who-row` the leftover
+height and splits it into equal rows, and the buttons stretch into it. This
+is shared by all four party games.
+
+**The floor belongs to the game, not to the shell**, which is why
+`css/party.css` sets no card height. Each game gives its own card face a
+`min-height` in solo mode and the buttons take everything below it, because
+what a card has to show differs: this one carries a four-word banned list
+and keeps `42dvh`, What Am I? is read across a room and keeps `44dvh`, Star
+Words is one word and keeps `32dvh`, and Somewhere Between's dial keeps only
+the `26dvh` its track and labels need because that game keeps its action row
+as well as the names. Change a card face and change its floor with it.
+
+An **odd number of guessers** makes the last button span both columns rather
+than leaving a hole — tidier, and one more wide target.
+
 ### Setting names
 
 Two input modes, switched in setup:
