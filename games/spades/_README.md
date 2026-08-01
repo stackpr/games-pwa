@@ -29,7 +29,21 @@ round *n* was dealt by seat `(n − 1) mod 4` and that is not worth a column.
 
 ## Entering a round
 
-Two rows of steppers, one column per seat — no keypad. A keypad means
+A hand runs in **two phases**, matching the order it is actually played:
+
+1. **Bidding** — only the bid row is on screen. The tricks row is not
+   greyed out, it is *absent*, because there is nothing to enter yet and an
+   empty row invites filling in. **Lock bids** ends this phase.
+2. **Playing** — the tricks row appears and the bids freeze, so a bid
+   cannot drift while the hand is played. **Score round** writes the row,
+   rotates the deal and drops back to bidding for the next hand.
+
+**Edit bids** reopens the bids without losing them, and only appears while
+playing. Locking is there to stop accidents, not to be a one-way door — a
+misheard bid is common enough that making it unrecoverable would be worse
+than the drift the lock prevents.
+
+Both rows are steppers, one column per seat — no keypad. A keypad means
 typing a number, dismissing a keyboard and repeating it eight times a hand;
 stepping is a tap per increment and never covers the screen.
 
@@ -83,8 +97,17 @@ what a player would otherwise have to remember.
 One JSON object under `games.spades.v1`:
 
 ```json
-{ "rounds": [ { "bids": [4, -1, 3, 5], "tricks": [4, 0, 3, 6] } ] }
+{
+  "rounds": [ { "bids": [4, -1, 3, 5], "tricks": [4, 0, 3, 6] } ],
+  "draft": { "phase": "playing", "bids": [3, 3, 3, 3], "tricks": [0, 0, 0, 0] }
+}
 ```
+
+`draft` is the hand in progress, and it is saved on **every stepper tap**
+rather than only when the round is scored. That matters because the gap
+between locking the bids and scoring is the hand itself: the phone is put
+down, the screen locks, and coming back to lost bids would be the app
+failing at its one job.
 
 Bids are stored as numbers, with **&minus;1 for nil and &minus;2 for blind
 nil**. Sentinels rather than a separate flag, because a bid is exactly one

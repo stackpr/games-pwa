@@ -18,7 +18,10 @@
     seats: document.getElementById('seats'),
     total1: document.getElementById('total-1'),
     total2: document.getElementById('total-2'),
-    score: document.getElementById('score-round'),
+    entry: document.getElementById('entry'),
+    commit: document.getElementById('commit'),
+    editBids: document.getElementById('edit-bids'),
+    phaseHint: document.getElementById('phase-hint'),
     undo: document.getElementById('undo'),
     newGame: document.getElementById('new-game'),
     rules: document.getElementById('rules'),
@@ -31,14 +34,16 @@
   }
 
   let state = load();
-  let draft = freshDraft();
   const bidCells = [];
   const trickCells = [];
   const bidBtns = [];
   const trickBtns = [];
 
+  // A hand runs in two phases: bid, then play. Tricks are not shown at all
+  // until the bids are locked. See _README.md.
   function freshDraft() {
     return {
+      phase: 'bidding',
       bids: Array(SEATS).fill(DEFAULT_BID),
       tricks: Array(SEATS).fill(0)
     };
@@ -61,7 +66,14 @@
         bids: Array.from({ length: SEATS }, (_, i) => validBid(r.bids[i])),
         tricks: Array.from({ length: SEATS }, (_, i) => validTricks(r.tricks[i]))
       }));
-    return { rounds };
+
+    const d = p && p.draft ? p.draft : null;
+    const draft = d ? {
+      phase: d.phase === 'playing' ? 'playing' : 'bidding',
+      bids: Array.from({ length: SEATS }, (_, i) => validBid(d.bids && d.bids[i])),
+      tricks: Array.from({ length: SEATS }, (_, i) => validTricks(d.tricks && d.tricks[i]))
+    } : freshDraft();
+    return { rounds, draft };
   }
 
   function save() {
@@ -132,12 +144,17 @@
       cells.push(name);
     }
 
-    cells.push(label('Bid'));
-    for (let i = 0; i < SEATS; i++) cells.push(stepper('bid', i));
-    cells.push(label('Took'));
-    for (let i = 0; i < SEATS; i++) cells.push(stepper('tricks', i));
+    cells.push(mark(label('Bid'), 'bid'));
+    for (let i = 0; i < SEATS; i++) cells.push(mark(stepper('bid', i), 'bid'));
+    cells.push(mark(label('Took'), 'took'));
+    for (let i = 0; i < SEATS; i++) cells.push(mark(stepper('tricks', i), 'took'));
 
     for (const c of cells) el.seats.append(c);
+  }
+
+  function mark(node, row) {
+    node.dataset.row = row;
+    return node;
   }
 
   function blank() {
@@ -185,36 +202,56 @@
   }
 
   function bump(kind, seat, dir) {
+    // Locked bids are not editable until Edit bids reopens them, and tricks
+    // do not exist yet while bidding.
+    if (kind === 'bid' && state.draft.phase !== 'bidding') return;
+    if (kind === 'tricks' && state.draft.phase !== 'playing') return;
     if (kind === 'bid') {
-      const at = BID_STEPS.indexOf(draft.bids[seat]);
+      const at = BID_STEPS.indexOf(state.draft.bids[seat]);
       const next = at + dir;
       if (next < 0 || next >= BID_STEPS.length) return;
-      draft.bids[seat] = BID_STEPS[next];
+      state.draft.bids[seat] = BID_STEPS[next];
     } else {
-      const next = draft.tricks[seat] + dir;
+      const next = state.draft.tricks[seat] + dir;
       if (next < 0 || next > TRICKS) return;
-      draft.tricks[seat] = next;
+      state.draft.tricks[seat] = next;
     }
+    // The hand in progress is persisted, so every nudge has to be durable —
+    // the phone gets locked between the bidding and the scoring.
+    save();
     renderEntry();
   }
 
   function renderEntry() {
     const d = dealer();
     for (let i = 0; i < SEATS; i++) {
-      const bid = draft.bids[i];
+      const bid = state.draft.bids[i];
       bidCells[i].textContent = bidLabel(bid);
       if (bid < 0) bidCells[i].dataset.special = '';
       else delete bidCells[i].dataset.special;
-      trickCells[i].textContent = String(draft.tricks[i]);
+      trickCells[i].textContent = String(state.draft.tricks[i]);
 
+      const bidding = state.draft.phase === 'bidding';
       const at = BID_STEPS.indexOf(bid);
-      bidBtns[i].up.disabled = at >= BID_STEPS.length - 1;
-      bidBtns[i].down.disabled = at <= 0;
-      trickBtns[i].up.disabled = draft.tricks[i] >= TRICKS;
-      trickBtns[i].down.disabled = draft.tricks[i] <= 0;
+      bidBtns[i].up.disabled = !bidding || at >= BID_STEPS.length - 1;
+      bidBtns[i].down.disabled = !bidding || at <= 0;
+      trickBtns[i].up.disabled = bidding || state.draft.tricks[i] >= TRICKS;
+      trickBtns[i].down.disabled = bidding || state.draft.tricks[i] <= 0;
 
       const name = el.seats.querySelector('.seat-name[data-seat="' + i + '"] .deal');
       if (name) name.textContent = i === d ? 'deals' : '';
+    }
+    renderPhase();
+  }
+
+  function renderPhase() {
+    const bidding = state.draft.phase === 'bidding';
+    if (el.entry) el.entry.dataset.phase = state.draft.phase;
+    if (el.commit) el.commit.textContent = bidding ? 'Lock bids' : 'Score round';
+    if (el.phaseHint) {
+      el.phaseHint.textContent = bidding
+        ? 'Bidding \u00b7 round ' + (state.rounds.length + 1)
+        : 'Playing \u00b7 bids locked';
     }
   }
 
@@ -263,9 +300,18 @@
     renderEntry();
   }
 
-  function scoreRound() {
-    state.rounds.push({ bids: draft.bids.slice(), tricks: draft.tricks.slice() });
-    draft = freshDraft();
+  function commit() {
+    if (state.draft.phase === 'bidding') {
+      state.draft.phase = 'playing';
+      save();
+      render();
+      return;
+    }
+    state.rounds.push({
+      bids: state.draft.bids.slice(),
+      tricks: state.draft.tricks.slice()
+    });
+    state.draft = freshDraft();
     save();
     render();
     // A fresh round is the interesting one, so keep it in view.
@@ -273,7 +319,13 @@
     if (sheet) sheet.scrollTop = sheet.scrollHeight;
   }
 
-  on(el.score, 'click', scoreRound);
+  on(el.commit, 'click', commit);
+  on(el.editBids, 'click', () => {
+    if (state.draft.phase !== 'playing') return;
+    state.draft.phase = 'bidding';
+    save();
+    render();
+  });
   on(el.undo, 'click', () => {
     if (!state.rounds.length) return;
     state.rounds.pop();
@@ -282,8 +334,7 @@
   });
   on(el.newGame, 'click', () => {
     if (state.rounds.length && !confirm('Start a new game?')) return;
-    state = { rounds: [] };
-    draft = freshDraft();
+    state = { rounds: [], draft: freshDraft() };
     save();
     render();
   });

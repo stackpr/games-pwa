@@ -191,6 +191,27 @@
     }
     .value[data-special] { font-size: 0.8rem; color: #f0b429; }
 
+    .entry-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      min-height: 1.5rem;
+      padding: 0 0.1rem 0.3rem;
+    }
+    .phase-hint {
+      font-size: 0.75rem;
+      font-weight: 700;
+      color: var(--text-dim);
+      letter-spacing: 0.02em;
+    }
+    .chip.small { padding: 0.2rem 0.6rem; font-size: 0.76rem; }
+    /* Tricks cannot be entered before the bids are in, so they are not shown
+       at all rather than sitting there greyed out. */
+    .entry[data-phase="bidding"] [data-row="took"] { display: none; }
+    .entry[data-phase="bidding"] #edit-bids { visibility: hidden; }
+    .entry[data-phase="playing"] .value[data-kind="bid"] { color: var(--text-dim); }
+    .entry[data-phase="playing"] .value[data-kind="bid"][data-special] { color: #b98a22; }
+
     .go {
       width: 100%;
       margin-top: 0.5rem;
@@ -253,9 +274,13 @@
     </div>
   </div>
 
-  <div class="entry">
+  <div class="entry" id="entry" data-phase="bidding">
+    <div class="entry-head">
+      <span id="phase-hint" class="phase-hint">Bidding</span>
+      <button id="edit-bids" class="chip small" type="button">Edit bids</button>
+    </div>
     <div class="seats" id="seats"></div>
-    <button id="score-round" class="go" type="button">Score round</button>
+    <button id="commit" class="go" type="button">Lock bids</button>
   </div>
 
   <div class="modal" id="rules">
