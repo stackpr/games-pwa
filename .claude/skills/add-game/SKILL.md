@@ -62,7 +62,7 @@ in CLAUDE.md.
    its comments short and point at `_README.md` for the reasoning.
 
 3. **Register it** in two places, both of which are easy to forget:
-   - `js/games.js` — add `{ name, description, emoji, path: 'games/<slug>/' }`
+   - `js/games.js` (with a `section`: `scoring`, `two`, `group` or `other`) — add `{ name, description, emoji, path: 'games/<slug>/' }`
      to the `GAMES` array. This is what renders the home-page tile.
    - `README.md` — add a row to the "Games & tools" table. Nothing enforces
      this one, so it silently goes stale; the table has drifted before.

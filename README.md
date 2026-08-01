@@ -12,7 +12,7 @@ installable PWA at **https://games.payne.run**.
 
 | Game | Description |
 | --- | --- |
-| [Scorekeeper](games/scorekeeper/) | Running score for two teams — tap a column to score |
+| [Scorekeeper](games/scorekeeper/) | Running score for 2 to 8 players — tap a seat to score |
 | [Counter](games/counter/) | One number, up and down — tallies with no rules attached |
 | [Four in a Row](games/four-in-a-row/) | Two players, one phone — touch a column to drop a piece |
 | [Tic-Tac-Toe](games/tic-tac-toe/) | Three in a row, X against O |
