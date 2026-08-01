@@ -27,8 +27,18 @@ async function setBids(page, bids) {
   }
 }
 
+/**
+ * Enters what each seat took. A team with no nil has one stepper, on the
+ * lower of its two seats, so the partner's tricks are added there.
+ */
 async function setTricks(page, tricks) {
-  for (let seat = 0; seat < 4; seat++) await nudge(page, 'tricks', seat, tricks[seat]);
+  const owners = await page.evaluate(() =>
+    [...document.querySelectorAll('.took-cell')].map(c => Number(c.dataset.seat)));
+  for (const seat of owners) {
+    const partner = seat < 2 ? seat + 2 : seat - 2;
+    const n = owners.includes(partner) ? tricks[seat] : tricks[seat] + tricks[partner];
+    await nudge(page, 'tricks', seat, n);
+  }
 }
 
 /** A whole hand: bid, lock, enter what was taken, score. */
@@ -112,12 +122,12 @@ test.describe('bidding', () => {
 test.describe('the two phases', () => {
   test('tricks are hidden until the bids are locked', async ({ page }) => {
     await expect(page.locator('#entry')).toHaveAttribute('data-phase', 'bidding');
-    await expect(page.locator('.stepper[data-row="took"]').first()).toBeHidden();
+    await expect(page.locator('.took-cell').first()).toBeHidden();
     await expect(page.locator('#commit')).toHaveText('Lock bids');
 
     await page.locator('#commit').click();
     await expect(page.locator('#entry')).toHaveAttribute('data-phase', 'playing');
-    await expect(page.locator('.stepper[data-row="took"]').first()).toBeVisible();
+    await expect(page.locator('.took-cell').first()).toBeVisible();
     await expect(page.locator('#commit')).toHaveText('Score round');
   });
 
@@ -137,7 +147,7 @@ test.describe('the two phases', () => {
     await expect(page.locator('#entry')).toHaveAttribute('data-phase', 'bidding');
     await expect(bidValue(page, 0)).toHaveText('5');
     await expect(step(page, 'bid', 0, 'up')).toBeEnabled();
-    await expect(page.locator('.stepper[data-row="took"]').first()).toBeHidden();
+    await expect(page.locator('.took-cell').first()).toBeHidden();
   });
 
   test('Edit bids is offered only while playing', async ({ page }) => {
@@ -153,6 +163,83 @@ test.describe('the two phases', () => {
     // A fresh hand, not the last one left on screen.
     await expect(bidValue(page, 0)).toHaveText('3');
     await expect(page.locator('.value[data-kind="tricks"][data-seat="0"]')).toHaveText('0');
+  });
+});
+
+test.describe('entering the tricks taken', () => {
+  const owners = page => page.evaluate(() =>
+    [...document.querySelectorAll('.took-cell')].map(c => ({
+      seat: Number(c.dataset.seat),
+      name: c.querySelector('.took-name').textContent,
+    })));
+
+  test('no nil means one combined number per team', async ({ page }) => {
+    await setBids(page, [4, 2, 3, 4]);
+    await page.locator('#commit').click();
+    expect(await owners(page)).toEqual([
+      { seat: 0, name: 'Team 1' },
+      { seat: 1, name: 'Team 2' },
+    ]);
+  });
+
+  test('a nil splits that team, and only that team', async ({ page }) => {
+    await setBids(page, [4, 'nil', 3, 4]);
+    await page.locator('#commit').click();
+    expect(await owners(page)).toEqual([
+      { seat: 0, name: 'Team 1' },
+      { seat: 1, name: 'P2 · Nil' },
+      { seat: 3, name: 'P4' },
+    ]);
+  });
+
+  test('blind nil splits it too', async ({ page }) => {
+    await setBids(page, [3, 3, 'blind', 3]);
+    await page.locator('#commit').click();
+    expect(await owners(page)).toEqual([
+      { seat: 0, name: 'P1' },
+      { seat: 2, name: 'P3 · Blind' },
+      { seat: 1, name: 'Team 2' },
+    ]);
+  });
+
+  test('a combined count scores the same as the split one', async ({ page }) => {
+    // Team 1 bid 7 between them and took 8: 70 for the contract, 1 over.
+    await setBids(page, [4, 2, 3, 4]);
+    await page.locator('#commit').click();
+    await nudge(page, 'tricks', 0, 8);
+    await page.locator('#commit').click();
+    await expect(total(page, 1)).toHaveText('71');
+  });
+
+  test('editing the bids into a nil reshapes the row and keeps the count',
+    async ({ page }) => {
+      await setBids(page, [4, 2, 3, 4]);
+      await page.locator('#commit').click();
+      await nudge(page, 'tricks', 1, 6);
+
+      await page.locator('#edit-bids').click();
+      await nudge(page, 'bid', 1, -2);          // team 2's seat 1 goes nil
+      await page.locator('#commit').click();
+
+      expect((await owners(page)).map(o => o.seat)).toEqual([0, 1, 3]);
+      // The six already entered stay on the seat that held them.
+      await expect(page.locator('.value[data-kind="tricks"][data-seat="1"]'))
+        .toHaveText('6');
+    });
+
+  test('dropping a nil folds the partners back into one count', async ({ page }) => {
+    await setBids(page, [4, 'nil', 3, 4]);
+    await page.locator('#commit').click();
+    await nudge(page, 'tricks', 1, 2);
+    await nudge(page, 'tricks', 3, 4);
+
+    await page.locator('#edit-bids').click();
+    await nudge(page, 'bid', 1, 3);             // back to an ordinary bid
+    await page.locator('#commit').click();
+
+    expect((await owners(page)).map(o => o.seat)).toEqual([0, 1]);
+    await expect(page.locator('.value[data-kind="tricks"][data-seat="1"]'))
+      .toHaveText('6');
   });
 });
 
@@ -225,7 +312,9 @@ test.describe('persistence', () => {
     await playRound(page, [4, 2, 3, 4], [4, 2, 3, 4]);
     const saved = await page.evaluate(() =>
       JSON.parse(localStorage.getItem('games.spades.v1')));
-    expect(saved.rounds).toEqual([{ bids: [4, 2, 3, 4], tricks: [4, 2, 3, 4] }]);
+    // Neither team bid nil, so each pair's tricks are stored on the seat
+    // that owned the stepper. scoreTeam sums them either way.
+    expect(saved.rounds).toEqual([{ bids: [4, 2, 3, 4], tricks: [7, 6, 0, 0] }]);
     expect(saved.draft).toEqual({ phase: 'bidding', bids: [3, 3, 3, 3], tricks: [0, 0, 0, 0] });
   });
 

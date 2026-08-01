@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Mancala</title>
+  <meta name="theme-color" content="#10141f">
+  <link rel="manifest" href="../../manifest.webmanifest">
+  <link rel="icon" href="../../icons/favicon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="../../icons/apple-touch-icon.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="stylesheet" href="../../css/players.css">
+  <link rel="stylesheet" href="../../css/modal.css">
+  <style>
+    :root {
+      --bg: #10141f;
+      --text: #eef1f8;
+      --text-dim: #9aa4bd;
+      --panel: #1a2030;
+      --panel-hi: #2b3450;
+      --wood: #4a3524;
+      --pit: #2c2117;
+      --seed: #e8c886;
+      --chrome: 6rem;
+      color-scheme: dark;
+    }
+    @media (orientation: portrait) { :root { --chrome: 9.5rem; } }
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    html, body { margin: 0; padding: 0; height: 100%; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      display: flex;
+      flex-direction: column;
+      height: 100dvh;
+      overflow: hidden;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: calc(0.45rem + env(safe-area-inset-top)) 0.75rem 0.45rem;
+      flex: none;
+    }
+    .topbar a { color: var(--text-dim); text-decoration: none; font-size: 0.95rem; }
+    .topbar-actions { display: flex; gap: 0.5rem; }
+    .chip {
+      border: 1px solid var(--panel-hi);
+      background: var(--panel);
+      color: var(--text);
+      border-radius: 999px;
+      padding: 0.35rem 0.9rem;
+      font-size: 0.9rem;
+      cursor: pointer;
+      touch-action: manipulation;
+    }
+    .chip:disabled { opacity: 0.4; }
+
+    .turn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.4em;
+      padding: 0 0.75rem 0.1rem;
+      flex: none;
+      font-size: clamp(1.5rem, 7vw, 2.6rem);
+      font-weight: 700;
+      line-height: 1.2;
+      text-align: center;
+    }
+    .turn-disc {
+      width: 1.1em; height: 1.1em;
+      border-radius: 50%;
+      flex: none;
+      background: var(--player-1);
+      box-shadow: inset 0 0 0 2px rgba(0,0,0,0.25);
+    }
+    .turn[data-player="2"] .turn-disc { background: var(--player-2); }
+    .turn[data-player="none"] .turn-disc { display: none; }
+    .turn[data-state="playing"] .turn-text { order: -1; }
+    .turn[data-state="over"] .turn-text { font-weight: 800; }
+    /* One dim line for what the last move did — an extra turn, a capture, a
+       sweep. Always present so nothing shifts when it fills in. */
+    .note {
+      flex: none;
+      min-height: 1.15rem;
+      padding: 0 0.75rem 0.35rem;
+      text-align: center;
+      font-size: 0.85rem;
+      color: var(--text-dim);
+    }
+    .visually-hidden {
+      position: absolute; width: 1px; height: 1px;
+      margin: -1px; padding: 0; overflow: hidden;
+      clip-path: inset(50%); white-space: nowrap; border: 0;
+    }
+
+    .stage {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0 6px calc(6px + env(safe-area-inset-bottom));
+      min-height: 0;
+    }
+    /* Named areas, because the same fourteen pits are laid out two ways and
+       "p7 sits here" is the only readable way to say it. */
+    .board {
+      display: grid;
+      gap: 4px;
+      padding: 6px;
+      background: var(--wood);
+      border-radius: 14px;
+      width: 100%;
+      aspect-ratio: 3.6;
+      max-width: min(100%, calc((100dvh - var(--chrome)) * 3.6), 60rem);
+      max-height: 100%;
+      grid-template-columns: 1.15fr repeat(6, 1fr) 1.15fr;
+      grid-template-rows: 1fr 1fr;
+      grid-template-areas:
+        "s2 p12 p11 p10 p9 p8 p7 s1"
+        "s2 p0  p1  p2  p3 p4 p5 s1";
+    }
+    @media (orientation: portrait) {
+      .board {
+        aspect-ratio: 1 / 2.2;
+        max-width: min(100%, calc((100dvh - var(--chrome)) / 2.2), 22rem);
+        max-height: none;
+        grid-template-columns: 1fr 1fr;
+        grid-template-rows: 1.15fr repeat(6, 1fr) 1.15fr;
+        grid-template-areas:
+          "s2 s2"
+          "p0 p12"
+          "p1 p11"
+          "p2 p10"
+          "p3 p9"
+          "p4 p8"
+          "p5 p7"
+          "s1 s1";
+      }
+    }
+    .cell[data-i="0"] { grid-area: p0; }
+    .cell[data-i="1"] { grid-area: p1; }
+    .cell[data-i="2"] { grid-area: p2; }
+    .cell[data-i="3"] { grid-area: p3; }
+    .cell[data-i="4"] { grid-area: p4; }
+    .cell[data-i="5"] { grid-area: p5; }
+    .cell[data-i="6"] { grid-area: s1; }
+    .cell[data-i="7"] { grid-area: p7; }
+    .cell[data-i="8"] { grid-area: p8; }
+    .cell[data-i="9"] { grid-area: p9; }
+    .cell[data-i="10"] { grid-area: p10; }
+    .cell[data-i="11"] { grid-area: p11; }
+    .cell[data-i="12"] { grid-area: p12; }
+    .cell[data-i="13"] { grid-area: s2; }
+
+    .cell {
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 0.1rem;
+      border: none;
+      padding: 4%;
+      min-width: 0;
+      min-height: 0;
+      background: var(--pit);
+      border-radius: 999px;
+      color: var(--text);
+      font: inherit;
+      box-shadow: inset 0 3px 7px rgba(0,0,0,0.55);
+    }
+    .cell[data-owner="1"] { box-shadow: inset 0 3px 7px rgba(0,0,0,0.55),
+      inset 0 0 0 2px color-mix(in srgb, var(--player-1) 55%, transparent); }
+    .cell[data-owner="2"] { box-shadow: inset 0 3px 7px rgba(0,0,0,0.55),
+      inset 0 0 0 2px color-mix(in srgb, var(--player-2) 55%, transparent); }
+    .cell.store { border-radius: 34px; }
+
+    /* Seeds are the point of the game, so pits show them as pips and the
+       number underneath. Past a dozen the pips stop meaning anything and
+       the number takes over. */
+    .seeds {
+      display: flex;
+      flex-wrap: wrap;
+      align-content: center;
+      justify-content: center;
+      gap: 0.14em;
+      max-width: 74%;
+      font-size: clamp(0.85rem, 3.4vmin, 1.4rem);
+    }
+    .seed {
+      width: 0.72em; height: 0.72em;
+      border-radius: 50%;
+      background: var(--seed);
+      box-shadow: inset 0 -1px 1px rgba(0,0,0,0.35);
+    }
+    .count {
+      font-size: clamp(0.7rem, 2.4vmin, 1rem);
+      font-weight: 700;
+      font-variant-numeric: tabular-nums;
+      color: var(--text-dim);
+      line-height: 1;
+    }
+    .cell[data-many] .seeds { display: none; }
+    .cell[data-many] .count { font-size: clamp(1.1rem, 4.4vmin, 2rem); color: var(--text); }
+    .store .seeds { display: none; }
+    .store .count { font-size: clamp(1.3rem, 5vmin, 2.4rem); color: var(--text); }
+
+    .cell[data-play] { cursor: pointer; touch-action: manipulation; }
+    .cell[data-play]::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      border-radius: inherit;
+      box-shadow: inset 0 0 0 3px var(--player-ink);
+      opacity: 0.85;
+    }
+    .cell[data-play]:active { filter: brightness(1.25); }
+    /* Pits the last move touched, so a sown row is readable after the fact. */
+    .cell[data-hit] { animation: sown 420ms ease-out; }
+    @keyframes sown {
+      0% { background: color-mix(in srgb, var(--seed) 55%, var(--pit)); }
+      100% { background: var(--pit); }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .cell[data-hit] { animation: none; }
+    }
+
+    .pick-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.4rem;
+      margin-bottom: 0.7rem;
+    }
+    .pick {
+      background: var(--bg);
+      border: 1px solid var(--panel-hi);
+      border-radius: 10px;
+      color: var(--text);
+      font-size: 0.95rem;
+      font-weight: 700;
+      padding: 0.5rem 0;
+      cursor: pointer;
+      touch-action: manipulation;
+    }
+    .pick[aria-pressed="true"] { background: var(--panel-hi); }
+    .rules-list { margin: 0; padding-left: 1.1rem; font-size: 0.85rem;
+      color: var(--text-dim); line-height: 1.45; }
+    .rules-list li + li { margin-top: 0.35rem; }
+    .rules-sub { margin: 0.9rem 0 0.4rem; font-size: 0.9rem; }
+    .rules-note { margin: 0.9rem 0 0; font-size: 0.78rem; color: var(--text-dim); }
+    .modal[data-rules="capture"] .r-avalanche,
+    .modal[data-rules="avalanche"] .r-capture { display: none; }
+  </style>
+</head>
+<body>
+  <div class="topbar">
+    <a href="../../">&larr; Games</a>
+    <div class="topbar-actions">
+      <button id="rules-btn" class="chip" type="button" aria-expanded="false">Rules</button>
+      <button id="undo" class="chip" type="button" disabled>Undo</button>
+      <button id="reset" class="chip" type="button">New game</button>
+    </div>
+  </div>
+
+  <div id="turn" class="turn" data-player="1" data-state="playing" aria-live="polite">
+    <span id="turn-disc" class="turn-disc" aria-hidden="true"></span>
+    <span id="turn-text" class="turn-text" aria-hidden="true">Next:</span>
+    <span id="turn-label" class="visually-hidden">Player 1 to move</span>
+  </div>
+  <div id="note" class="note" aria-live="polite"></div>
+
+  <main class="stage">
+    <div id="board" class="board"></div>
+  </main>
+
+  <div class="modal" id="rules" data-rules="capture">
+    <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="rules-title">
+      <h2 class="modal-title" id="rules-title">Rules</h2>
+      <div class="pick-row" id="pick-row" role="group" aria-label="Rule set">
+        <button class="pick" id="pick-capture" type="button" data-rules="capture"
+                aria-pressed="true">Capture</button>
+        <button class="pick" id="pick-avalanche" type="button" data-rules="avalanche"
+                aria-pressed="false">Avalanche</button>
+      </div>
+
+      <ul class="rules-list r-capture">
+        <li>Land your last seed in <strong>your own store</strong> and you go
+          again.</li>
+        <li>Land it in an <strong>empty pit on your side</strong> and you
+          capture it along with everything in the pit facing it. A facing pit
+          that is already empty captures nothing.</li>
+        <li>Otherwise the turn passes.</li>
+      </ul>
+      <ul class="rules-list r-avalanche">
+        <li>Land your last seed in an <strong>occupied pit</strong> and you
+          scoop that pit up and keep sowing, from there.</li>
+        <li>The turn ends when the last seed lands in <strong>your store</strong>
+          or in a pit that was <strong>empty</strong>.</li>
+        <li>No captures, and never an extra turn — one tap can still run a
+          long way round the board.</li>
+      </ul>
+
+      <h3 class="rules-sub">Both rule sets</h3>
+      <ul class="rules-list">
+        <li>Six pits a side, four seeds in each. Tap one of your pits to lift
+          its seeds and drop them one per pit, moving <strong>towards your own
+          store</strong> and on round the board.</li>
+        <li>You drop a seed in your own store but <strong>skip your
+          opponent's</strong>.</li>
+        <li>The game ends the moment <strong>either side's six pits are
+          empty</strong>; the other player sweeps their remaining seeds into
+          their own store.</li>
+        <li>Most seeds in your store wins. An equal split is a draw.</li>
+      </ul>
+      <p class="rules-note">Changing the rule set starts a new game.</p>
+      <button class="modal-close" type="button" data-close>Close</button>
+    </div>
+  </div>
+
+  <script src="../../js/lib/store.js"></script>
+  <script src="../../js/lib/modal.js"></script>
+  <script src="mancala.js"></script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('../../sw.js').catch(() => {});
+    }
+  </script>
+</body>
+</html>

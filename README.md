@@ -20,6 +20,8 @@ installable PWA at **https://games.payne.run**.
 | [Dice](games/dice/) | A plain dice roller — pick one to six dice and throw |
 | [Spades](games/spades/) | Scoresheet for four-handed partners, with nil and blind nil |
 | [Checkers](games/checkers/) | Two players on one phone, jumps forced |
+| [Reversi](games/reversi/) | Trap a line of discs and flip them |
+| [Mancala](games/mancala/) | Sow seeds round the board — Capture or Avalanche rules |
 
 ## Development
 

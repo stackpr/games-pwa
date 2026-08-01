@@ -19,6 +19,7 @@
     total1: document.getElementById('total-1'),
     total2: document.getElementById('total-2'),
     entry: document.getElementById('entry'),
+    took: document.getElementById('took'),
     commit: document.getElementById('commit'),
     editBids: document.getElementById('edit-bids'),
     phaseHint: document.getElementById('phase-hint'),
@@ -38,6 +39,9 @@
   const trickCells = [];
   const bidBtns = [];
   const trickBtns = [];
+  // The shape of the tricks row — which seats own a stepper. Rebuilding it
+  // only when that changes keeps the buttons under a repeated tap alive.
+  let tookShape = '';
 
   // A hand runs in two phases: bid, then play. Tricks are not shown at all
   // until the bids are locked. See _README.md.
@@ -146,10 +150,54 @@
 
     cells.push(mark(label('Bid'), 'bid'));
     for (let i = 0; i < SEATS; i++) cells.push(mark(stepper('bid', i), 'bid'));
-    cells.push(mark(label('Took'), 'took'));
-    for (let i = 0; i < SEATS; i++) cells.push(mark(stepper('tricks', i), 'took'));
 
     for (const c of cells) el.seats.append(c);
+  }
+
+  /**
+   * A team's tricks only need splitting between the partners when one of them
+   * bid nil — that is the only thing settled per player. Otherwise the pair
+   * enter one number, which is what gets counted anyway. See _README.md.
+   */
+  function combined(team) {
+    return seatsOf(team).every(i => state.draft.bids[i] >= 0);
+  }
+
+  /** Which seats own a stepper, in display order. */
+  function tookSeats() {
+    const seats = [];
+    for (const team of [1, 2]) {
+      const s = seatsOf(team);
+      if (combined(team)) seats.push(s[0]);
+      else seats.push(s[0], s[1]);
+    }
+    return seats;
+  }
+
+  function buildTook() {
+    el.took.textContent = '';
+    trickCells.length = 0;
+    trickBtns.length = 0;
+
+    const seats = tookSeats();
+    el.took.style.gridTemplateColumns = 'repeat(' + seats.length + ', 1fr)';
+    for (const seat of seats) {
+      const team = (seat % 2) + 1;
+      const cell = document.createElement('div');
+      cell.className = 'took-cell';
+      cell.dataset.team = String(team);
+      cell.dataset.seat = String(seat);
+
+      const name = document.createElement('span');
+      name.className = 'took-name';
+      const bid = state.draft.bids[seat];
+      name.textContent = combined(team)
+        ? 'Team ' + team
+        : 'P' + (seat + 1) + (bid < 0 ? ' · ' + bidLabel(bid) : '');
+
+      cell.append(name, stepper('tricks', seat));
+      el.took.append(cell);
+    }
   }
 
   function mark(node, row) {
@@ -222,21 +270,37 @@
     renderEntry();
   }
 
+  /** Nil is the only thing that changes the tricks row, so key on it alone. */
+  function tookKey() {
+    return state.draft.bids.map(b => (b < 0 ? String(b) : '.')).join('');
+  }
+
   function renderEntry() {
     const d = dealer();
+    const key = tookKey();
+    if (key !== tookShape) {
+      tookShape = key;
+      buildTook();
+    }
+
     for (let i = 0; i < SEATS; i++) {
       const bid = state.draft.bids[i];
       bidCells[i].textContent = bidLabel(bid);
       if (bid < 0) bidCells[i].dataset.special = '';
       else delete bidCells[i].dataset.special;
-      trickCells[i].textContent = String(state.draft.tricks[i]);
 
       const bidding = state.draft.phase === 'bidding';
       const at = BID_STEPS.indexOf(bid);
       bidBtns[i].up.disabled = !bidding || at >= BID_STEPS.length - 1;
       bidBtns[i].down.disabled = !bidding || at <= 0;
-      trickBtns[i].up.disabled = bidding || state.draft.tricks[i] >= TRICKS;
-      trickBtns[i].down.disabled = bidding || state.draft.tricks[i] <= 0;
+
+      // A seat only has a stepper when its team is split; the rest of the
+      // team's tricks live on the seat that does.
+      if (trickCells[i]) {
+        trickCells[i].textContent = String(state.draft.tricks[i]);
+        trickBtns[i].up.disabled = bidding || state.draft.tricks[i] >= TRICKS;
+        trickBtns[i].down.disabled = bidding || state.draft.tricks[i] <= 0;
+      }
 
       const name = el.seats.querySelector('.seat-name[data-seat="' + i + '"] .deal');
       if (name) name.textContent = i === d ? 'deals' : '';
@@ -303,6 +367,16 @@
   function commit() {
     if (state.draft.phase === 'bidding') {
       state.draft.phase = 'playing';
+      // A team entering one number keeps it on the seat that owns the
+      // stepper, so anything typed before an Edit bids detour is folded in
+      // rather than stranded on a seat that no longer has a control.
+      for (const team of [1, 2]) {
+        if (!combined(team)) continue;
+        const [keep, fold] = seatsOf(team);
+        state.draft.tricks[keep] =
+          Math.min(TRICKS, state.draft.tricks[keep] + state.draft.tricks[fold]);
+        state.draft.tricks[fold] = 0;
+      }
       save();
       render();
       return;
