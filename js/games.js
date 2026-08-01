@@ -48,6 +48,18 @@ const GAMES = [
     description: 'Two players, forced jumps',
     emoji: '\u{1F3C1}',
     path: 'games/checkers/'
+  },
+  {
+    name: 'Reversi',
+    description: 'Trap a line and flip it',
+    emoji: '\u{26AB}',
+    path: 'games/reversi/'
+  },
+  {
+    name: 'Mancala',
+    description: 'Sow seeds — two rule sets',
+    emoji: '\u{1F330}',
+    path: 'games/mancala/'
   }
 ];
 

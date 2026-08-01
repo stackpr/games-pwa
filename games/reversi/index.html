@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Reversi</title>
+  <meta name="theme-color" content="#10141f">
+  <link rel="manifest" href="../../manifest.webmanifest">
+  <link rel="icon" href="../../icons/favicon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="../../icons/apple-touch-icon.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="stylesheet" href="../../css/players.css">
+  <link rel="stylesheet" href="../../css/modal.css">
+  <style>
+    :root {
+      --bg: #10141f;
+      --text: #eef1f8;
+      --text-dim: #9aa4bd;
+      --panel: #1a2030;
+      --panel-hi: #2b3450;
+      --felt: #235c43;
+      --line: #1a4633;
+      --chrome: 13.5rem;
+      color-scheme: dark;
+    }
+    @media (orientation: landscape) { :root { --chrome: 7rem; } }
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    html, body { margin: 0; padding: 0; height: 100%; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      display: flex;
+      flex-direction: column;
+      height: 100dvh;
+      overflow: hidden;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: calc(0.45rem + env(safe-area-inset-top)) 0.75rem 0.45rem;
+      flex: none;
+    }
+    .topbar a { color: var(--text-dim); text-decoration: none; font-size: 0.95rem; }
+    .topbar-actions { display: flex; gap: 0.5rem; }
+    .chip {
+      border: 1px solid var(--panel-hi);
+      background: var(--panel);
+      color: var(--text);
+      border-radius: 999px;
+      padding: 0.35rem 0.9rem;
+      font-size: 0.9rem;
+      cursor: pointer;
+      touch-action: manipulation;
+    }
+    .chip:disabled { opacity: 0.4; }
+
+    /* Running count, which is the whole tension of the game. */
+    .tally {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.6rem;
+      padding: 0 0.75rem 0.35rem;
+      flex: none;
+      font-variant-numeric: tabular-nums;
+    }
+    .tally-side {
+      display: flex;
+      align-items: center;
+      gap: 0.35rem;
+      font-size: 1.25rem;
+      font-weight: 800;
+      padding: 0.15rem 0.6rem;
+      border-radius: 999px;
+      background: var(--panel);
+    }
+    .tally-side[data-turn] { background: var(--panel-hi); box-shadow: inset 0 0 0 2px rgba(255,255,255,0.5); }
+    .pip-1, .pip-2 {
+      width: 1.05rem; height: 1.05rem;
+      border-radius: 50%;
+      flex: none;
+    }
+    .pip-1 { background: var(--player-1); }
+    .pip-2 { background: var(--player-2); }
+
+    .turn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.4em;
+      padding: 0 0.75rem 0.5rem;
+      flex: none;
+      font-size: clamp(1.5rem, 7vw, 2.6rem);
+      font-weight: 700;
+      line-height: 1.2;
+      text-align: center;
+    }
+    .visually-hidden {
+      position: absolute; width: 1px; height: 1px;
+      margin: -1px; padding: 0; overflow: hidden;
+      clip-path: inset(50%); white-space: nowrap; border: 0;
+    }
+    @media (orientation: landscape) {
+      .turn { font-size: clamp(1rem, 4.5vh, 1.5rem); padding-bottom: 0.3rem; }
+      .tally-side { font-size: 1rem; }
+    }
+    .turn-disc {
+      width: 1.1em; height: 1.1em;
+      border-radius: 50%;
+      flex: none;
+      background: var(--player-1);
+      box-shadow: inset 0 0 0 2px rgba(0,0,0,0.25);
+    }
+    .turn[data-player="2"] .turn-disc { background: var(--player-2); }
+    .turn[data-player="none"] .turn-disc { display: none; }
+    .turn[data-state="playing"] .turn-text { order: -1; }
+    .turn[data-state="over"] .turn-text { font-weight: 800; }
+
+    .stage {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0 6px calc(6px + env(safe-area-inset-bottom));
+      min-height: 0;
+    }
+    .board {
+      display: grid;
+      grid-template-columns: repeat(8, 1fr);
+      grid-template-rows: repeat(8, 1fr);
+      gap: 2px;
+      padding: 2px;
+      background: var(--line);
+      aspect-ratio: 1;
+      width: 100%;
+      max-width: min(100%, calc(100dvh - var(--chrome)), 30rem);
+      max-height: 100%;
+      border-radius: 8px;
+    }
+    @media (orientation: portrait) {
+      .turn { flex: 1; padding-top: 0.5rem; }
+      .stage { flex: none; }
+      body::after { content: ''; flex: 1; }
+      .board { max-height: none; }
+    }
+
+    .sq {
+      position: relative;
+      border: none;
+      padding: 0;
+      background: var(--felt);
+      min-width: 0;
+      min-height: 0;
+    }
+    .sq:disabled { cursor: default; }
+    .sq[data-play] { cursor: pointer; touch-action: manipulation; }
+
+    .disc {
+      position: absolute;
+      inset: 9%;
+      border-radius: 50%;
+      box-shadow: inset 0 -3px 6px rgba(0,0,0,0.35), inset 0 3px 5px rgba(255,255,255,0.2);
+    }
+    .sq[data-p="1"] .disc { background: var(--player-1); }
+    .sq[data-p="2"] .disc { background: var(--player-2); }
+
+    /* Where the current player may drop. Faint on purpose: it is a hint, not
+       an instruction, and eight of them should not overwhelm the position. */
+    .sq[data-play]::after {
+      content: '';
+      position: absolute;
+      inset: 34%;
+      border-radius: 50%;
+      background: rgba(255,255,255,0.28);
+    }
+    /* Discs that just changed hands. */
+    .sq[data-flip] .disc { animation: flip 380ms ease-out; }
+    @keyframes flip {
+      0% { transform: scaleX(1); filter: brightness(1.8); }
+      50% { transform: scaleX(0.06); }
+      100% { transform: scaleX(1); }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .sq[data-flip] .disc { animation: none; }
+    }
+
+    .rules-list { margin: 0; padding-left: 1.1rem; font-size: 0.85rem;
+      color: var(--text-dim); line-height: 1.45; }
+    .rules-list li + li { margin-top: 0.35rem; }
+    .rules-note { margin: 0.9rem 0 0; font-size: 0.78rem; color: var(--text-dim); }
+  </style>
+</head>
+<body>
+  <div class="topbar">
+    <a href="../../">&larr; Games</a>
+    <div class="topbar-actions">
+      <button id="rules-btn" class="chip" type="button" aria-expanded="false">Rules</button>
+      <button id="undo" class="chip" type="button" disabled>Undo</button>
+      <button id="reset" class="chip" type="button">New game</button>
+    </div>
+  </div>
+
+  <div class="tally" aria-hidden="true">
+    <span class="tally-side" id="tally-1" data-turn>
+      <span class="pip-1"></span><span id="count-1">2</span>
+    </span>
+    <span class="tally-side" id="tally-2">
+      <span class="pip-2"></span><span id="count-2">2</span>
+    </span>
+  </div>
+
+  <div id="turn" class="turn" data-player="1" data-state="playing" aria-live="polite">
+    <span id="turn-disc" class="turn-disc" aria-hidden="true"></span>
+    <span id="turn-text" class="turn-text" aria-hidden="true">Next:</span>
+    <span id="turn-label" class="visually-hidden">Player 1 to move</span>
+  </div>
+
+  <main class="stage">
+    <div id="board" class="board"></div>
+  </main>
+
+  <div class="modal" id="rules">
+    <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="rules-title">
+      <h2 class="modal-title" id="rules-title">Rules</h2>
+      <ul class="rules-list">
+        <li>Place a disc so that it <strong>traps a line of your
+          opponent's</strong> between the new disc and one of yours — along a
+          row, a column or a diagonal. Every trapped disc flips.</li>
+        <li>A move is only legal if it flips at least one disc. The dots show
+          where you may play.</li>
+        <li><strong>No legal move means you pass</strong>, and the turn goes
+          straight back. The game ends when neither side can move — usually
+          when the board is full.</li>
+        <li>Most discs wins. An equal count is a draw.</li>
+      </ul>
+      <p class="rules-note">
+        This game is also sold under a brand name, which is a trademark.
+        Reversi is the original name and the one used here.
+      </p>
+      <button class="modal-close" type="button" data-close>Close</button>
+    </div>
+  </div>
+
+  <script src="../../js/lib/store.js"></script>
+  <script src="../../js/lib/modal.js"></script>
+  <script src="reversi.js"></script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('../../sw.js').catch(() => {});
+    }
+  </script>
+</body>
+</html>

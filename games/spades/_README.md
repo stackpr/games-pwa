@@ -43,20 +43,44 @@ playing. Locking is there to stop accidents, not to be a one-way door — a
 misheard bid is common enough that making it unrecoverable would be worse
 than the drift the lock prevents.
 
-Both rows are steppers, one column per seat — no keypad. A keypad means
-typing a number, dismissing a keyboard and repeating it eight times a hand;
+Everything is entered with steppers — no keypad. A keypad means typing a
+number, dismissing a keyboard and repeating it several times a hand;
 stepping is a tap per increment and never covers the screen.
 
-- **Bid** runs `13` down to `1`, then **Nil**, then **Blind** at the floor.
-  Nil replaces zero rather than sitting beside it, because a bid of zero
-  *is* nil — there is no way to bid zero and not be playing a nil.
-- **Took** runs `0` to `13`.
+- **Bid** is one column per seat, running `13` down to `1`, then **Nil**,
+  then **Blind** at the floor. Nil replaces zero rather than sitting beside
+  it, because a bid of zero *is* nil — there is no way to bid zero and not
+  be playing a nil.
+- **Tricks taken** runs `0` to `13`, and is **not** one column per seat —
+  see below.
 - The steppers disable at both ends rather than wrapping, so holding one
   down cannot roll `13` around to `Blind`.
 
 Both arrows are always visible for every seat, so a bid can be corrected
 before the round is scored. After scoring, **Undo** takes the last round
 back off the sheet.
+
+### Tricks are entered per team unless a nil says otherwise
+
+Scoring never asks how a partnership's tricks were split. The contract is
+made or set on the **team's** total, and the only thing settled per player
+is a nil. So:
+
+- **Neither partner bid nil** → the team gets **one stepper**, labelled
+  *Team 1* / *Team 2*. Two numbers where one will do is two chances to
+  mis-enter, and it asks the table for a fact nobody tracked.
+- **Either partner bid nil or blind nil** → that team splits into two
+  steppers, labelled with the seat and its bid (`P2 · Nil`), because the
+  nil bidder's own count decides ±100.
+
+The two teams are decided independently, so a hand with one nil shows three
+steppers, not four. The row is rebuilt only when that shape changes — not on
+every tap — so the button under a repeated tap stays alive.
+
+Locking the bids **folds a combined team's two counts into one**, which
+matters after an *Edit bids* detour: enter 6 for a split team, drop the nil,
+lock again, and the 6 moves onto the surviving stepper rather than being
+stranded on a seat with no control.
 
 ## Scoring
 
@@ -102,6 +126,13 @@ One JSON object under `games.spades.v1`:
   "draft": { "phase": "playing", "bids": [3, 3, 3, 3], "tricks": [0, 0, 0, 0] }
 }
 ```
+
+`tricks` stays a four-element array even when a team entered one number: the
+combined count sits on the **lower of the team's two seats** and the partner
+is `0`. Scoring sums the pair either way, so the two encodings are
+equivalent, and whether a stored round was combined is recoverable from its
+own `bids` — no extra flag to fall out of sync. The array is best read as
+"trick counts split only as finely as scoring requires".
 
 `draft` is the hand in progress, and it is saved on **every stepper tap**
 rather than only when the round is scored. That matters because the gap
