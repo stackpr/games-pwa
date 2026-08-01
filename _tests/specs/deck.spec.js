@@ -6,7 +6,7 @@ test.beforeEach(async ({ page }) => {
   await page.goto(URL);
 });
 
-test.describe('the card library', () => {
+test.describe('the card library', { tag: '@nodom' }, () => {
   test('a deck is fifty-two distinct cards', async ({ page }) => {
     const d = await page.evaluate(() => {
       const cards = Deck.single();

@@ -258,7 +258,9 @@ All client-side; no server APIs:
 
 ```
 python3 -m http.server 8080     # from repo root; SW requires http(s), file:// won't work
-cd _tests && npm ci && npm test         # Playwright suite (starts its own server)
+cd _tests && npm ci             # first time only
+npm run affected                # only the specs your changes can break
+npm test                        # the whole suite — minutes
 ```
 
 Service workers cache aggressively — when testing changes, use DevTools →
@@ -266,8 +268,65 @@ Application → "Update on reload", or bump `CACHE_VERSION`.
 
 `_tests/` holds the Playwright suite: shell (manifest, icons, service
 worker, offline, install prompt), one spec per game, and `publishing.spec.js`
-guarding what reaches the deployed site. Run it before merging to
-`gh-pages`.
+guarding what reaches the deployed site.
+
+### Run a segment while you work, the suite before you merge
+
+The suite is over seven hundred tests and takes minutes. **Do not run it
+after every edit.** A game can only break its own spec, the specs of the
+libraries its page loads, and the deploy surface, so run that much and keep
+moving:
+
+```
+npm run affected            # works it out from the diff — the usual answer
+npm run game mancala        # one game, plus the js/lib specs its page loads
+npm run shell               # home page, worker, install prompt, publishing
+npm run lib                 # the js/lib modules' own specs
+```
+
+`npm run affected` reads both the diff against `origin/gh-pages` and the
+uncommitted working tree, and anything it cannot place falls back to
+running everything — so it is never the reason something went untested.
+`_tests/README.md` has the mapping.
+
+**Run the full `npm test` once before merging to `gh-pages`**, and quote
+the real number in the PR. The segments are a working aid, not the gate.
+
+### Turning the full run off for a thread
+
+Some iterations do not warrant eight minutes. Saying any of these **stands
+for the rest of the conversation**, not just the next reply:
+
+| Say | Means |
+| --- | --- |
+| "partial test only" / "no full test" / "affected only" | run `npm run affected` or a named segment; **do not** run `npm test`, including before a merge or a PR |
+| "no tests" | run nothing; commit and push on the strength of the change alone |
+| "full test" / "run everything" | back to the default |
+
+Two things do not change when it is off:
+
+- **Never claim a run that did not happen.** Quote what actually ran —
+  *"43 passing (`npm run game mancala`); full suite not run this thread at
+  your request"* — in the reply and in the PR body. A number in a PR is
+  read as the whole suite unless it says otherwise, and inventing one is
+  worse than skipping the run.
+- **Say when the skip starts to matter.** A one-line CSS tweak is a fine
+  thing to skip a full run on; touching `js/lib/`, `sw.js` or
+  `js/games.js` reaches every game, and the segments already cover that
+  breadth — so say what a full run would have added, once, and carry on.
+  It is the repo owner's call, not a decision to re-litigate each time.
+
+Do not infer the opt-out from impatience, from a short deadline, or from
+having run the suite recently. It has to be asked for.
+
+**Segmenting is about which specs a run needs, never about dropping a
+viewport.** Both projects — phone and desktop — run everything that
+renders. The one exception is `{ tag: '@nodom' }`, carried by the five
+specs with no UI at all (`deck`, `vocab`, `publishing`, and the suite's own
+`segments` and `tagging`), where a second viewport repeats identical work.
+`specs/tagging.spec.js` fails the suite if a tagged block so much as calls
+`locator`, and the config uses `grepInvert` so running at both widths stays
+the default. Do not tag a spec to make it faster.
 
 Use `npm ci`, never `npm install`, and never run `npx playwright install`.
 The `@playwright/test` version is pinned to match a browser build that is
