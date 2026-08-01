@@ -27,6 +27,7 @@ installable PWA at **https://games.payne.run**.
 | [What Am I?](games/what-am-i/) | Hold the phone up; you get the category, they give the clues |
 | [Pitch](games/pitch/) | Scoresheet for four- or five-handed Pitch, 10 or 13 point |
 | [Somewhere Between](games/somewhere-between/) | Drag the marker to the hidden spot on a scale |
+| [Honeycomb: 3 Bees](games/honeycomb-3-bees/) | Drop a bee in a cell, take a cell away — the comb shrinks under you |
 | [Blackjack](games/blackjack/) | Vegas rules, any bet, a bankroll that carries over |
 
 ## Development

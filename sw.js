@@ -85,6 +85,9 @@ const PRECACHE_URLS = [
   'games/somewhere-between/',
   'games/somewhere-between/index.html',
   'games/somewhere-between/somewhere-between.js',
+  'games/honeycomb-3-bees/',
+  'games/honeycomb-3-bees/index.html',
+  'games/honeycomb-3-bees/honeycomb-3-bees.js',
   'games/blackjack/',
   'games/blackjack/index.html',
   'games/blackjack/blackjack.js'

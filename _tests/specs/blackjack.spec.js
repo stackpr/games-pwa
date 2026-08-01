@@ -227,6 +227,10 @@ test.describe('playing a hand', () => {
 
 test.describe('persistence', () => {
   test('the bankroll carries over a reload; the hand does not', async ({ page }) => {
+    // Stacked for the same reason as the stake test: a natural settles on
+    // the deal and the bankroll would already have moved past $490.
+    await stack(page, ['TS', '9D', '8H', '7C']);
+    await table(page);
     await page.locator('#deal').click();
     await expect(bank(page)).toHaveText('$490');
     await page.reload();
