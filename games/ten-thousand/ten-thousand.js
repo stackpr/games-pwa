@@ -18,7 +18,8 @@
     seats: document.getElementById('seats'),
     settingsBtn: document.getElementById('settings-btn'),
     settings: document.getElementById('settings'),
-    settingsClose: document.getElementById('settings-close'),
+    scoringBtn: document.getElementById('scoring-btn'),
+    scoring: document.getElementById('scoring'),
     countRow: document.getElementById('count-row'),
     status: document.getElementById('status-text'),
     roll: document.getElementById('roll'),
@@ -304,35 +305,7 @@
 
   function setPlayerCount(count) {
     startGame(count);
-    closeSettings();
-  }
-
-  function settingsOpen() {
-    return Boolean(el.settings && el.settings.hasAttribute('data-open'));
-  }
-
-  function openSettings() {
-    if (!el.settings) return;
-    el.settings.dataset.open = '';
-    if (el.settingsBtn) el.settingsBtn.setAttribute('aria-expanded', 'true');
-    // Land focus inside the dialog rather than leaving it on the button
-    // behind the scrim.
-    const first = el.countRow.querySelector('.count');
-    if (first) first.focus();
-  }
-
-  function closeSettings() {
-    if (!settingsOpen()) return;
-    delete el.settings.dataset.open;
-    if (el.settingsBtn) {
-      el.settingsBtn.setAttribute('aria-expanded', 'false');
-      el.settingsBtn.focus();
-    }
-  }
-
-  function toggleSettings() {
-    if (settingsOpen()) closeSettings();
-    else openSettings();
+    settings.close();
   }
 
   for (let c = MIN_PLAYERS; c <= MAX_PLAYERS; c++) {
@@ -359,18 +332,9 @@
   on(el.stop, 'click', doStop);
   on(el.next, 'click', nextPlayer);
   on(el.newGame, 'click', () => startGame(state.count));
-  on(el.settingsBtn, 'click', toggleSettings);
-  on(el.settingsClose, 'click', closeSettings);
-  // A tap on the scrim, but not on the panel sitting on top of it.
-  on(el.settings, 'click', event => {
-    if (event.target === el.settings) closeSettings();
-  });
-  document.addEventListener('keydown', event => {
-    if (event.key === 'Escape' && settingsOpen()) {
-      closeSettings();
-      event.preventDefault();
-    }
-  });
+
+  const settings = Modal.create(el.settings, { trigger: el.settingsBtn });
+  Modal.create(el.scoring, { trigger: el.scoringBtn });
 
   tray.setCount(DICE);
   buildSeats();

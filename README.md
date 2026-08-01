@@ -18,6 +18,8 @@ installable PWA at **https://games.payne.run**.
 | [Tic-Tac-Toe](games/tic-tac-toe/) | Three in a row, X against O |
 | [10,000 (Dice)](games/ten-thousand/) | Press your luck with six dice, 2–12 players |
 | [Dice](games/dice/) | A plain dice roller — pick one to six dice and throw |
+| [Spades](games/spades/) | Scoresheet for four-handed partners, with nil and blind nil |
+| [Checkers](games/checkers/) | Two players on one phone, jumps forced |
 
 ## Development
 
