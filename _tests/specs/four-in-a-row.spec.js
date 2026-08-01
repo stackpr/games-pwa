@@ -22,7 +22,7 @@ test.beforeEach(async ({ page }) => {
   await clearState(page);
 });
 
-test.describe('dropping', () => {
+test.describe('dropping', { tag: '@layout' }, () => {
   test('starts empty with player 1 to move', async ({ page }) => {
     await expect(turnText(page)).toHaveText('Next:');
     await expect(turn(page)).toHaveAttribute('data-player', '1');
@@ -214,7 +214,7 @@ test.describe('persistence', () => {
   });
 });
 
-test.describe('presentation', () => {
+test.describe('presentation', { tag: '@layout' }, () => {
   test('uses the shared player colors, not its own', async ({ page }) => {
     await col(page, 0).click();
     await col(page, 1).click();

@@ -258,7 +258,9 @@ All client-side; no server APIs:
 
 ```
 python3 -m http.server 8080     # from repo root; SW requires http(s), file:// won't work
-cd _tests && npm ci && npm test         # Playwright suite (starts its own server)
+cd _tests && npm ci             # first time only
+npm run affected                # only the specs your changes can break
+npm test                        # the whole suite — minutes
 ```
 
 Service workers cache aggressively — when testing changes, use DevTools →
@@ -266,8 +268,37 @@ Application → "Update on reload", or bump `CACHE_VERSION`.
 
 `_tests/` holds the Playwright suite: shell (manifest, icons, service
 worker, offline, install prompt), one spec per game, and `publishing.spec.js`
-guarding what reaches the deployed site. Run it before merging to
-`gh-pages`.
+guarding what reaches the deployed site.
+
+### Run a segment while you work, the suite before you merge
+
+The suite is over seven hundred tests and takes minutes. **Do not run it
+after every edit.** A game can only break its own spec, the specs of the
+libraries its page loads, and the deploy surface, so run that much and keep
+moving:
+
+```
+npm run affected            # works it out from the diff — the usual answer
+npm run game mancala        # one game, plus the js/lib specs its page loads
+npm run shell               # home page, worker, install prompt, publishing
+npm run lib                 # the js/lib modules' own specs
+```
+
+`npm run affected` reads both the diff against `origin/gh-pages` and the
+uncommitted working tree, and anything it cannot place falls back to
+running everything — so it is never the reason something went untested.
+`_tests/README.md` has the mapping.
+
+**Run the full `npm test` once before merging to `gh-pages`**, and quote
+the real number in the PR. The segments are a working aid, not the gate.
+
+Tests are split across two projects: the phone runs everything, and desktop
+runs only `describe` blocks tagged `@layout` — the ones that measure the
+rendered page, which is all a wider window can change. Adding a block that
+calls `boundingBox`, `getComputedStyle`, `setViewportSize` or friends means
+adding `{ tag: '@layout' }`; `specs/tagging.spec.js` fails the suite if you
+forget, because the alternative is a block that silently stops being
+checked at desktop width.
 
 Use `npm ci`, never `npm install`, and never run `npx playwright install`.
 The `@playwright/test` version is pinned to match a browser build that is

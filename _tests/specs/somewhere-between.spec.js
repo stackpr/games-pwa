@@ -162,7 +162,7 @@ test.describe('everyone guesses in turn', () => {
   });
 });
 
-test.describe('the reveal', () => {
+test.describe('the reveal', { tag: '@layout' }, () => {
   test('every marker appears, labelled, with the target', async ({ page }) => {
     await table(page, ['Ari', 'Bo', 'Cass', 'Dee']);
     await giveClue(page, 'lukewarm');
@@ -301,7 +301,7 @@ test.describe('two teams', () => {
   });
 });
 
-test.describe('presentation', () => {
+test.describe('presentation', { tag: '@layout' }, () => {
   test('the how-to explains the sum and the no-number rule', async ({ page }) => {
     await page.locator('#rules-btn').click();
     await expect(page.locator('#rules')).toContainText('added');

@@ -24,7 +24,7 @@ test.beforeEach(async ({ page }) => {
   await clearState(page);
 });
 
-test.describe('choosing how many', () => {
+test.describe('choosing how many', { tag: '@layout' }, () => {
   test('offers one to six dice, starting at two', async ({ page }) => {
     await expect(page.locator('.count')).toHaveCount(6);
     await expect(page.locator('.count[data-count="2"]')).toHaveAttribute('aria-pressed', 'true');
@@ -70,7 +70,7 @@ test.describe('choosing how many', () => {
   });
 });
 
-test.describe('rolling', () => {
+test.describe('rolling', { tag: '@layout' }, () => {
   test('the Roll button rolls', async ({ page }) => {
     await forceFaces(page, [3, 6]);
     await roll(page);
@@ -172,7 +172,7 @@ test.describe('persistence', () => {
   });
 });
 
-test.describe('presentation', () => {
+test.describe('presentation', { tag: '@layout' }, () => {
   test('no external requests and no raster images', async ({ page }) => {
     const external = trackExternalRequests(page);
     await page.goto(URL);
@@ -210,7 +210,7 @@ test.describe('presentation', () => {
   });
 });
 
-test.describe('the roll animation', () => {
+test.describe('the roll animation', { tag: '@layout' }, () => {
   test('dice tumble before settling into the row', async ({ page }) => {
     await page.emulateMedia({ reducedMotion: null });
     await page.reload();

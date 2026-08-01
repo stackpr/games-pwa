@@ -45,12 +45,86 @@ same port is reused.
 ```
 cd _tests
 npm ci               # first time only — see "Installing" below
-npm test             # run everything
+npm run affected     # only what your changes can break  ← start here
+npm test             # everything: minutes, not seconds
 npm test -- --headed # watch it run
 npm test -- specs/scorekeeper.spec.js   # one file
 npm test -- -g "undo"                   # by test name
 npm run report       # open the HTML report after a CI-style run
 ```
+
+## Segments
+
+The whole suite is over seven hundred tests and takes minutes. Almost no
+change needs all of them: a game can only break its own spec, the specs of
+the libraries its page loads, and the deploy surface. So run a segment
+while you work, and the whole thing once before merging.
+
+```
+npm run affected            # worked out from the diff — the usual answer
+npm run game mancala        # one game, plus the js/lib specs its page loads
+npm run shell               # home page, worker, install prompt, publishing
+npm run lib                 # the js/lib modules' own specs
+```
+
+**`npm run affected`** diffs against `origin/gh-pages` *and* reads the
+working tree, so it covers what you have not committed yet — which is the
+state it is usually run in. `--since HEAD` narrows it to uncommitted work;
+`--list` prints the specs without running them.
+
+The mapping lives in `segments.js`:
+
+| Changed | Runs |
+| --- | --- |
+| `games/<slug>/…` | that game's spec |
+| `games/<slug>/_README.md` | `publishing` — it is the spec that requires the file |
+| `js/lib/<name>.js` | that module's spec, **and every game whose page loads it** |
+| `css/<name>.css` | every game whose page links it |
+| `js/…`, `sw.js`, `index.html`, `manifest.webmanifest`, `icons/…` | `shell` + `publishing` |
+| `_config.yml`, `CNAME` | `publishing` |
+| `_tests/specs/<x>.spec.js` | that spec, and the tag guard |
+| `_tests/helpers.js`, the config, `segments.js` | everything |
+| `*.md` elsewhere | nothing |
+| anything unrecognised | **everything** |
+
+The reverse dependencies — which games use `dice.js`, which link
+`players.css` — are read out of each game's `index.html` at run time rather
+than listed here. A hand-kept table is a second place to update, and the
+day it goes stale is the day a change ships untested.
+
+Unrecognised paths run the whole suite on purpose. A wrong "nothing to run"
+is silent and a wrong "run everything" costs a few minutes, so the fallback
+goes the expensive way.
+
+**Run the whole suite before merging to `gh-pages`.** The segments are a
+working aid, not the gate.
+
+## The two projects
+
+Every test runs on `mobile-portrait` (Pixel 7). The `desktop` project runs
+only blocks tagged `@layout`:
+
+```js
+test.describe('presentation', { tag: '@layout' }, () => { … });
+```
+
+A wider window can only change assertions that **measure the rendered
+page** — `boundingBox`, `scrollWidth`, `getComputedStyle`,
+`setViewportSize`, a media query. Rules, scoring, persistence and
+storage-shape assertions read the same DOM at any width, and running them a
+second time was costing about a third of the suite's wall clock for no
+signal.
+
+`specs/tagging.spec.js` is what keeps that honest. It reads every other
+spec and fails if a block that measures the page is missing the tag — the
+failure mode being invisible otherwise, since an untagged block does not
+error, it just quietly stops being checked at desktop width. It also fails
+on a tag that measures nothing (a pointless second run), on a tag written
+into a title instead of the options object, and on a config that no longer
+greps for it.
+
+When in doubt, tag it. An unnecessary tag costs a few seconds; a missing
+one costs the coverage.
 
 ## Installing
 
@@ -80,12 +154,17 @@ by emulating Safari's user agent rather than running WebKit.
 playwright.config.js   Server startup, projects (mobile + desktop), reporters
 helpers.js             Shared setup: clean state, service-worker readiness,
                        external-request and console-error tracking
+segments.js            Which specs a change can affect, and the describe-block
+                       parser the tag guard reads
+affected.js            `npm run affected` — segments.js against a git diff
+run-segment.js         `npm run game|shell|lib` — the named segments
 specs/shell.spec.js        Home page, manifest, icons, service worker,
                            offline, install prompt, precache integrity
 specs/scorekeeper.spec.js  Scoring, tap grouping, undo, reset, persistence,
                            history-line layout
 specs/counter.spec.js      Counting, keyboard, persistence, H/V reflow
 specs/publishing.spec.js   Deploy surface: exclude rules, CNAME, no .nojekyll
+specs/tagging.spec.js      Guards the @layout split between the two projects
 ```
 
 ## Adding tests for a new game

@@ -55,7 +55,7 @@ test.describe('counting', () => {
   });
 });
 
-test.describe('layout', () => {
+test.describe('layout', { tag: '@layout' }, () => {
   test('portrait stacks up / number / down and fills the screen', async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     const boxes = await page.evaluate(() => {

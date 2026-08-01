@@ -62,7 +62,7 @@ test.describe('setup', () => {
   });
 });
 
-test.describe('rolling', () => {
+test.describe('rolling', { tag: '@layout' }, () => {
   test('six dice land in a single row along the bottom', async ({ page }) => {
     await roll(page);
     const box = await page.evaluate(() => {
@@ -352,7 +352,7 @@ test.describe('the last lap', () => {
   });
 });
 
-test.describe('settings', () => {
+test.describe('settings', { tag: '@layout' }, () => {
   test('the panel is closed until the button is tapped', async ({ page }) => {
     await expect(page.locator('#settings')).toBeHidden();
     await page.locator('#settings-btn').click();
@@ -562,7 +562,7 @@ test.describe('persistence', () => {
   });
 });
 
-test.describe('presentation', () => {
+test.describe('presentation', { tag: '@layout' }, () => {
   test('no external requests and no raster images', async ({ page }) => {
     const external = trackExternalRequests(page);
     await page.goto(URL);
@@ -589,7 +589,7 @@ test.describe('presentation', () => {
   });
 });
 
-test.describe('the roll animation', () => {
+test.describe('the roll animation', { tag: '@layout' }, () => {
   test('dice tumble inside the tray before settling into the row', async ({ page }) => {
     await page.emulateMedia({ reducedMotion: null });
     await page.reload();

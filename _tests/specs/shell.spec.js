@@ -289,7 +289,7 @@ test.describe('app shell', () => {
   });
 });
 
-test.describe('install prompt', () => {
+test.describe('install prompt', { tag: '@layout' }, () => {
   test('banner stays hidden when already installed', async ({ browser }) => {
     const context = await browser.newContext();
     const page = await context.newPage();

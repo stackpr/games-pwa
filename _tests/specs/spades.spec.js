@@ -340,7 +340,7 @@ test.describe('persistence', () => {
   });
 });
 
-test.describe('presentation', () => {
+test.describe('presentation', { tag: '@layout' }, () => {
   test('the scoring modal explains the rules', async ({ page }) => {
     await expect(page.locator('#rules')).toBeHidden();
     await page.locator('#rules-btn').click();

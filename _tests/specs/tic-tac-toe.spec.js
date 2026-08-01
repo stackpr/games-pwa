@@ -187,7 +187,7 @@ test.describe('persistence', () => {
   });
 });
 
-test.describe('presentation', () => {
+test.describe('presentation', { tag: '@layout' }, () => {
   test('uses the shared player colors, not its own', async ({ page }) => {
     await playAll(page, [0, 1]);
 

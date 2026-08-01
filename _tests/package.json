@@ -5,6 +5,10 @@
   "scripts": {
     "test": "playwright test",
     "test:headed": "playwright test --headed",
+    "affected": "node affected.js",
+    "game": "node run-segment.js game",
+    "shell": "node run-segment.js shell",
+    "lib": "node run-segment.js lib",
     "report": "playwright show-report"
   },
   "devDependencies": {

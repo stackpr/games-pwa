@@ -273,7 +273,7 @@ test.describe('persistence', () => {
     });
 });
 
-test.describe('presentation', () => {
+test.describe('presentation', { tag: '@layout' }, () => {
   test('uses the shared player colors for the two teams', async ({ page }) => {
     const colors = await page.evaluate(() => {
       const root = getComputedStyle(document.documentElement);

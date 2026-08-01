@@ -292,7 +292,7 @@ test.describe('persistence', () => {
   });
 });
 
-test.describe('presentation', () => {
+test.describe('presentation', { tag: '@layout' }, () => {
   test('the rules modal states the 3:2 payout and the soft-17 rule',
     async ({ page }) => {
       await page.locator('#rules-btn').click();
