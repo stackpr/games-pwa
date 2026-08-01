@@ -221,6 +221,29 @@ test.describe('the reveal', () => {
     await expect(page.locator('#tally-list li[data-giver]')).toHaveText('Ari +4');
   });
 
+  test('the header total moves with the payout', async ({ page }) => {
+    await table(page, ['Ari', 'Bo', 'Cass']);
+    await giveClue(page, 'lukewarm');
+    await expect(page.locator('#score-so-far')).toHaveText('0');
+    const at = await targetAt(page);
+    await answer(page, at / 100);
+    await answer(page, at / 100);
+    await expect(page.locator('#score-so-far')).toHaveText('8');
+  });
+
+  test('the target stays visible under a marker that landed on it',
+    async ({ page }) => {
+      await table(page, ['Ari', 'Bo', 'Cass']);
+      await giveClue(page, 'lukewarm');
+      const at = await targetAt(page);
+      await answer(page, at / 100);
+      await answer(page, at / 100);
+      // A bullseye draws a `.said` over the target; the target has to win.
+      const above = await page.evaluate(() =>
+        getComputedStyle(document.getElementById('target')).zIndex);
+      expect(above).not.toBe('auto');
+    });
+
   test('a clue nobody gets is worth nothing to its author', async ({ page }) => {
     await table(page, ['Ari', 'Bo', 'Cass']);
     await giveClue(page, 'nonsense');

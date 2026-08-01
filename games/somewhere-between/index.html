@@ -55,7 +55,9 @@
       display: flex;
       flex-direction: column;
       justify-content: center;
-      gap: 0.9rem;
+      /* Wide enough that a name tag above a marker clears the end labels —
+         a tag at 95% otherwise lands on top of the right-hand word. */
+      gap: 1.5rem;
       min-height: 0;
       padding: 0.5rem 0.9rem;
     }
@@ -102,7 +104,9 @@
       box-shadow: 0 0 0 2px var(--bg);
       pointer-events: none;
     }
-    #target { background: #f0b429; display: none; }
+    /* Above the answers: a guess that landed on the target would otherwise
+       hide the very thing the reveal is there to show. */
+    #target { background: #f0b429; display: none; z-index: 1; }
     body[data-phase="clue"] #target,
     body[data-phase="reveal"] #target { display: block; }
 

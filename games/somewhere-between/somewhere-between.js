@@ -357,6 +357,9 @@
       party.scores[giver()] += total;
       Party.advance(party);
       save();
+      // The header carries the clue-giver's running total, so it has to move
+      // with the payout rather than staying on what they had at the start.
+      el.scoreSoFar.textContent = String(party.scores[giver()]);
       phase('reveal');
       renderScale();
       renderBoard();
