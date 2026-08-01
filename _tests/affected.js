@@ -21,23 +21,27 @@ const rest = argv.filter((arg, i) =>
 
 function git(args) {
   try {
+    // Lines are kept verbatim: `status --porcelain` puts the state in the
+    // first two columns, so trimming here would eat part of the path.
     return execFileSync('git', args, { cwd: ROOT, encoding: 'utf8' })
-      .split('\n').map(line => line.trim()).filter(Boolean);
+      .split('\n').filter(Boolean);
   } catch (err) {
     return null;                    // no such ref, not a checkout, no git
   }
 }
 
 // Committed changes against the base, plus whatever is not committed yet —
-// the second half is the point when this runs mid-edit.
+// the second half is the point, since this runs mid-edit.
 const committed = git(['diff', '--name-only', `${since}...HEAD`]);
 const working = git(['status', '--porcelain']) || [];
-const untracked = working.map(line => line.slice(3).split(' -> ').pop());
+// ` M path`, `?? path`, `R  old -> new`: two status columns, a space, then
+// the path, and a rename carries the name it now has on the right.
+const uncommitted = working.map(line => line.slice(3).split(' -> ').pop());
 
 if (committed === null) {
   console.error(`affected: cannot diff against ${since} — running everything.`);
 }
-const changed = [...new Set([...(committed || []), ...untracked])];
+const changed = [...new Set([...(committed || []), ...uncommitted])];
 
 if (!changed.length) {
   console.log('affected: nothing changed, nothing to run.');
