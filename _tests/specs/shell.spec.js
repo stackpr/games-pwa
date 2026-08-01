@@ -15,6 +15,65 @@ test.describe('app shell', () => {
     }
   });
 
+  test('the list is grouped under headings, in order', async ({ page }) => {
+    await page.goto('/');
+    const titles = await page.locator('.section-title')
+      .evaluateAll(els => els.map(e => e.textContent));
+    expect(titles).toEqual(['Scoring', '2 players', 'Groups', 'Other']);
+  });
+
+  test('each section is alphabetical', async ({ page }) => {
+    await page.goto('/');
+    const groups = await page.locator('.game-group').evaluateAll(els =>
+      els.map(g => ({
+        section: g.dataset.section,
+        names: [...g.querySelectorAll('.game-name')].map(n => n.textContent),
+      })));
+    expect(groups.length).toBe(4);
+    for (const group of groups) {
+      const sorted = group.names.slice()
+        .sort((a, b) => a.localeCompare(b, 'en', { numeric: true }));
+      expect(group.names, `${group.section} out of order`).toEqual(sorted);
+    }
+  });
+
+  test('every registered game lands in a section', async ({ page }) => {
+    await page.goto('/');
+    const counts = await page.evaluate(() => ({
+      registered: GAMES.length,
+      shown: document.querySelectorAll('#game-list li a').length,
+      // A missing or unknown section must fall through to Other, not vanish.
+      unknown: GAMES.filter(g => !['scoring', 'two', 'group', 'other']
+        .includes(g.section)).map(g => g.name),
+    }));
+    expect(counts.shown).toBe(counts.registered);
+    expect(counts.unknown).toEqual([]);
+  });
+
+  test('a game with no section still reaches the page', async ({ page }) => {
+    await page.goto('/');
+    const landed = await page.evaluate(() => {
+      const list = document.getElementById('game-list');
+      list.textContent = '';
+      GAMES.push({ name: 'Zzz Test', description: 'x', emoji: '?', path: 'games/dice/' });
+      renderGameList();
+      const other = document.querySelector('.game-group[data-section="other"]');
+      return [...other.querySelectorAll('.game-name')].map(n => n.textContent);
+    });
+    expect(landed).toContain('Zzz Test');
+  });
+
+  test('the headings name their own list for a screen reader', async ({ page }) => {
+    await page.goto('/');
+    const linked = await page.locator('.game-group').evaluateAll(els =>
+      els.map(g => {
+        const id = g.getAttribute('aria-labelledby');
+        const head = id && document.getElementById(id);
+        return Boolean(head && head.classList.contains('section-title'));
+      }));
+    expect(linked).toEqual([true, true, true, true]);
+  });
+
   test('manifest is valid and uses relative paths', async ({ page }) => {
     await page.goto('/');
     const href = await page.locator('link[rel="manifest"]').getAttribute('href');

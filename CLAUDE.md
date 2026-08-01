@@ -79,7 +79,11 @@ Use the `add-game` skill, or by hand:
 1. Create `games/<slug>/index.html` (+ its JS). Keep each game
    self-contained; link back to `../../` in a top bar.
 2. Write `games/<slug>/_README.md` (required — see Documenting a game).
-3. Add an entry to `GAMES` in `js/games.js`.
+3. Add an entry to `GAMES` in `js/games.js`, including its **`section`**:
+   `scoring`, `two`, `group` or `other`. The home page groups by that and
+   sorts alphabetically inside each group, so where the entry sits in the
+   array does not matter. An entry with no recognised section falls through
+   to *Other* rather than vanishing.
 4. Add the new files to `PRECACHE_URLS` in `sw.js` — code and assets only,
    never `_README.md`.
 5. **Bump `CACHE_VERSION` in `sw.js`** — required for any change to a
