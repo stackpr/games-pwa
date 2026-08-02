@@ -6,6 +6,8 @@
   const MAX_PLAYERS = 8;
   const PUZZLE_COUNTS = [3, 5, 7];
   const VOWEL_COST = 250;
+  const SOLVE_SECONDS = 10;
+  const BACKSPACE = '\u232B';
   const VOWELS = 'AEIOU';
   const REMEMBER = 60;          // puzzles kept back from being dealt again
 
@@ -34,11 +36,10 @@
     vowel: document.getElementById('vowel'),
     solve: document.getElementById('solve'),
     keys: document.getElementById('keys'),
-    pickHint: document.getElementById('pick-hint'),
+    keyHint: document.getElementById('key-hint'),
+    clock: document.getElementById('clock'),
     vowels: document.getElementById('vowels'),
     vowelBack: document.getElementById('vowel-back'),
-    gotIt: document.getElementById('got-it'),
-    missed: document.getElementById('missed'),
     ready: document.getElementById('ready'),
     passNote: document.getElementById('pass-note'),
     nextPuzzle: document.getElementById('next-puzzle'),
@@ -125,6 +126,7 @@
       answer: puzzle.answer,
       category: puzzle.category,
       called: '',
+      typed: '',
       phase: 'pass',
       wedge: 0,
       message: '',
@@ -154,16 +156,27 @@
       answer,
       category: typeof p.category === 'string' ? p.category : '',
       called: typeof p.called === 'string' ? p.called.toUpperCase().replace(/[^A-Z]/g, '') : '',
+      typed: '',
       // 'spinning' is mid-animation and cannot be resumed; land it on the
       // spin screen with the wedge it had already drawn.
       phase: p.phase === 'spinning' ? 'spin'
-        : (['spin', 'pick', 'vowel', 'judge', 'pass', 'solved', 'over']
+        : (['spin', 'pick', 'vowel', 'solve', 'pass', 'solved', 'over']
           .indexOf(p.phase) >= 0 ? p.phase : 'pass'),
       wedge: clamp(p.wedge, 0, WHEEL.length - 1, 0),
       message: typeof p.message === 'string' ? p.message : '',
       used: Array.isArray(p.used)
         ? p.used.filter(x => typeof x === 'string').slice(-REMEMBER) : []
     };
+    // A solve cannot be resumed — the ten seconds are the whole of it — and
+    // letting a reload cancel one would make tapping Solve free. So the turn
+    // is spent, exactly as if the clock had run out on the phone. See
+    // _README.md.
+    if (s.phase === 'solve') {
+      s.roundMoney = 0;
+      s.current = (s.current + 1) % s.players;
+      s.message = 'The clock ran out.';
+      s.phase = 'pass';
+    }
     if (s.solvedCount >= s.puzzles) s.phase = 'over';
     return s;
   }
@@ -194,6 +207,19 @@
     return out;
   }
 
+  /**
+   * Where the blanks are, as positions in the answer. A solve fills these
+   * left to right, which is why the order matters and a Set would not do.
+   */
+  function blanks() {
+    const out = [];
+    const text = state.answer.toUpperCase();
+    for (let i = 0; i < text.length; i++) {
+      if (/[A-Z]/.test(text[i]) && !called(text[i])) out.push(i);
+    }
+    return out;
+  }
+
   const consonantsLeft = () => hidden().some(c => !isVowel(c));
   const vowelsLeft = () => hidden().some(isVowel);
   const solved = () => hidden().length === 0;
@@ -207,6 +233,8 @@
   /* ---- turns ---------------------------------------------------------- */
 
   function endTurn(message) {
+    clock.stop();
+    state.typed = '';
     state.roundMoney = 0;
     state.current = (state.current + 1) % state.players;
     state.message = message;
@@ -285,15 +313,66 @@
     render();
   }
 
+  /*
+   * Solving is a commitment, not a question. There is no way back out of
+   * this phase: no cancel, no Back, and a reload spends the turn too. The
+   * clock and the last blank are the only two ways out. See _README.md.
+   */
   function doSolve() {
     if (state.phase !== 'spin') return;
-    setPhase('judge');
+    state.typed = '';
+    setPhase('solve');
     save();
+    render();
+    // A board with nothing left to fill is already solved; do not start a
+    // clock the player cannot spend.
+    if (!blanks().length) {
+      finishSolve(true);
+      return;
+    }
+    clock.start();
+    paintClock(SOLVE_SECONDS * 1000);
+  }
+
+  function typeLetter(ch) {
+    if (state.phase !== 'solve') return;
+    const room = blanks().length;
+    if (state.typed.length >= room) return;
+    state.typed += ch;
+    render();
+    // The last blank ends it there and then — no review, no second thoughts.
+    if (state.typed.length === room) finishSolve(isRight());
+  }
+
+  function unType() {
+    if (state.phase !== 'solve' || !state.typed) return;
+    state.typed = state.typed.slice(0, -1);
     render();
   }
 
-  function doGotIt() {
-    if (state.phase !== 'judge') return;
+  function isRight() {
+    const text = state.answer.toUpperCase();
+    return blanks().every((at, k) => state.typed[k] === text[at]);
+  }
+
+  function finishSolve(right) {
+    clock.stop();
+    if (!right) {
+      state.typed = '';
+      endTurn(name(state.current) + ' did not have it.');
+      return;
+    }
+    state.typed = '';
+    bankPuzzle();
+  }
+
+  function outOfTime() {
+    if (state.phase !== 'solve') return;
+    state.typed = '';
+    endTurn('Out of time.');
+  }
+
+  function bankPuzzle() {
     state.banks[state.current] += state.roundMoney;
     state.message = name(state.current) + ' solved it for ' + money(state.roundMoney);
     state.roundMoney = 0;
@@ -314,6 +393,7 @@
     state.category = puzzle.category;
     state.used = state.used.concat([puzzle.answer]).slice(-REMEMBER);
     state.called = '';
+    state.typed = '';
     state.roundMoney = 0;
     // The solver has had their turn, so the next puzzle opens on the seat
     // after them rather than handing them a second start.
@@ -327,6 +407,7 @@
 
   function startGame(players, puzzles, names) {
     stopSpin();
+    clock.stop();
     const keep = state ? state.used : [];
     state = freshGame(
       players === undefined ? state.players : players,
@@ -339,6 +420,29 @@
     document.body.dataset.phase = state.phase;
     save();
     render();
+  }
+
+  /* ---- the solve clock ------------------------------------------------ */
+
+  /*
+   * Timer paints mm:ss, which reads wrong for ten seconds — so the element
+   * is left off and the digits are painted from onTick instead. The library
+   * is still worth having: it derives the time left from a timestamp rather
+   * than counting a variable down, so a phone that throttles the tab comes
+   * back with the right answer. See js/lib/timer.js.
+   */
+  const clock = Timer.create(null, {
+    seconds: SOLVE_SECONDS,
+    onTick: paintClock,
+    onEnd: outOfTime
+  });
+
+  function paintClock(left) {
+    if (!el.clock) return;
+    const secs = Math.max(0, Math.ceil(left / 1000));
+    el.clock.textContent = String(secs);
+    if (secs <= 3) el.clock.dataset.low = '';
+    else delete el.clock.dataset.low;
   }
 
   /* ---- the reel ------------------------------------------------------- */
@@ -418,9 +522,27 @@
         key.type = 'button';
         key.dataset.letter = ch;
         key.textContent = ch;
-        key.addEventListener('click', () => doPick(ch));
+        // One keyboard, two jobs: calling a letter, and typing an answer.
+        key.addEventListener('click', () => {
+          if (state.phase === 'solve') typeLetter(ch);
+          else doPick(ch);
+        });
         keyNodes[ch] = key;
         line.append(key);
+      }
+      // The backspace rides in the bottom row rather than a fourth one, so
+      // the keyboard is the same height whichever job it is doing and the
+      // board never moves under it.
+      if (row === KEY_ROWS[KEY_ROWS.length - 1]) {
+        const back = document.createElement('button');
+        back.className = 'key';
+        back.type = 'button';
+        back.dataset.letter = BACKSPACE;
+        back.textContent = BACKSPACE;
+        back.setAttribute('aria-label', 'Rub out the last letter');
+        back.addEventListener('click', unType);
+        keyNodes[BACKSPACE] = back;
+        line.append(back);
       }
       el.keys.append(line);
     }
@@ -535,6 +657,9 @@
     if (!el.board) return;
     el.board.textContent = '';
     const show = state.phase === 'over' || state.phase === 'solved' || solved();
+    // Blanks are numbered left to right across the whole board, because that
+    // is the order a solve fills them in.
+    let blank = -1;
     for (const word of state.answer.toUpperCase().split(/\s+/)) {
       if (!word) continue;
       const group = document.createElement('div');
@@ -544,10 +669,17 @@
         tile.className = 'tile';
         const letter = /[A-Z]/.test(ch);
         const seen = !letter || called(ch) || show;
+        if (letter && !seen) blank += 1;
+        const guess = !seen && letter ? state.typed[blank] : '';
         if (seen) tile.dataset.shown = '';
         if (seen && ch === justCalled) tile.dataset.fresh = '';
+        if (guess) tile.dataset.typed = '';
+        // The blank about to be filled, so a typed letter has somewhere
+        // obvious to land.
+        if (!seen && letter && state.phase === 'solve'
+          && blank === state.typed.length) tile.dataset.next = '';
         tile.dataset.letter = letter ? ch : '';
-        tile.textContent = seen ? ch : '';
+        tile.textContent = seen ? ch : (guess || '');
         group.append(tile);
       }
       el.board.append(group);
@@ -577,11 +709,26 @@
   }
 
   function renderKeys() {
+    const solving = state.phase === 'solve';
+    const room = solving ? blanks().length : 0;
     for (const ch of Object.keys(keyNodes)) {
       const key = keyNodes[ch];
+      if (ch === BACKSPACE) {
+        key.disabled = !solving || !state.typed;
+        continue;
+      }
       const used = called(ch);
       if (used) key.dataset.used = '';
       else delete key.dataset.used;
+      if (solving) {
+        // A letter already called cannot be in a blank — the board would be
+        // showing it. Killing the key spends no information the player does
+        // not already have, and ten seconds is not long enough to waste a
+        // tap on it.
+        key.disabled = used || state.typed.length >= room;
+        key.setAttribute('aria-label', ch + (used ? ', already on the board' : ''));
+        continue;
+      }
       key.disabled = state.phase !== 'pick' || used || isVowel(ch);
       key.setAttribute('aria-label',
         ch + (used ? ', already called' : isVowel(ch) ? ', vowels must be bought' : ''));
@@ -607,9 +754,10 @@
       } else if (state.message) el.spinHint.textContent = state.message;
       else el.spinHint.textContent = 'Spin for what a consonant pays.';
     }
-    if (el.pickHint) {
-      el.pickHint.textContent = 'Call a consonant — each one pays '
-        + money(WHEEL[state.wedge] || 0) + '.';
+    if (el.keyHint) {
+      el.keyHint.textContent = state.phase === 'solve'
+        ? 'Fill in the blanks —'
+        : 'Call a consonant — each one pays ' + money(WHEEL[state.wedge] || 0) + '.';
     }
     if (el.passNote) {
       el.passNote.textContent = (state.message ? state.message + ' ' : '')
@@ -665,11 +813,6 @@
     setPhase('spin');
     save();
     render();
-  });
-  on(el.gotIt, 'click', doGotIt);
-  on(el.missed, 'click', () => {
-    if (state.phase !== 'judge') return;
-    endTurn(name(state.current) + ' missed it.');
   });
   on(el.ready, 'click', doReady);
   on(el.nextPuzzle, 'click', doNextPuzzle);
