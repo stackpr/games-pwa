@@ -30,15 +30,72 @@ specs carries the trademarked name, and nothing should start to.
 
 ### Scoring
 
-| Word | Points |
+Three parts added together:
+
+| Part | Points |
 | --- | --- |
-| Four letters | 1 |
-| Five or more | 1 per letter |
-| Uses all seven letters | +7 on top — a pangram |
+| Each letter used | its Scrabble value — `a`/`e` 1, `k` 5, `q`/`z` 10 |
+| Length | `(n − 3)²` — 1, 4, 9, 16, 25, 36 at 4–9 letters |
+| All seven letters | +10 — a pangram |
+
+Worked examples: `ache` = 9 + 1 = **10**. `cheat` = 10 + 4 = **14**.
+`cheetah` = 15 + 16 = **31**. `checkmate` = 22 + 36 + 10 = **68**.
+
+**Why these two halves.** Letter values alone would score a four-letter
+word the same as a nine-letter one built from the same letters, and length
+alone would say `entire` and `jinxed` are equally hard. Together each one
+owns a range: the length bonus is 1 at the floor, so a short word is scored
+almost entirely on how awkward its letters are, and it reaches 36 by nine
+letters, so a long word is scored almost entirely on its length. `quiz` (23)
+beats `entire` (15) despite being shorter; `entertain` (45) beats `quiz`
+despite being made of ones.
+
+**Why squared.** It had to climb fast enough that a long word feels like the
+prize — linear growth barely separated a six from a nine once letter values
+were in play — without the runaway of doubling per letter, which would make
+one lucky nine-letter word worth more than a whole good game. Squaring is
+also the version a player can hold in their head: 1, 4, 9, 16.
+
+**Why Scrabble's numbers** rather than a scale of our own: it is the letter
+scale English speakers already know, so `z` being worth 10 needs no
+explanation. The letters are drawn at random here, which makes the values
+matter more than they would with hand-built hives — a hive holding a `k`
+and a `w` is a different proposition from one holding `n` and `r`, and the
+scoring is what says so out loud.
+
+Every letter counts each time it is used, `hatchet`'s two `h`s included.
+That is the Scrabble reading and it needs no caveat in the rules; it does
+mean length is paid for twice, once through the letters and once through
+the bonus, which is deliberate — long words should feel like the prize.
+
+**Every tile shows its own value.** Hidden letter values would make "spell
+with the awkward letters" a rule you could only learn by losing. See The
+tiles.
 
 With the whole language in play rather than a curated answer list, there is
 no ceiling to quote and no such thing as a perfect game. The clock is what
 bounds a round, which is why the limit is a setting rather than a constant.
+
+`wordScore()` clamps the length reach at zero. Nothing below four letters
+reaches it — `submit()` rejects those first — but an unclamped `(n − 3)²`
+pays a *bonus* for being too short, which is the kind of thing that only
+shows up once the function is reused somewhere else.
+
+### The tiles
+
+Each hexagon carries its letter and, small and baseline-aligned beside it,
+that letter's value — the Scrabble tile arrangement, for the same reason
+Scrabble uses it.
+
+Two things follow from putting a second thing inside the button:
+
+- **The letter lives in `data-letter`, not just the markup.** A tap used to
+  read `hex.textContent`, which now ends in a digit. Reading the attribute
+  is what keeps `k5` from being typed as two characters.
+- **`paintHive()` falls back to plain text** when it finds no
+  `.hex-letter` span inside the cell. That is the neighbouring-release case
+  from CLAUDE.md: a client can load this release's script against the last
+  one's markup, and a hive with no values beats a blank game.
 
 ## The clock
 

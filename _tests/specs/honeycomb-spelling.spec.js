@@ -60,9 +60,18 @@ async function play(page, opts = {}) {
  */
 function hive(page) {
   return page.evaluate(() => ({
-    centre: document.querySelector('.hex[data-pos="c"]').textContent,
-    letters: [...document.querySelectorAll('.hex')].map(e => e.textContent),
+    centre: document.querySelector('.hex[data-pos="c"]').dataset.letter,
+    letters: [...document.querySelectorAll('.hex')].map(e => e.dataset.letter),
   }));
+}
+
+/**
+ * What the game says a word is worth. Letter values mean a guess built from
+ * whatever letters were dealt has no score known ahead of time, so the wiring
+ * tests ask; `the scoring` below pins the table itself against real words.
+ */
+function points(page, word) {
+  return page.evaluate(w => window.HoneycombHive.score(w), word);
 }
 
 async function guess(page, word) {
@@ -127,7 +136,7 @@ test.describe('the letters', () => {
     const { centre, letters } = await hive(page);
     expect(new Set(letters).size).toBe(7);
     expect(letters).toContain(centre);
-    await expect(page.locator('.hex[data-pos="c"]')).toHaveText(centre);
+    await expect(page.locator('.hex[data-pos="c"]')).toHaveAttribute('data-letter', centre);
   });
 
   test('a fresh draw every game, holding to the rules each time', async ({ page }) => {
@@ -215,7 +224,7 @@ test.describe('the letters', () => {
     await play(page);
     const { letters } = await hive(page);
     for (const ch of letters.slice(0, 4)) {
-      await page.locator('.hex', { hasText: new RegExp('^' + ch + '$') }).click();
+      await page.locator('.hex[data-letter="' + ch + '"]').click();
     }
     await expect(page.locator('#typed')).toHaveText(letters.slice(0, 4).join(''));
     await page.locator('#delete').click();
@@ -235,7 +244,7 @@ test.describe('the letters', () => {
     await play(page);
     const { centre } = await hive(page);
     const outer = () => page.locator('.hex:not([data-pos="c"])')
-      .evaluateAll(els => els.map(e => e.textContent));
+      .evaluateAll(els => els.map(e => e.dataset.letter));
     const before = await outer();
     // A shuffle can land back where it started, so try until it moves.
     let after = before;
@@ -245,32 +254,50 @@ test.describe('the letters', () => {
     }
     expect(after.join('')).not.toBe(before.join(''));
     expect(after.slice().sort()).toEqual(before.slice().sort());
-    await expect(page.locator('.hex[data-pos="c"]')).toHaveText(centre);
+    await expect(page.locator('.hex[data-pos="c"]')).toHaveAttribute('data-letter', centre);
   });
 });
 
 test.describe('scoring a word', () => {
-  test('four letters is one point, longer is a point a letter', async ({ page }) => {
+  test('a word scores its letters plus its length', async ({ page }) => {
     await play(page);
     const { centre } = await hive(page);
+    const four = await points(page, centre.repeat(4));
+    const five = await points(page, centre.repeat(5));
+
     await guess(page, centre.repeat(4));
-    await expect(page.locator('#score')).toHaveText('1');
-    await expect(page.locator('#flash')).toHaveText('+1');
+    await expect(page.locator('#score')).toHaveText(String(four));
+    await expect(page.locator('#flash')).toHaveText('+' + four);
 
     await guess(page, centre.repeat(5));
-    await expect(page.locator('#score')).toHaveText('6');
-    await expect(page.locator('#flash')).toHaveText('+5');
+    await expect(page.locator('#score')).toHaveText(String(four + five));
+    await expect(page.locator('#flash')).toHaveText('+' + five);
     await expect(page.locator('#count')).toHaveText('2');
+    // One more of the same letter: another letter value, and the length
+    // bonus jumping 1 -> 4.
+    expect(five - four).toBe(await points(page, centre) + 3);
+    expect(four).toBe(await points(page, centre) * 4 + 1);
   });
 
-  test('a pangram is worth its letters plus seven', async ({ page }) => {
+  test('a pangram is worth its letters, its length and ten', async ({ page }) => {
     await play(page);
     const { letters } = await hive(page);
     const pangram = letters.join('');
+    const worth = await points(page, pangram);
     await guess(page, pangram);
-    await expect(page.locator('#flash')).toHaveText('Pangram! +14');
-    await expect(page.locator('#score')).toHaveText('14');
+    await expect(page.locator('#flash')).toHaveText('Pangram! +' + worth);
+    await expect(page.locator('#score')).toHaveText(String(worth));
     await expect(page.locator('#found .word[data-pangram]')).toHaveText(pangram);
+
+    // Seven letters, so 16 for the length and 10 for the pangram on top of
+    // whatever the letters themselves are worth.
+    const bare = await page.evaluate(l => {
+      const v = { a: 1, b: 3, c: 3, d: 2, e: 1, f: 4, g: 2, h: 4, i: 1, j: 8, k: 5,
+        l: 1, m: 3, n: 1, o: 1, p: 3, q: 10, r: 1, s: 1, t: 1, u: 1, v: 4, w: 4,
+        x: 8, y: 4, z: 10 };
+      return l.reduce((sum, ch) => sum + v[ch], 0);
+    }, letters);
+    expect(worth).toBe(bare + 16 + 10);
   });
 
   test('found words stack up newest first', async ({ page }) => {
@@ -286,7 +313,7 @@ test.describe('scoring a word', () => {
     await play(page);
     const { centre, letters } = await hive(page);
     await guess(page, centre.repeat(4));
-    await expect(page.locator('#flash')).toHaveText('+1');
+    await expect(page.locator('#flash')).toHaveText('+' + await points(page, centre.repeat(4)));
     await page.keyboard.type(letters[0]);
     // Both share one line, so the flash has to go before the word arrives.
     await expect(page.locator('#flash')).not.toHaveAttribute('data-show', '');
@@ -300,6 +327,89 @@ test.describe('scoring a word', () => {
     await expect(page.locator('#typed')).toHaveText('');
     await guess(page, centre.repeat(4));
     await expect(page.locator('#typed')).toHaveText('');
+  });
+});
+
+test.describe('the scoring', () => {
+  // Real words with the arithmetic written out, so a change to the table or
+  // the curve has to be deliberate. Letters + (length - 3)^2 + 10 a pangram.
+  const cases = [
+    { word: 'ache', sum: 9, len: 1, pangram: 0 },      // a1 c3 h4 e1
+    { word: 'cheat', sum: 10, len: 4, pangram: 0 },    // c3 h4 e1 a1 t1
+    { word: 'cheetah', sum: 15, len: 16, pangram: 0 }, // c3 h4 e1 e1 t1 a1 h4
+    { word: 'checkmate', sum: 22, len: 36, pangram: 10 },
+    { word: 'quiz', sum: 22, len: 1, pangram: 0 },     // q10 u1 i1 z10
+    { word: 'jinx', sum: 18, len: 1, pangram: 0 },     // j8 i1 n1 x8
+    { word: 'entire', sum: 6, len: 9, pangram: 0 },    // all ones
+  ];
+
+  for (const { word, sum, len, pangram } of cases) {
+    test(`${word} is worth ${sum + len + pangram}`, async ({ page }) => {
+      expect(await points(page, word)).toBe(sum + len + pangram);
+    });
+  }
+
+  test('awkward letters beat easy ones at the same length', async ({ page }) => {
+    // Same four letters of length, wildly different to spell with.
+    expect(await points(page, 'quiz')).toBeGreaterThan(await points(page, 'entire'));
+  });
+
+  test('length overtakes letter values once a word gets long', async ({ page }) => {
+    // The whole point of squaring: four awkward letters lose to nine easy
+    // ones, which is not true of the letter values on their own.
+    expect(await points(page, 'entertain')).toBeGreaterThan(await points(page, 'quiz'));
+  });
+
+  test('the length bonus is the square of the reach past three', async ({ page }) => {
+    // Same letter throughout, so only the curve moves.
+    const run = [];
+    for (let n = 4; n <= 9; n++) run.push(await points(page, 'e'.repeat(n)));
+    // 'e' is worth 1, so each score is n + (n - 3)^2.
+    expect(run).toEqual([5, 9, 15, 23, 33, 45]);
+  });
+
+  test('the pangram bonus is exactly ten', async ({ page }) => {
+    // Seven letters either way, so the length bonus cancels. One uses all
+    // seven distinct; the other repeats a b instead of reaching for the w.
+    const pangram = await points(page, 'bathesw');
+    const notQuite = await points(page, 'bathesb');
+    // w is worth 4 and b is worth 3, so the letters differ by one on top.
+    expect(pangram - notQuite).toBe(10 + 1);
+  });
+});
+
+test.describe('the tiles', () => {
+  test('every tile shows its own letter value', async ({ page }) => {
+    await play(page);
+    const shown = await page.locator('.hex').evaluateAll(els => els.map(e => ({
+      letter: e.dataset.letter,
+      value: e.querySelector('.hex-value').textContent,
+      label: e.getAttribute('aria-label'),
+    })));
+
+    expect(shown).toHaveLength(7);
+    for (const { letter, value, label } of shown) {
+      // The value on the tile is the value the scorer uses — a tile that lied
+      // would be worse than one that said nothing.
+      expect(Number(value), letter).toBe(await points(page, letter));
+      expect(label, letter).toContain('worth ' + value);
+    }
+  });
+
+  test('the middle tile says it is the middle one', async ({ page }) => {
+    await play(page);
+    const { centre } = await hive(page);
+    const label = await page.locator('.hex[data-pos="c"]').getAttribute('aria-label');
+    const value = await points(page, centre);
+    expect(label).toBe(centre + ', worth ' + value + ', the middle letter');
+  });
+
+  test('the value never leaks into the word being typed', async ({ page }) => {
+    await play(page);
+    const { letters } = await hive(page);
+    await page.locator('.hex[data-letter="' + letters[0] + '"]').click();
+    // Tapping reads data-letter, not the tile's text, which now holds a digit.
+    await expect(page.locator('#typed')).toHaveText(letters[0]);
   });
 });
 
@@ -339,8 +449,8 @@ test.describe('the dictionary', () => {
     await expect(page.locator('#score')).toHaveText('0');
 
     release();
-    await expect(page.locator('#flash')).toHaveText('+1');
-    await expect(page.locator('#score')).toHaveText('1');
+    await expect(page.locator('#flash')).toHaveText('+' + await points(page, word));
+    await expect(page.locator('#score')).toHaveText(String(await points(page, word)));
   });
 
   test('the same word sent twice over only asks once', async ({ page }) => {
@@ -363,7 +473,7 @@ test.describe('the dictionary', () => {
     await expect(page.locator('#flash')).toHaveText('Checking ' + word);
     await guess(page, word);
     release();
-    await expect(page.locator('#score')).toHaveText('1');
+    await expect(page.locator('#score')).toHaveText(String(await points(page, word)));
     expect(asked).toBe(1);
     await expect(page.locator('#found .word')).toHaveCount(1);
   });
@@ -416,7 +526,7 @@ test.describe('the dictionary', () => {
       await page.unroute(API);
       await dictionary(page);
       await guess(page, word);
-      await expect(page.locator('#score')).toHaveText('1');
+      await expect(page.locator('#score')).toHaveText(String(await points(page, word)));
     });
   }
 });
@@ -452,11 +562,12 @@ test.describe('a word that does not count', () => {
   test('the same word twice only scores once', async ({ page }) => {
     await play(page);
     const { centre } = await hive(page);
+    const worth = await points(page, centre.repeat(4));
     await guess(page, centre.repeat(4));
-    await expect(page.locator('#score')).toHaveText('1');
+    await expect(page.locator('#score')).toHaveText(String(worth));
     await guess(page, centre.repeat(4));
     await expect(page.locator('#flash')).toHaveText('Already found');
-    await expect(page.locator('#score')).toHaveText('1');
+    await expect(page.locator('#score')).toHaveText(String(worth));
     await expect(page.locator('#found .word')).toHaveCount(1);
   });
 
@@ -475,6 +586,7 @@ test.describe('finishing', () => {
     await play(page);
     const { centre, letters } = await hive(page);
     const pangram = letters.join('');
+    const total = await points(page, centre.repeat(4)) + await points(page, pangram);
     await guess(page, centre.repeat(4));
     await expect(page.locator('#count')).toHaveText('1');
     await guess(page, pangram);
@@ -483,7 +595,7 @@ test.describe('finishing', () => {
 
     await expect(page.locator('#over')).toHaveAttribute('data-open', '');
     await expect(page.locator('#over-title')).toHaveText('Done');
-    await expect(page.locator('#final-score')).toHaveText('15');
+    await expect(page.locator('#final-score')).toHaveText(String(total));
     await expect(page.locator('#final-count')).toHaveText('2');
     await expect(page.locator('#final-longest')).toHaveText(pangram);
   });
@@ -504,14 +616,15 @@ test.describe('finishing', () => {
   test('a first result is a new best, and lands on the board', async ({ page }) => {
     await play(page);
     const { centre } = await hive(page);
+    const worth = await points(page, centre.repeat(5));
     await guess(page, centre.repeat(5));
-    await expect(page.locator('#score')).toHaveText('5');
+    await expect(page.locator('#score')).toHaveText(String(worth));
     await page.locator('#new').click();
 
     await expect(page.locator('#over-badge')).toHaveText('Best yet at 3:00');
     const row = page.locator('#over-board-rows tr');
     await expect(row).toHaveCount(1);
-    await expect(row.locator('.pts')).toHaveText('5');
+    await expect(row.locator('.pts')).toHaveText(String(worth));
     await expect(row.locator('.longest')).toHaveText(centre.repeat(5));
     await expect(row).toHaveAttribute('data-fresh', '');
   });
@@ -578,14 +691,15 @@ test.describe('the top-score boards', () => {
     await play(page);
     const { letters } = await hive(page);
     const pangram = letters.join('');
+    const worth = await points(page, pangram);
     await guess(page, pangram);
-    await expect(page.locator('#score')).toHaveText('14');
+    await expect(page.locator('#score')).toHaveText(String(worth));
     await page.locator('#new').click();
     await page.reload();
 
     const row = page.locator('#board-rows tr');
     await expect(row).toHaveCount(1);
-    await expect(row.locator('.pts')).toHaveText('14');
+    await expect(row.locator('.pts')).toHaveText(String(worth));
     await expect(row.locator('.longest')).toHaveText(pangram);
     await expect(page.locator('#board-empty')).toBeHidden();
   });
@@ -616,13 +730,16 @@ test.describe('the top-score boards', () => {
       },
     });
     const { letters } = await hive(page);
+    const worth = await points(page, letters.join(''));
     await guess(page, letters.join(''));
-    await expect(page.locator('#score')).toHaveText('14');
+    await expect(page.locator('#score')).toHaveText(String(worth));
     await page.locator('#new').click();
 
-    await expect(page.locator('#over-board-rows .pts')).toHaveText(['400', '14']);
+    // 400 is out of reach of one word, so the seeded best keeps the top slot.
+    expect(worth).toBeLessThan(400);
+    await expect(page.locator('#over-board-rows .pts')).toHaveText(['400', String(worth)]);
     await expect(page.locator('#over-badge')).toBeHidden();
-    await expect(page.locator('#over-board-rows tr[data-fresh] .pts')).toHaveText('14');
+    await expect(page.locator('#over-board-rows tr[data-fresh] .pts')).toHaveText(String(worth));
     expect((await saved(page)).scores['600'].length).toBe(1);
   });
 
@@ -634,11 +751,15 @@ test.describe('the top-score boards', () => {
       },
     });
     const { letters } = await hive(page);
+    const worth = await points(page, letters.join(''));
     await guess(page, letters.join(''));
-    await expect(page.locator('#score')).toHaveText('14');
+    await expect(page.locator('#score')).toHaveText(String(worth));
     await page.locator('#new').click();
 
-    await expect(page.locator('#over-board-rows .pts')).toHaveText(['14', '5', '4', '3', '2']);
+    // A pangram clears 5 in any hive, so the new score takes the top slot.
+    expect(worth).toBeGreaterThan(5);
+    await expect(page.locator('#over-board-rows .pts'))
+      .toHaveText([String(worth), '5', '4', '3', '2']);
     await expect(page.locator('#over-badge')).toHaveText('Best yet at 3:00');
     expect((await saved(page)).scores['180'].length).toBe(5);
   });
@@ -661,15 +782,16 @@ test.describe('the clock', () => {
   test('running out ends the game and records the score', async ({ page }) => {
     await play(page, { limit: 60 });
     const { centre } = await hive(page);
+    const worth = await points(page, centre.repeat(7));
     await guess(page, centre.repeat(7));
-    await expect(page.locator('#score')).toHaveText('7');
+    await expect(page.locator('#score')).toHaveText(String(worth));
     await page.clock.runFor(61000);
 
     await expect(page.locator('#over')).toHaveAttribute('data-open', '');
     await expect(page.locator('#over-title')).toHaveText('Time!');
-    await expect(page.locator('#final-score')).toHaveText('7');
+    await expect(page.locator('#final-score')).toHaveText(String(worth));
     await expect(page.locator('#final-longest')).toHaveText(centre.repeat(7));
-    await expect(page.locator('#over-board-rows .pts')).toHaveText(['7']);
+    await expect(page.locator('#over-board-rows .pts')).toHaveText([String(worth)]);
     // The stopped clock shows the limit again, not a red 0:00.
     await expect(page.locator('#clock')).toHaveText('1:00');
     await expect(page.locator('#clock')).not.toHaveAttribute('data-low', '');

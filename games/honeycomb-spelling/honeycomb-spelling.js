@@ -11,6 +11,7 @@
   const TOP_N = 5;
   const RING = ['n', 'ne', 'se', 's', 'sw', 'nw'];
   const FLASH_MS = 1100;
+  const MIN_LENGTH = 4;
 
   function pick(id, tag) {
     const node = document.getElementById(id);
@@ -113,11 +114,27 @@
     return d.toLocaleDateString('en', { month: 'short', day: 'numeric' });
   }
 
+  // Scrabble's letter values, which is the point: they are a scale players
+  // already know, and every tile shows its own. See _README.md.
+  const SCRABBLE = {
+    a: 1, b: 3, c: 3, d: 2, e: 1, f: 4, g: 2, h: 4, i: 1, j: 8, k: 5, l: 1,
+    m: 3, n: 1, o: 1, p: 3, q: 10, r: 1, s: 1, t: 1, u: 1, v: 4, w: 4, x: 8,
+    y: 4, z: 10
+  };
+  const PANGRAM_BONUS = 10;
+
+  // Letters + length + pangram. Length is squared from the four-letter floor,
+  // so it is worth almost nothing on a short word and carries a long one —
+  // which leaves each half a range where it decides the score.
   function wordScore(word) {
-    // Four letters is the floor and scores one; after that a letter is a
-    // point, and using all seven is worth another seven.
-    const base = word.length === 4 ? 1 : word.length;
-    return base + (new Set(word).size === 7 ? 7 : 0);
+    let letters = 0;
+    for (const ch of word) letters += SCRABBLE[ch] || 0;
+    // Clamped so a word below the floor is worth its letters and nothing
+    // more. submit() rejects those before they get here, but squaring a
+    // negative reach would quietly pay a bonus for being too short.
+    const reach = Math.max(0, word.length - MIN_LENGTH + 1);
+    const pangram = new Set(word).size === HIVE_SIZE ? PANGRAM_BONUS : 0;
+    return letters + reach * reach + pangram;
   }
 
   // --- the hive ------------------------------------------------------------
@@ -188,7 +205,9 @@
   // The draw is pure, and the specs sample it many thousands of times to
   // check the vowel floor and the q/u rule — neither is reachable by playing
   // games at the rate a q turns up. See _README.md.
-  window.HoneycombHive = { next: newHive };
+  // `score` is here for the same reason: the table is worth asserting on real
+  // words, which random letters cannot be relied on to produce.
+  window.HoneycombHive = { next: newHive, score: wordScore };
 
   // --- the dictionary ------------------------------------------------------
 
@@ -229,12 +248,27 @@
     const cells = el.hive.querySelectorAll('.hex');
     for (const cell of cells) {
       const pos = cell.dataset.pos;
-      if (!game) { cell.textContent = ''; continue; }
-      const letter = pos === 'c' ? game.hive.centre : game.ring[RING.indexOf(pos)];
-      cell.textContent = letter || '';
-      cell.setAttribute('aria-label', pos === 'c'
-        ? (letter || '') + ', the middle letter'
-        : (letter || ''));
+      const letter = !game ? ''
+        : (pos === 'c' ? game.hive.centre : game.ring[RING.indexOf(pos)]) || '';
+      // The letter lives in the attribute as well as the markup, so a tap
+      // reads it without having to strip the value back off again.
+      cell.dataset.letter = letter;
+
+      const letterNode = cell.querySelector('.hex-letter');
+      const valueNode = cell.querySelector('.hex-value');
+      if (letterNode) {
+        letterNode.textContent = letter;
+        if (valueNode) valueNode.textContent = letter ? String(SCRABBLE[letter]) : '';
+      } else {
+        // Markup from the neighbouring release has no spans inside the hex.
+        // A hive with no values beats a blank game — see CLAUDE.md.
+        cell.textContent = letter;
+      }
+
+      const value = letter ? ', worth ' + SCRABBLE[letter] : '';
+      cell.setAttribute('aria-label', letter
+        ? letter + value + (pos === 'c' ? ', the middle letter' : '')
+        : '');
     }
   }
 
@@ -298,7 +332,7 @@
     paintTyped();
     if (!word) return;
 
-    if (word.length < 4) return flash('Too short', 'bad');
+    if (word.length < MIN_LENGTH) return flash('Too short', 'bad');
     if (word.indexOf(game.hive.centre) === -1) {
       return flash('Missing ' + game.hive.centre.toUpperCase(), 'bad');
     }
@@ -322,7 +356,7 @@
 
   function accept(word) {
     const points = wordScore(word);
-    const pangram = new Set(word).size === 7;
+    const pangram = new Set(word).size === HIVE_SIZE;
     game.found.unshift(word);
     game.score += points;
     if (word.length > game.longest.length) game.longest = word;
@@ -349,7 +383,7 @@
       const chip = document.createElement('span');
       chip.className = 'word';
       chip.textContent = word;
-      if (new Set(word).size === 7) chip.dataset.pangram = '';
+      if (new Set(word).size === HIVE_SIZE) chip.dataset.pangram = '';
       el.found.append(chip);
     }
   }
@@ -503,7 +537,7 @@
 
   on(el.hive, 'click', event => {
     const hex = event.target.closest ? event.target.closest('.hex') : null;
-    if (hex) typeLetter(hex.textContent.trim());
+    if (hex) typeLetter(hex.dataset.letter || hex.textContent.trim());
   });
   on(el.del, 'click', backspace);
   on(el.enter, 'click', submit);

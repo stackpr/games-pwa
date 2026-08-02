@@ -195,6 +195,21 @@
       text-transform: uppercase;
       cursor: pointer;
       touch-action: manipulation;
+      /* Baseline-aligned so the value sits at the foot of the letter, the way
+         it does on a Scrabble tile. The pair is centred as one unit. */
+      display: flex;
+      align-items: baseline;
+      justify-content: center;
+      gap: 0.06em;
+    }
+    /* Small enough to read as an annotation rather than a second letter, and
+       nudged in from the clipped corner so the hexagon never cuts it. */
+    .hex-value {
+      font-size: 0.36em;
+      font-weight: 700;
+      opacity: 0.7;
+      font-variant-numeric: tabular-nums;
+      text-transform: none;
     }
     .hive { container-type: inline-size; }
     .hex:active { filter: brightness(1.35); }
@@ -411,13 +426,13 @@
 
     <main class="stage">
       <div class="hive" id="hive">
-        <button class="hex" type="button" data-pos="nw"></button>
-        <button class="hex" type="button" data-pos="n"></button>
-        <button class="hex" type="button" data-pos="ne"></button>
-        <button class="hex" type="button" data-pos="c"></button>
-        <button class="hex" type="button" data-pos="sw"></button>
-        <button class="hex" type="button" data-pos="s"></button>
-        <button class="hex" type="button" data-pos="se"></button>
+        <button class="hex" type="button" data-pos="nw"><span class="hex-letter"></span><span class="hex-value"></span></button>
+        <button class="hex" type="button" data-pos="n"><span class="hex-letter"></span><span class="hex-value"></span></button>
+        <button class="hex" type="button" data-pos="ne"><span class="hex-letter"></span><span class="hex-value"></span></button>
+        <button class="hex" type="button" data-pos="c"><span class="hex-letter"></span><span class="hex-value"></span></button>
+        <button class="hex" type="button" data-pos="sw"><span class="hex-letter"></span><span class="hex-value"></span></button>
+        <button class="hex" type="button" data-pos="s"><span class="hex-letter"></span><span class="hex-value"></span></button>
+        <button class="hex" type="button" data-pos="se"><span class="hex-letter"></span><span class="hex-value"></span></button>
       </div>
     </main>
 
@@ -509,10 +524,16 @@
       </ul>
       <h3 class="rules-sub">Scoring</h3>
       <table class="score-table">
-        <tr><td>Four letters</td><td>1 point</td></tr>
-        <tr><td>Five or more</td><td>1 point per letter</td></tr>
-        <tr><td>All seven letters</td><td>plus 7 &mdash; a pangram</td></tr>
+        <tr><td>Each letter</td><td>its value, shown on the tile</td></tr>
+        <tr><td>Length</td><td>1, 4, 9, 16, 25&hellip; at 4, 5, 6, 7, 8 letters</td></tr>
+        <tr><td>All seven letters</td><td>plus 10 &mdash; a pangram</td></tr>
       </table>
+      <p class="rules-note">
+        Letter values are the familiar ones &mdash; <em>e</em> and <em>a</em>
+        are worth 1, <em>k</em> is 5, <em>q</em> and <em>z</em> are 10. So a
+        short word made of awkward letters can beat a longer easy one, while
+        length wins outright once a word gets really long.
+      </p>
       <h3 class="rules-sub">The clock</h3>
       <ul class="rules-list">
         <li>Pick a limit before you start. A short game is a different game, so
