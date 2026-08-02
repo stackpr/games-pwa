@@ -134,6 +134,15 @@ changed.
   `CLAUDE.md`.
 - A crossed cell keeps its number readable under the X and dims to 50%,
   because checking a sheet means reading which numbers are gone.
+- **Three states, three looks.** A number you crossed keeps its colour and
+  wears an X. A number you *skipped past* — anything left of your last
+  cross — goes grey with no X, because nobody marked it and pretending
+  otherwise misreads the sheet. Everything still in play stays bright. The
+  difference matters most in the idle state, where the sheet is otherwise
+  wide open and there is nothing else to say which end of a row is live.
+- **The dice grey out between your turns.** They belong to whoever is
+  rolling, and from your Done to your next Roll that is not you. It is the
+  same signal as the sheet's greyed cells: dimmed means not yours.
 - What the current roll allows is marked with an inset white ring, the same
   marker the rest of the site uses, and everything else on the sheet is
   both dimmed and `disabled` — so an illegal tap is impossible rather than
