@@ -118,6 +118,13 @@ const GAMES = [
     path: 'games/honeycomb-3-bees/'
   },
   {
+    name: 'Spin Words',
+    section: 'group',
+    description: 'Spin, call a letter, solve the puzzle',
+    emoji: '\u{1F504}',
+    path: 'games/spin-words/'
+  },
+  {
     name: 'Quik Dice',
     section: 'group',
     description: 'Cross off numbers in four colours',

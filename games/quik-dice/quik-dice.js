@@ -428,17 +428,21 @@
       if (state.closed[r]) rowNode.dataset.closed = '';
       else delete rowNode.dataset.closed;
 
+      const behind = lastMarked(r);
       row.numbers.forEach((n, i) => {
         const cell = cells[r][i];
         const marked = state.rows[r][i];
         if (marked) cell.dataset.marked = '';
         else delete cell.dataset.marked;
+        // Skipped past rather than taken: grey, but not crossed off.
+        if (!marked && i < behind) cell.dataset.dead = '';
+        else delete cell.dataset.dead;
         const isTarget = open.has(r + ':' + i);
         if (isTarget) cell.dataset.target = '';
         else delete cell.dataset.target;
         cell.disabled = !isTarget;
-        cell.setAttribute('aria-label',
-          row.label + ' ' + n + (marked ? ', crossed off' : ''));
+        cell.setAttribute('aria-label', row.label + ' ' + n
+          + (marked ? ', crossed off' : (!marked && i < behind ? ', passed' : '')));
       });
 
       const lock = lockCells[r];

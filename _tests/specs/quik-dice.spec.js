@@ -102,6 +102,19 @@ test.describe("someone else's turn", () => {
     await expect(total(page)).toHaveText('1');
   });
 
+  test('numbers skipped past are greyed, not crossed', async ({ page }) => {
+    await cell(page, 'red', 7).click();
+    // Passed over, so gone — but nobody marked them, so no X.
+    for (const n of [2, 3, 4, 5, 6]) {
+      await expect(cell(page, 'red', n)).toHaveAttribute('data-dead', '');
+      await expect(cell(page, 'red', n)).not.toHaveAttribute('data-marked', '');
+    }
+    await expect(cell(page, 'red', 7)).not.toHaveAttribute('data-dead', '');
+    await expect(cell(page, 'red', 8)).not.toHaveAttribute('data-dead', '');
+    const grey = await cell(page, 'red', 4).evaluate(e => getComputedStyle(e).filter);
+    expect(grey).not.toBe('none');
+  });
+
   test('other rows are untouched by a cross in one of them', async ({ page }) => {
     await cell(page, 'red', 7).click();
     await expect(cell(page, 'blue', 7)).toBeEnabled();
@@ -491,6 +504,26 @@ test.describe('presentation', () => {
       expect(m.oy, `y overflow at ${at}`).toBeLessThanOrEqual(0);
       expect(m.controlsBottom, `controls on screen at ${at}`).toBeLessThanOrEqual(1);
     }
+  });
+
+  test('the dice go grey between your turns', async ({ page }) => {
+    const tray = page.locator('#tray');
+    const look = () => tray.evaluate(e => {
+      const s = getComputedStyle(e);
+      return { filter: s.filter, opacity: Number(s.opacity) };
+    });
+    const idle = await look();
+    expect(idle.filter, 'greyed while it is not your roll').toContain('grayscale');
+    expect(idle.opacity).toBeLessThan(1);
+
+    await roll(page, [3, 4, 1, 1, 1, 1]);
+    const mine = await look();
+    expect(mine.filter).toBe('none');
+    expect(mine.opacity).toBe(1);
+
+    await page.locator('#done').click();
+    expect((await look()).filter, 'grey again once Done is tapped')
+      .toContain('grayscale');
   });
 
   test('the tray stays square', async ({ page }) => {
