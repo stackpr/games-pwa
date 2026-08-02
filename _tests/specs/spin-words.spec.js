@@ -7,6 +7,7 @@ const URL = '/games/spin-words/';
 const KEY = 'games.spin-words.v1';
 
 const key = (page, ch) => page.locator(`.key[data-letter="${ch}"]`);
+const BACK = '\u232B';   // the keyboard's rub-out key
 const vowelKey = (page, ch) => page.locator(`.vowel-key[data-letter="${ch}"]`);
 const bank = (page, i) => page.locator(`.seat[data-seat="${i}"] .seat-bank`);
 const seat = (page, i) => page.locator(`.seat[data-seat="${i}"]`);
@@ -101,7 +102,7 @@ test.describe('spinning and calling', () => {
     await seed(page, {});
     await spin(page, 0);                      // wedge 0 is $600
     expect(await phase(page)).toBe('pick');
-    await expect(page.locator('#pick-hint')).toContainText('$600');
+    await expect(page.locator('#key-hint')).toContainText('$600');
   });
 
   test('a consonant that is there pays per letter and keeps the phone',
@@ -213,47 +214,148 @@ test.describe('buying a vowel', () => {
   });
 });
 
+/*
+ * Solving is a commitment. Every one of these seeds `called` so that only a
+ * letter or three is blank — the rules are what is under test, not how fast
+ * a robot can type eighteen keys inside ten seconds.
+ */
 test.describe('solving', () => {
-  test('the table judges it out loud', async ({ page }) => {
-    await seed(page, { roundMoney: 1800 });
+  // BETTER LATE THAN NEVER with everything but V already on the board.
+  const ONE_BLANK = 'BETRLAHN';
+  // ...and everything but N and V, which is three blanks: THA[N] [N]E[V]ER.
+  const THREE_BLANKS = 'BETRLAH';
+
+  const type = async (page, letters) => {
+    for (const ch of letters) await key(page, ch).click();
+  };
+  const typedText = page => page.evaluate(() =>
+    [...document.querySelectorAll('.tile[data-typed]')].map(t => t.textContent).join(''));
+
+  test('Solve hands over the keyboard and starts the clock', async ({ page }) => {
+    await seed(page, { called: ONE_BLANK, roundMoney: 1800 });
     await page.locator('#solve').click();
-    expect(await phase(page)).toBe('judge');
-    await expect(page.locator('#got-it')).toBeVisible();
+    expect(await phase(page)).toBe('solve');
+    await expect(page.locator('.keys')).toBeVisible();
+    await expect(page.locator('#clock')).toHaveText('10');
+    await expect(page.locator('#key-hint')).toContainText('Fill in the blanks');
   });
 
-  test('Got it banks the puzzle and reveals the answer', async ({ page }) => {
-    await seed(page, { roundMoney: 1800, banks: [500, 0, 0] });
+  test('there is no way back out of a solve', async ({ page }) => {
+    await seed(page, { called: ONE_BLANK, roundMoney: 1800 });
     await page.locator('#solve').click();
-    await page.locator('#got-it').click();
-    expect(await phase(page)).toBe('solved');
-    await expect(bank(page, 0)).toHaveText('$2,300');
-    expect(await boardText(page)).toBe('BETTER LATE THAN NEVER');
+    // Every control that could cancel it belongs to a pane that is now gone.
+    for (const id of ['#spin', '#vowel', '#solve', '#vowel-back', '#ready']) {
+      await expect(page.locator(id), id + ' is out of reach').toBeHidden();
+    }
   });
 
-  test('Missed passes the phone and loses the puzzle money', async ({ page }) => {
-    await seed(page, { roundMoney: 1800, banks: [500, 0, 0] });
+  test('typing fills the blanks, and shows them as a guess', async ({ page }) => {
+    await seed(page, { called: THREE_BLANKS, roundMoney: 900 });
     await page.locator('#solve').click();
-    await page.locator('#missed').click();
+    await type(page, 'NN');
+    expect(await typedText(page)).toBe('NN');
+    // Still a guess, not the board: the third blank is untouched.
+    expect(await phase(page)).toBe('solve');
+  });
+
+  test('the last blank ends it, and a right answer banks the puzzle',
+    async ({ page }) => {
+      await seed(page, { called: ONE_BLANK, roundMoney: 1800, banks: [500, 0, 0] });
+      await page.locator('#solve').click();
+      await type(page, 'V');
+      expect(await phase(page)).toBe('solved');
+      await expect(bank(page, 0)).toHaveText('$2,300');
+      expect(await boardText(page)).toBe('BETTER LATE THAN NEVER');
+    });
+
+  test('a wrong answer loses the turn and the puzzle money', async ({ page }) => {
+    await seed(page, { called: ONE_BLANK, roundMoney: 1800, banks: [500, 0, 0] });
+    await page.locator('#solve').click();
+    await type(page, 'X');
     expect(await phase(page)).toBe('pass');
+    await expect(page.locator('#pass-note')).toContainText('did not have it');
     await expect(bank(page, 0)).toHaveText('$500');
   });
 
-  test('the next puzzle opens on the seat after the solver', async ({ page }) => {
-    await seed(page, { current: 0, roundMoney: 300 });
+  test('backspace rubs out a letter, not the decision', async ({ page }) => {
+    await seed(page, { called: THREE_BLANKS, roundMoney: 900 });
     await page.locator('#solve').click();
-    await page.locator('#got-it').click();
+    await expect(key(page, BACK)).toBeDisabled();
+    await type(page, 'NX');
+    await key(page, BACK).click();
+    expect(await typedText(page)).toBe('N');
+    // Still committed, and still solving.
+    expect(await phase(page)).toBe('solve');
+    await type(page, 'NV');
+    expect(await phase(page)).toBe('solved');
+  });
+
+  test('letters already on the board cannot be typed', async ({ page }) => {
+    await seed(page, { called: THREE_BLANKS, roundMoney: 900 });
+    await page.locator('#solve').click();
+    for (const ch of THREE_BLANKS) await expect(key(page, ch)).toBeDisabled();
+    await expect(key(page, 'N')).toBeEnabled();
+    await expect(key(page, 'V')).toBeEnabled();
+    // Vowels are free to type — they only had to be bought to be called.
+    await expect(key(page, 'I')).toBeEnabled();
+  });
+
+  test('ten seconds, and the turn is spent', async ({ page }) => {
+    await page.clock.install();
+    await page.goto(URL);
+    await seed(page, { called: ONE_BLANK, roundMoney: 1800, banks: [500, 0, 0] });
+    await page.locator('#solve').click();
+    await page.clock.runFor(4000);
+    await expect(page.locator('#clock')).toHaveText('6');
+    await page.clock.runFor(7000);
+    expect(await phase(page)).toBe('pass');
+    await expect(page.locator('#pass-note')).toContainText('Out of time');
+    await expect(bank(page, 0)).toHaveText('$500');
+  });
+
+  test('the clock goes red at the end', async ({ page }) => {
+    await page.clock.install();
+    await page.goto(URL);
+    await seed(page, { called: ONE_BLANK, roundMoney: 900 });
+    await page.locator('#solve').click();
+    await expect(page.locator('#clock')).not.toHaveAttribute('data-low', '');
+    await page.clock.runFor(7500);
+    await expect(page.locator('#clock')).toHaveAttribute('data-low', '');
+  });
+
+  test('a reload during a solve spends the turn too', async ({ page }) => {
+    // Otherwise tapping Solve would be free: reload, and think again.
+    await seed(page, { called: ONE_BLANK, roundMoney: 1800, banks: [500, 0, 0] });
+    await page.locator('#solve').click();
+    await page.reload();
+    expect(await phase(page)).toBe('pass');
+    await expect(page.locator('#pass-note')).toContainText('clock ran out');
+    await expect(bank(page, 0)).toHaveText('$500');
+    await expect(seat(page, 1)).toHaveAttribute('data-active', '');
+  });
+
+  test('a board with no blanks left solves on the tap', async ({ page }) => {
+    await seed(page, { called: 'BETRLAHNV', roundMoney: 700 });
+    await page.locator('#solve').click();
+    expect(await phase(page)).toBe('solved');
+    await expect(bank(page, 0)).toHaveText('$700');
+  });
+
+  test('the next puzzle opens on the seat after the solver', async ({ page }) => {
+    await seed(page, { called: ONE_BLANK, current: 0, roundMoney: 300 });
+    await page.locator('#solve').click();
+    await type(page, 'V');
     await page.locator('#next-puzzle').click();
     expect(await phase(page)).toBe('pass');
     await expect(seat(page, 1)).toHaveAttribute('data-active', '');
-    // A fresh puzzle, so nothing is showing and nothing is banked to it.
     await expect(page.locator('.tile[data-shown]')).toHaveCount(0);
   });
 
   test('the last puzzle ends the game and names a winner', async ({ page }) => {
-    await seed(page, { puzzles: 3, solvedCount: 2, roundMoney: 900,
-      banks: [0, 100, 0] });
+    await seed(page, { called: ONE_BLANK, puzzles: 3, solvedCount: 2,
+      roundMoney: 900, banks: [0, 100, 0] });
     await page.locator('#solve').click();
-    await page.locator('#got-it').click();
+    await type(page, 'V');
     expect(await phase(page)).toBe('over');
     await expect(page.locator('#over-note')).toContainText('Ada wins with $900');
     await page.locator('#again').click();
@@ -262,10 +364,10 @@ test.describe('solving', () => {
   });
 
   test('a tie is called a tie', async ({ page }) => {
-    await seed(page, { puzzles: 3, solvedCount: 2, roundMoney: 100,
-      banks: [0, 100, 0] });
+    await seed(page, { called: ONE_BLANK, puzzles: 3, solvedCount: 2,
+      roundMoney: 100, banks: [0, 100, 0] });
     await page.locator('#solve').click();
-    await page.locator('#got-it').click();
+    await type(page, 'V');
     await expect(page.locator('#over-note')).toContainText('A tie at $100');
   });
 });
@@ -284,7 +386,7 @@ test.describe('running out of letters', () => {
       await seed(page, { called: 'BTRLTHNNVR', roundMoney: 0 });
       await expect(page.locator('#vowel')).toBeDisabled();
       await page.locator('#solve').click();
-      expect(await phase(page)).toBe('judge');
+      expect(await phase(page)).toBe('solve');
     });
 });
 
@@ -461,7 +563,7 @@ test.describe('presentation', () => {
   });
 
   test('nothing overflows the screen at any size', async ({ page }) => {
-    for (const p of ['pass', 'spin', 'pick', 'vowel', 'judge', 'over']) {
+    for (const p of ['pass', 'spin', 'pick', 'vowel', 'solved', 'over']) {
       await seed(page, { phase: p, roundMoney: 900, solvedCount: 2 });
       for (const size of [{ width: 320, height: 568 }, { width: 390, height: 844 },
         { width: 844, height: 390 }]) {

@@ -27,13 +27,53 @@ and does nothing until somebody taps Ready.
 3. **Buy a vowel** costs $250 out of this puzzle's winnings and pays
    nothing. It needs the $250 to be there first, which is why the button is
    dead until the player has won something.
-4. **Solve** at any point. The player says the answer out loud and the
-   table decides — *Got it* banks this puzzle's winnings for good, *Missed*
-   passes the phone.
+4. **Solve** at any point — see below.
 
 `BANKRUPT` takes this puzzle's winnings and nothing else: what a player has
 already banked by solving is safe. That split is the whole tension of a
 spin, so it is worth being exact about.
+
+## Solving is a commitment
+
+The first version had the player say the answer out loud and the table tap
+*Got it* or *Missed*. It did not work: there is nothing to stop the table
+being generous, nothing to stop an argument, and no reason to hurry.
+
+So a solve is typed, against a clock, and cannot be taken back.
+
+- **Tapping Solve commits you.** There is no cancel and no Back — every
+  control that could call it off belongs to a pane that is gone the moment
+  the phase changes. A **reload spends the turn too**, landing on the pass
+  screen with "The clock ran out"; without that, tapping Solve would be
+  free and thinking again would be one swipe away.
+- **Ten seconds.** The countdown sits in the hint line and turns red at
+  three. It runs on `js/lib/timer.js`, which derives the time left from a
+  timestamp rather than counting a variable down — a phone that throttles a
+  backgrounded tab comes back with the right answer rather than a generous
+  one.
+- **You fill in the blanks, not the whole phrase.** Typing eighteen letters
+  on a phone keyboard inside ten seconds is not a game. Letters already on
+  the board stay on it, each key fills the leftmost blank, and the blank
+  about to be filled carries a ring so the letter has somewhere obvious to
+  land. Spaces need no typing.
+- **The last blank ends it, there and then.** No submit button and no
+  review — filling the final blank is the answer. Backspace rubs out a
+  letter, because a fat finger on a 33px key is not a change of mind; there
+  is simply no backspace left once the last one lands.
+- **Letters already called are dead keys.** One of them cannot be in a
+  blank — the board would be showing it — so killing the key spends no
+  information the player does not already have, and ten seconds is not long
+  enough to waste a tap discovering that.
+- **A board with no blanks left solves on the tap**, without starting a
+  clock nobody can spend.
+
+Right, and this puzzle's winnings are banked for good. Wrong or out of
+time, and the phone moves on with the winnings lost — the same cost as a
+`BANKRUPT`, which is what makes solving early a real gamble.
+
+**Vowels are free to type.** They had to be bought to be *called*, because
+calling one reveals it for everybody; typing one into your own guess
+reveals nothing.
 
 ### Edge cases
 
@@ -163,7 +203,7 @@ and a category picker would be four taps in the way of starting.
   "answer":      "BETTER LATE THAN NEVER",
   "category":    "Phrase",
   "called":      "ETRN",
-  "phase":       "spin | pick | vowel | judge | pass | solved | over",
+  "phase":       "spin | pick | vowel | solve | pass | solved | over",
   "wedge":       4,
   "message":     "",
   "used":        ["...", "up to 60 answers"]
@@ -175,7 +215,11 @@ characters and `indexOf` is the only question ever asked of it. `answer` is
 stored upper case, and the board derives everything else from it — there is
 no separate "revealed" list to drift out of step with the letters called.
 `phase` is never stored as `spinning`: the reel cannot be resumed, so a
-reload mid-spin lands on `spin` with the wedge already drawn. Names are
+reload mid-spin lands on `spin` with the wedge already drawn. `solve` *is*
+stored, and a reload spends the turn rather than resuming it — the ten
+seconds are the whole of that phase, so there is nothing honest to come
+back to. The letters typed into the blanks are not persisted at all for the
+same reason. Names are
 also written to the shared `games.party-names.v1` list via `js/lib/names.js`
 when the settings dialog closes, which is the one cross-game key in the
 tree.
@@ -187,4 +231,10 @@ sources, and the wedge. A spec forces a puzzle by seeding
 `localStorage` rather than by stubbing randomness — the draw happens at
 load, before a test can reach it, and a seeded `answer` is the thing the
 tests actually care about. The wedge is forced by seeding `wedge` and
-reading it back through the pick hint.
+reading it back through the keyboard hint.
+
+The solve tests seed `called` so that only a letter or three is blank: what
+is under test is the rules, not how fast a robot can type. The clock is
+driven with Playwright's `page.clock`, installed before the page loads,
+which is what lets a ten-second timeout be a fast test rather than a slow
+one.

@@ -28,6 +28,7 @@
          colors in CLAUDE.md. */
       --cash: #3fbf7f;
       --bust: #d84a35;
+      --guess: #f2c14e;
       --tile: #f4f6fb;
       --tile-ink: #10141f;
       --tile-blank: #243049;
@@ -130,6 +131,13 @@
     }
     /* The letter that has just been called reads as new for a beat. */
     .tile[data-fresh] { box-shadow: 0 0 0 2px var(--cash); }
+    /* A letter typed into a blank during a solve: clearly the player's, not
+       the board's, until the moment it is judged. */
+    .tile[data-typed] {
+      background: var(--guess);
+      color: var(--tile-ink);
+    }
+    .tile[data-next] { box-shadow: inset 0 0 0 2px var(--guess); }
 
     /* Above the board rather than under it: the banks are a scoreboard, and
        a scoreboard that floats in the middle of the screen reads as part of
@@ -197,9 +205,9 @@
     .pane { display: none; flex-direction: column; gap: 0.4rem; }
     body[data-phase="spin"] .pane[data-pane="spin"],
     body[data-phase="spinning"] .pane[data-pane="spin"],
-    body[data-phase="pick"] .pane[data-pane="pick"],
+    body[data-phase="pick"] .pane[data-pane="keys"],
+    body[data-phase="solve"] .pane[data-pane="keys"],
     body[data-phase="vowel"] .pane[data-pane="vowel"],
-    body[data-phase="judge"] .pane[data-pane="judge"],
     body[data-phase="pass"] .pane[data-pane="pass"],
     body[data-phase="solved"] .pane[data-pane="solved"],
     body[data-phase="over"] .pane[data-pane="over"] { display: flex; }
@@ -265,6 +273,16 @@
       min-height: 1.2rem;
     }
     .hint strong { color: var(--text); }
+    /* Ten seconds is short enough that the number has to be readable at a
+       glance, and loud enough that nobody misses it running out. */
+    .clock {
+      display: none;
+      font-size: 1.25rem;
+      font-variant-numeric: tabular-nums;
+      color: var(--guess);
+    }
+    body[data-phase="solve"] .clock { display: inline; }
+    .clock[data-low] { color: var(--bust); }
 
     /* Our own keyboard, not the system one: the game has to grey out the
        letters that are gone, and no system keyboard can be told to. */
@@ -444,9 +462,11 @@
           <strong>Lose a turn</strong> just passes the phone.</li>
         <li><strong>Buy a vowel</strong> costs $250 out of this puzzle's
           winnings, and pays nothing. You need the $250 first.</li>
-        <li><strong>Solve</strong> whenever you like. Say the answer out
-          loud; the table decides. Right, and this puzzle's winnings are
-          banked for good. Wrong, and the phone moves on.</li>
+        <li><strong>Solve</strong> whenever you like — but the moment you
+          tap it you are committed. The keyboard fills in the blanks, you
+          get <strong>ten seconds</strong>, and the last blank you fill ends
+          it there and then. Right, and this puzzle's winnings are banked
+          for good. Wrong, or out of time, and the phone moves on.</li>
         <li><strong>Most banked after the last puzzle wins.</strong></li>
       </ul>
       <button class="modal-close" type="button" data-close>Close</button>
@@ -478,8 +498,13 @@
         </div>
       </div>
 
-      <div class="pane" data-pane="pick">
-        <p class="hint" id="pick-hint"></p>
+      <!-- One keyboard for both calling a letter and typing an answer. The
+           phase decides what a key does and which keys are alive. -->
+      <div class="pane" data-pane="keys">
+        <p class="hint">
+          <span id="key-hint"></span>
+          <b class="clock" id="clock"></b>
+        </p>
         <div class="keys" id="keys"></div>
       </div>
 
@@ -491,13 +516,6 @@
         </div>
       </div>
 
-      <div class="pane" data-pane="judge">
-        <p class="hint">Say the answer out loud. The table decides.</p>
-        <div class="row">
-          <button id="got-it" class="action big good" type="button">Got it</button>
-          <button id="missed" class="action big bad" type="button">Missed</button>
-        </div>
-      </div>
 
       <div class="pane" data-pane="pass">
         <p class="hint" id="pass-note"></p>
@@ -520,6 +538,7 @@
   <script src="../../js/lib/store.js"></script>
   <script src="../../js/lib/vocab.js"></script>
   <script src="../../js/lib/names.js"></script>
+  <script src="../../js/lib/timer.js"></script>
   <script src="../../js/lib/modal.js"></script>
   <script src="phrases.js"></script>
   <script src="spin-words.js"></script>
