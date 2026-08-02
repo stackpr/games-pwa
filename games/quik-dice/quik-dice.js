@@ -36,9 +36,11 @@
 
   let state = load();
   let rolling = false;
-  const cells = [];      // cells[row][index], plus lockCells[row]
+  const cells = [];      // cells[row][index]
+  const rowNodes = [];   // the scrollers the cells sit in
   const lockCells = [];
   const totalNodes = [];
+  const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
 
   const tray = DiceTray.create(el.tray);
 
@@ -255,6 +257,7 @@
     tray.roll(indices, state.dice, () => {
       rolling = false;
       render();
+      revealTargets(targets());
     });
   }
 
@@ -284,6 +287,68 @@
     render();
   }
 
+  /* ---- scrolling ------------------------------------------------------ */
+
+  /*
+   * A row is wider than a phone, so the player drags it. Two moments move a
+   * row on their behalf: a roll landing, and opening the page onto a sheet
+   * whose live end has already moved off to the right. Both move as little
+   * as they can, so a row that already shows what matters stays exactly
+   * where the player left it.
+   */
+  function stripScroll(r, x, instant) {
+    const strip = rowNodes[r];
+    if (!strip) return;
+    const left = Math.max(0, Math.round(x));
+    const behavior = instant || reduceMotion.matches ? 'auto' : 'smooth';
+    if (strip.scrollTo) strip.scrollTo({ left, behavior });
+    else strip.scrollLeft = left;
+  }
+
+  /** The width a row can actually show, less the padlock pinned over it. */
+  function windowWidth(r) {
+    const strip = rowNodes[r];
+    const pinned = lockCells[r] ? lockCells[r].offsetWidth : 0;
+    return Math.max(0, strip.clientWidth - pinned);
+  }
+
+  /** Scrolls row r the least it can to show cells `first` through `last`. */
+  function revealRange(r, first, last, instant) {
+    const a = cells[r][first];
+    const b = cells[r][last] || a;
+    if (!rowNodes[r] || !a) return;
+    const view = windowWidth(r);
+    let x = rowNodes[r].scrollLeft;
+    const right = b.offsetLeft + b.offsetWidth;
+    if (right > x + view) x = right - view;
+    // If the span is wider than the window the near end wins: that is the
+    // end a player scans from.
+    if (a.offsetLeft < x) x = a.offsetLeft;
+    stripScroll(r, x, instant);
+  }
+
+  function revealTargets(open) {
+    for (let r = 0; r < ROWS.length; r++) {
+      let first = -1;
+      let last = -1;
+      for (let i = 0; i < CELLS; i++) {
+        if (!open.has(r + ':' + i)) continue;
+        if (first < 0) first = i;
+        last = i;
+      }
+      if (first >= 0) revealRange(r, first, last);
+    }
+  }
+
+  /** Puts the first number still in play at the left, with one for context. */
+  function revealPlayable(instant) {
+    for (let r = 0; r < ROWS.length; r++) {
+      const next = Math.min(LAST, lastMarked(r) + 1);
+      const lead = cells[r][Math.max(0, next - 1)];
+      if (lead) stripScroll(r, lead.offsetLeft, instant);
+    }
+  }
+
   /* ---- rendering ------------------------------------------------------ */
 
   function buildSheet() {
@@ -293,7 +358,9 @@
       node.className = 'row';
       node.dataset.color = row.key;
       node.dataset.row = String(r);
+      node.setAttribute('aria-label', row.label + ' row');
       cells[r] = [];
+      rowNodes[r] = node;
 
       row.numbers.forEach((n, i) => {
         const cell = document.createElement('button');
@@ -357,7 +424,7 @@
     const open = targets();
 
     ROWS.forEach((row, r) => {
-      const rowNode = cells[r][0].parentElement;
+      const rowNode = rowNodes[r];
       if (state.closed[r]) rowNode.dataset.closed = '';
       else delete rowNode.dataset.closed;
 
@@ -430,7 +497,7 @@
       }
       return state.turn.white ? 'One colour pair left' : 'Colour pair taken';
     }
-    return 'Their turn — or tap Roll for yours';
+    return 'Others rolling — tap Roll on your turn';
   }
 
   /* ---- start ---------------------------------------------------------- */
@@ -454,4 +521,7 @@
   tray.setCount(DICE);
   tray.showFaces(state.dice);
   render();
+  // A sheet with a well-crossed row opens onto its live end rather than onto
+  // the numbers that are already gone.
+  revealPlayable(true);
 })();

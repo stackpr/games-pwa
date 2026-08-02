@@ -36,13 +36,16 @@
       --blue: #3d7fe0;
       --ink-light: #ffffff;
       --ink-dark: #10141f;
-      /* Everything the tray is not. Measured: the bars come to ~13rem, and
-         the sheet's height follows its own width because the cells are
-         square — 12 columns and four rows, so 0.4 of it. Guessing a constant
-         here either overflows a short window or wastes half of a tall one. */
+      /* A cell is sized for a thumb, not for fitting eleven of them across a
+         phone — the rows scroll instead. Twelve at the top of the clamp plus
+         their gaps come to 40.8rem, which is why the sheet caps at 42rem:
+         on a desktop-width window the whole scale is visible at once. */
+      --cell: clamp(2.5rem, 12vw, 3.25rem);
+      --gap: 0.16rem;
+      /* Everything the tray is not: the bars, measured at ~13rem, plus four
+         rows of square cells. The tray takes what is left. */
       --bars: 13rem;
-      --sheet-width: min(100vw - 0.8rem, 32rem);
-      --chrome: calc(var(--bars) + 0.4 * var(--sheet-width));
+      --chrome: calc(var(--bars) + 4 * var(--cell) + 0.9rem);
       color-scheme: dark;
     }
     @media (orientation: landscape) {
@@ -93,18 +96,18 @@
     .chip:disabled { opacity: 0.35; cursor: default; }
     .chip.round { padding: 0.35rem 0.65rem; }
 
-    /* The sheet: four rows of eleven numbers plus a lock box, sized so the
-       whole row fits a 320px phone without scrolling sideways. */
+    /* The sheet: four rows of eleven numbers plus a padlock. Eleven cells
+       across a phone would be 24px each, so instead each row is its own
+       horizontal scroller and the player drags the colour they are looking
+       at. See this game's notes. */
     .sheet {
       flex: none;
       display: flex;
       flex-direction: column;
-      gap: 0.28rem;
+      gap: 0.3rem;
       padding: 0 0.4rem;
       width: 100%;
-      /* Square cells mean an unbounded sheet grows with the window, and four
-         rows of 70px cells is taller than a phone in landscape. */
-      max-width: calc(var(--sheet-width) + 0.8rem);
+      max-width: 42rem;
       margin: 0 auto;
     }
     .side {
@@ -124,11 +127,25 @@
       .sheet { grid-area: sheet; align-self: center; }
       .side { grid-area: side; }
     }
+    /* Drag left and right to move along the scale. Native overflow scrolling
+       rather than a pointer handler: it is a drag on a phone, a trackpad
+       swipe on a desktop, and it cannot swallow a tap. */
     .row {
+      /* Positioned so a cell's offsetLeft is its place along the scale,
+         which is what the reveal maths in the script works in. */
+      position: relative;
       display: grid;
-      grid-template-columns: repeat(11, 1fr) 1.15fr;
-      gap: 0.14rem;
+      grid-auto-flow: column;
+      grid-auto-columns: var(--cell);
+      gap: var(--gap);
+      overflow-x: auto;
+      overscroll-behavior-x: contain;
+      touch-action: pan-x;
+      scrollbar-width: none;
+      /* Keeps scrollIntoView from tucking a cell under the pinned padlock. */
+      scroll-padding-right: calc(var(--cell) + var(--gap));
     }
+    .row::-webkit-scrollbar { display: none; }
     .cell {
       position: relative;
       min-width: 0;
@@ -140,7 +157,7 @@
       border-radius: 5px;
       padding: 0;
       font: inherit;
-      font-size: clamp(0.62rem, 2.7vw, 0.95rem);
+      font-size: clamp(0.85rem, 3.6vw, 1.2rem);
       font-weight: 700;
       font-variant-numeric: tabular-nums;
       cursor: pointer;
@@ -171,10 +188,20 @@
     /* A white ring marks what this roll allows, the same way the site marks
        anything else that is picked out. */
     .cell[data-target] { box-shadow: inset 0 0 0 2px var(--ink-light), 0 0 0 1px rgba(0,0,0,0.4); }
-    body[data-phase="turn"] .cell:not([data-target]):not([data-marked]) { opacity: 0.34; }
+    body[data-phase="turn"] .cell:not([data-target]):not([data-marked]):not(.lock) {
+      opacity: 0.34;
+    }
     .cell:disabled { cursor: default; }
 
-    .cell.lock { background: color-mix(in srgb, var(--fill) 55%, #000); }
+    /* Pinned to the right edge: closing a row is reachable from wherever the
+       row happens to be scrolled, and its state stays readable. */
+    .cell.lock {
+      position: sticky;
+      right: 0;
+      z-index: 1;
+      background: color-mix(in srgb, var(--fill) 55%, #000);
+      box-shadow: -8px 0 10px -6px rgba(0, 0, 0, 0.75);
+    }
     .lock-icon { width: 62%; height: 62%; fill: var(--ink); }
     .cell.lock[data-marked]::after { inset: 14%; }
 
@@ -335,9 +362,13 @@
           allows: the two white dice added together, in any row, and one white
           die added to one colour die, in that colour's row. Take the white sum
           first if you want both.</li>
-        <li><strong>On someone else's turn</strong> you may cross off their
-          white sum in any row — so every number that is still legal is
-          tappable. Tap nothing if it does not suit you.</li>
+        <li><strong>Between your turns</strong> — from the moment you tap Done
+          until you tap Roll again — the other players are taking theirs. You
+          may cross off each of their white sums, so every number that is
+          still legal is tappable. Tap nothing if none of them suit you.</li>
+        <li><strong>Drag a row sideways</strong> to move along that colour's
+          scale. Each colour scrolls on its own, and the padlock stays pinned
+          to the right.</li>
         <li><strong>Left to right only.</strong> Crossing a number skips
           everything to its left for good.</li>
         <li><strong>The last number</strong> in a row needs five crosses in

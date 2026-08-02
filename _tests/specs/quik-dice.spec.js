@@ -352,6 +352,119 @@ test.describe('persistence', () => {
     });
 });
 
+test.describe('dragging along a scale', () => {
+  /** How far a cell sticks out past the row's visible area, either side. */
+  const outside = (page, color, n) => page.evaluate(([c, num]) => {
+    const strip = document.querySelector(`.row[data-color="${c}"]`);
+    const box = strip.getBoundingClientRect();
+    const cellBox = strip.querySelector(`.cell[data-number="${num}"]`)
+      .getBoundingClientRect();
+    const pinned = strip.querySelector('.cell.lock').getBoundingClientRect().width;
+    return Math.max(box.left - cellBox.left, cellBox.right - (box.right - pinned));
+  }, [color, n]);
+
+  const scrollLeft = (page, color) =>
+    page.locator(`.row[data-color="${color}"]`).evaluate(e => e.scrollLeft);
+
+  test('a row is wider than the phone, so it scrolls', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    const m = await page.locator('.row[data-color="red"]').evaluate(e => ({
+      scroll: e.scrollWidth, client: e.clientWidth,
+      overflow: getComputedStyle(e).overflowX,
+    }));
+    expect(m.scroll).toBeGreaterThan(m.client);
+    expect(m.overflow).toBe('auto');
+  });
+
+  test('each colour scrolls on its own', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.locator('.row[data-color="red"]').evaluate(e => { e.scrollLeft = 150; });
+    expect(await scrollLeft(page, 'red')).toBeGreaterThan(100);
+    expect(await scrollLeft(page, 'yellow')).toBe(0);
+    expect(await scrollLeft(page, 'blue')).toBe(0);
+  });
+
+  test('dragging sideways moves the row', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    const box = await page.locator('.row[data-color="green"]').boundingBox();
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+    await page.mouse.wheel(250, 0);
+    await expect.poll(() => scrollLeft(page, 'green')).toBeGreaterThan(50);
+    expect(await scrollLeft(page, 'red'), 'other rows stay put').toBe(0);
+  });
+
+  test('a cell scrolled into view is still tappable', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.locator('.row[data-color="red"]').evaluate(e => { e.scrollLeft = 9999; });
+    await cell(page, 'red', 11).click();
+    await expect(cell(page, 'red', 11)).toHaveAttribute('data-marked', '');
+  });
+
+  test('the padlock stays pinned to the right edge', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    for (const at of [0, 200, 9999]) {
+      await page.locator('.row[data-color="red"]')
+        .evaluate((e, x) => { e.scrollLeft = x; }, at);
+      const gap = await page.evaluate(() => {
+        const strip = document.querySelector('.row[data-color="red"]');
+        return strip.getBoundingClientRect().right
+          - strip.querySelector('.cell.lock').getBoundingClientRect().right;
+      });
+      expect(Math.abs(gap), `padlock pinned at scrollLeft ${at}`).toBeLessThan(1.5);
+    }
+  });
+
+  test('a roll brings each row target into view', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    expect(await scrollLeft(page, 'blue')).toBe(0);
+    // White 1+2 = 3, which in blue (12 down to 2) is the second from the end.
+    await roll(page, [1, 2, 1, 1, 1, 1]);
+    expect(await scrollLeft(page, 'blue')).toBeGreaterThan(0);
+    expect(await outside(page, 'blue', 3)).toBeLessThanOrEqual(1);
+  });
+
+  test('a roll shows the far target as well as the near one', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    // Green runs 12 down to 2, so its white 7 sits mid-row and its colour
+    // pairs — 3+1 and 4+1 — are away at the far end. Stopping at the first
+    // target would leave those two off screen.
+    await roll(page, [3, 4, 1, 1, 1, 1]);
+    expect(await outside(page, 'green', 7)).toBeLessThanOrEqual(1);
+    expect(await outside(page, 'green', 5)).toBeLessThanOrEqual(1);
+    expect(await outside(page, 'green', 4)).toBeLessThanOrEqual(1);
+  });
+
+  test('a row already showing its target is left alone', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    // White 3+4 = 7 sits at the left end of red, where the row already is.
+    await roll(page, [3, 4, 1, 1, 1, 1]);
+    expect(await scrollLeft(page, 'red')).toBe(0);
+  });
+
+  test('a well-crossed row opens on its live end', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await seed(page, { rows: [marked(8)] });
+    expect(await scrollLeft(page, 'red')).toBeGreaterThan(0);
+    expect(await outside(page, 'red', 10)).toBeLessThanOrEqual(1);
+    expect(await scrollLeft(page, 'yellow'), 'an untouched row does not move').toBe(0);
+  });
+
+  test('cells are big enough to tap', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    const box = await cell(page, 'red', 4).boundingBox();
+    expect(box.width).toBeGreaterThanOrEqual(38);
+    expect(box.height).toBeGreaterThanOrEqual(38);
+  });
+
+  test('a wide window shows the whole scale without scrolling', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 800 });
+    const m = await page.locator('.row[data-color="red"]').evaluate(e => ({
+      scroll: e.scrollWidth, client: e.clientWidth,
+    }));
+    expect(m.scroll).toBeLessThanOrEqual(m.client + 1);
+  });
+});
+
 test.describe('presentation', () => {
   test('no external requests and no raster images', async ({ page }) => {
     const external = trackExternalRequests(page);

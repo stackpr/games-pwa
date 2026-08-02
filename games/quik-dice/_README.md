@@ -22,12 +22,17 @@ rolled. The turn is driven by the two buttons:
 - **Done** ends it and hands play on. If you crossed nothing off, Done
   takes a penalty, which is why the button reads `Done −5` in that case.
 
-Between your turns the phone sits in the idle state, where the only thing
-you can do is cross off the *white sum* the active player just called out.
-Your phone has no way to know that number, so idle mode offers **every
-number that is still legal** and trusts you to take the right one — or
-none. That is the whole reason valid tap targets differ between the two
-states, and it is the honest limit of a no-network design.
+**Everything between your Done and your next Roll is the other players'
+turns.** That window is the idle state, and the only thing you can do in
+it is cross off the *white sum* each of them calls out. Your phone has no
+way to know those numbers, so idle mode offers **every number that is
+still legal** and trusts you to take the right ones — or none. That is
+the whole reason valid tap targets differ between the two states.
+
+The honesty that requires is the same honesty a paper sheet requires, so
+the app does not try to police it: there is no limit on how many crosses
+you take while idle, because the sheet cannot know how many opponents sit
+between your turns. `Undo` is the correction, not a rule.
 
 ## Rules as implemented
 
@@ -41,9 +46,8 @@ Six dice: two white, one per row colour.
   taking the white first is never the worse choice: it leaves the colour
   pair still available.
 - **On someone else's turn** any legal number is tappable, and there is no
-  limit on how many you take. The sheet cannot police one-per-turn without
-  knowing when turns start, and a wrong limit would be worse than none.
-  `Undo` is the safety net.
+  limit on how many you take — see the note above. A wrong limit would be
+  worse than none, and the paper game is on the same footing.
 - **Left to right.** Crossing a number puts everything to its left out of
   reach for good.
 - **The last number** in a row (12 for red and yellow, 2 for green and
@@ -75,12 +79,52 @@ score is always visible rather than something to work out at the end.
 
 ## Layout
 
-- **The sheet is the fixed part of the page; the tray takes what is left.**
-  Eleven numbers plus a padlock have to fit the width of a 320px phone, so
-  the cells are square, the font is a `clamp()`, and there is no room for a
-  per-row score inside the row — that is why the subtotals live in their
-  own strip underneath.
-- The dice tray is capped at 15rem. It is the same square tray as 10,000
+### Each colour is its own scroller
+
+Eleven numbers plus a padlock across a 320px phone is a 24px cell — too
+small to tap and too small to read. So the cells are sized for a thumb
+(`clamp(2.5rem, 12vw, 3.25rem)`, square) and **each row scrolls
+horizontally on its own**: you drag the colour you are looking at, and the
+other three stay where you left them.
+
+That is native `overflow-x: auto` rather than a pointer handler. It is a
+drag on a phone, a trackpad swipe on a desktop, it has momentum and rubber
+banding for free, and — the part a hand-rolled version gets wrong — it
+cannot swallow a tap. `touch-action: pan-x` keeps a sideways drag from
+being read as a page scroll. At 42rem and wider the whole scale fits and
+nothing scrolls at all, which is what a desktop window gets.
+
+**The padlock is pinned** (`position: sticky; right: 0`) so closing a row
+is reachable from wherever that row happens to be scrolled, and so a
+closed row reads as closed without scrolling to the end to check. It
+overlaps the cell beneath it; the drop shadow is what says so.
+
+The script moves a row only twice, and both times as little as it can:
+
+- **When a roll lands**, each row scrolls to show the whole span of its
+  targets — not just the first one. Green's white sum can sit mid-row with
+  its colour pairs away at the far end, and stopping at the first target
+  left those off screen. If the span is wider than the window the near end
+  wins, because that is the end a player scans from.
+- **On load**, a row whose crossed-off end has moved right opens on its
+  live end, with one crossed number as context rather than a screen of
+  numbers that are already gone.
+
+A row that already shows what matters does not move at all — the maths
+works in `scrollLeft` and `offsetLeft` and only ever closes the gap, so a
+player's own scroll position survives everything that does not need it
+changed.
+
+### The rest
+
+- **The sheet is the fixed part of the page; the tray takes what is left**
+  (`--chrome` is the bars plus four rows of square cells). In landscape
+  the sheet moves *beside* the tray instead, which is the only way both
+  survive a 390px-tall window.
+- There is no room for a per-row score inside a row, which is why the
+  subtotals live in their own strip underneath — six boxes, always on
+  screen.
+- The dice tray is capped at 22rem. It is the same square tray as 10,000
   and Dice (`js/lib/dice.js` needs a square tray — the die is sized as a
   percentage of both axes), just smaller, because here the sheet is the
   thing being looked at.
