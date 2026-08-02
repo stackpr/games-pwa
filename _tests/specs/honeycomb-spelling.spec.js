@@ -122,7 +122,7 @@ test.describe('the start sheet', () => {
       // reload — a phone that loses signal on the start sheet still gets told.
       await page.evaluate(() => window.dispatchEvent(new Event('offline')));
       await expect(page.locator('#net-note')).toBeVisible();
-      await expect(page.locator('#net-note')).toContainText('online dictionary');
+      await expect(page.locator('#net-note')).toContainText('checked online');
     } finally {
       await context.setOffline(false);
     }
@@ -410,6 +410,32 @@ test.describe('the tiles', () => {
     expect(label).toBe(centre + ', worth ' + value + ', the middle letter');
   });
 
+  test('a tap that drifts onto the next hex still types the one it landed on',
+    async ({ page }) => {
+      await play(page);
+      const from = page.locator('.hex[data-pos="nw"]');
+      const to = page.locator('.hex[data-pos="ne"]');
+      const a = await from.boundingBox();
+      const b = await to.boundingBox();
+
+      await page.mouse.move(a.x + a.width / 2, a.y + a.height / 2);
+      await page.mouse.down();
+      await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2);
+      await page.mouse.up();
+
+      // A click needs press and release on the same element, so a finger that
+      // slides between two touching hexagons used to type nothing at all.
+      // Taking the letter on pointerdown is what fixes it — see _README.md.
+      await expect(page.locator('#typed')).toHaveText(await from.getAttribute('data-letter'));
+    });
+
+  test('a tap lands on the letter even when it hits the value', async ({ page }) => {
+    await play(page);
+    const hex = page.locator('.hex[data-pos="n"]');
+    await hex.locator('.hex-value').click();
+    await expect(page.locator('#typed')).toHaveText(await hex.getAttribute('data-letter'));
+  });
+
   test('the value never leaks into the word being typed', async ({ page }) => {
     await play(page);
     const { letters } = await hive(page);
@@ -428,7 +454,8 @@ test.describe('the dictionary', () => {
     await dictionary(page, { reject: [word] });
 
     await guess(page, word);
-    await expect(page.locator('#flash')).toHaveText('Not a word');
+    // The verdict names the word: an answer can arrive long after the guess.
+    await expect(page.locator('#flash')).toHaveText('Not a word: ' + word);
     await expect(page.locator('#flash')).toHaveAttribute('data-tone', 'bad');
     await expect(page.locator('#score')).toHaveText('0');
     await expect(page.locator('#count')).toHaveText('0');
@@ -494,7 +521,7 @@ test.describe('the dictionary', () => {
     page.on('request', req => { if (req.url().includes('dictionaryapi.dev')) asked++; });
 
     await guess(page, word);
-    await expect(page.locator('#flash')).toHaveText('Not a word');
+    await expect(page.locator('#flash')).toHaveText('Not a word: ' + word);
 
     // Clear the line, so the second verdict appearing is the second verdict
     // and not the first one still sitting there.
@@ -503,7 +530,7 @@ test.describe('the dictionary', () => {
 
     await guess(page, word);
     await expect(page.locator('#flash')).toHaveAttribute('data-show', '');
-    await expect(page.locator('#flash')).toHaveText('Not a word');
+    await expect(page.locator('#flash')).toHaveText('Not a word: ' + word);
     // Answered once, remembered for the session — see _README.md.
     expect(asked).toBe(1);
   });
@@ -515,7 +542,7 @@ test.describe('the dictionary', () => {
   ];
 
   for (const { name, dict } of unanswered) {
-    test(`no answer is not a no — ${name}`, async ({ page }) => {
+    test(`no answer is queued rather than counted as a no — ${name}`, async ({ page }) => {
       await play(page);
       const { centre } = await hive(page);
       const word = centre.repeat(4);
@@ -523,18 +550,177 @@ test.describe('the dictionary', () => {
       await dictionary(page, dict);
 
       await guess(page, word);
-      await expect(page.locator('#flash')).toHaveText('Could not check ' + word);
-      await expect(page.locator('#flash')).toHaveAttribute('data-tone', 'bad');
+      await expect(page.locator('#flash')).toHaveText('No answer — will retry ' + word);
       await expect(page.locator('#score')).toHaveText('0');
+      // Visibly waiting rather than silently dropped.
+      await expect(page.locator('#found .word[data-waiting]')).toHaveText(word + '2');
 
-      // Nothing was learned, so the word is worth asking about again rather
-      // than being remembered as a rejection.
+      // Nothing was learned, so the word is asked about again rather than
+      // being remembered as a rejection.
       await page.unroute(API);
       await dictionary(page);
-      await guess(page, word);
       await expect(page.locator('#score')).toHaveText(String(await points(page, word)));
+      await expect(page.locator('#found .word[data-waiting]')).toHaveCount(0);
     });
   }
+});
+
+test.describe('the retry queue', () => {
+  test('a word that went unanswered is asked again, and scores when it lands',
+    async ({ page }) => {
+      await play(page);
+      const { centre } = await hive(page);
+      const word = centre.repeat(4);
+
+      let asked = 0;
+      await page.route(API, async route => {
+        asked++;
+        // Unanswered the first time, fine the second.
+        if (asked === 1) return route.fulfill({ status: 503, body: '{}' });
+        await route.fulfill({
+          status: 200, contentType: 'application/json', body: JSON.stringify([{ word }]),
+        });
+      });
+
+      await guess(page, word);
+      await expect(page.locator('#found .word[data-waiting]')).toHaveCount(1);
+      await expect(page.locator('#score')).toHaveText(String(await points(page, word)));
+      await expect(page.locator('#found .word[data-waiting]')).toHaveCount(0);
+      await expect(page.locator('#found .word:not([data-waiting])')).toHaveText(word);
+      expect(asked).toBe(2);
+    });
+
+  test('the queue shows which try a word is on', async ({ page }) => {
+    await page.clock.install();
+    await page.goto(URL);
+    await clearState(page);
+    await play(page);
+    const { centre } = await hive(page);
+    const word = centre.repeat(4);
+    await page.unroute(API);
+    await dictionary(page, { status: 503 });
+
+    await guess(page, word);
+    const chip = page.locator('#found .word[data-waiting]');
+    await expect(chip).toHaveText(word + '2');
+
+    // The waits double: a second to the 2nd try, two more to the 3rd, four
+    // to the 4th. Nothing moves early.
+    await page.clock.runFor(900);
+    await expect(chip).toHaveText(word + '2');
+    await page.clock.runFor(200);
+    await expect(chip).toHaveText(word + '3');
+    await page.clock.runFor(2100);
+    await expect(chip).toHaveText(word + '4');
+    await page.clock.runFor(4100);
+    await expect(chip).toHaveText(word + '5');
+  });
+
+  test('five unanswered tries is as far as it goes', async ({ page }) => {
+    await page.clock.install();
+    await page.goto(URL);
+    await clearState(page);
+    await play(page);
+    const { centre } = await hive(page);
+    const word = centre.repeat(4);
+    let asked = 0;
+    page.on('request', req => { if (req.url().includes('dictionaryapi.dev')) asked++; });
+    await page.unroute(API);
+    await dictionary(page, { status: 503 });
+
+    await guess(page, word);
+    // 1s + 2s + 4s + 8s covers every retry there is.
+    await page.clock.runFor(16000);
+
+    await expect(page.locator('#flash')).toHaveText('Could not check ' + word);
+    await expect(page.locator('#found .word[data-waiting]')).toHaveCount(0);
+    await expect(page.locator('#score')).toHaveText('0');
+    expect(asked).toBe(5);
+  });
+
+  test('a word already queued is not queued twice', async ({ page }) => {
+    await page.clock.install();
+    await page.goto(URL);
+    await clearState(page);
+    await play(page);
+    const { centre } = await hive(page);
+    const word = centre.repeat(4);
+    await page.unroute(API);
+    await dictionary(page, { status: 503 });
+
+    await guess(page, word);
+    // The chip covers a word in flight too, so wait for the try number: that
+    // is what says it has failed once and is sitting in the queue.
+    await expect(page.locator('#found .word[data-waiting]')).toHaveText(word + '2');
+
+    // Typing it again while it waits changes nothing but the message.
+    await guess(page, word);
+    await expect(page.locator('#flash')).toHaveText('Still waiting on ' + word);
+    await expect(page.locator('#found .word[data-waiting]')).toHaveCount(1);
+    await expect(page.locator('#found .word[data-waiting]')).toHaveText(word + '2');
+  });
+
+  test('a new game starts with an empty queue', async ({ page }) => {
+    await play(page);
+    const { centre } = await hive(page);
+    await page.unroute(API);
+    await dictionary(page, { status: 503 });
+    await guess(page, centre.repeat(4));
+    await expect(page.locator('#found .word[data-waiting]'))
+      .toHaveText(centre.repeat(4) + '2');
+
+    await page.locator('#new').click();
+    await page.locator('#again').click();
+    await expect(page.locator('#found .word[data-waiting]')).toHaveCount(0);
+    await expect(page.locator('#found .found-empty')).toBeVisible();
+  });
+});
+
+test.describe('our own vocabulary', () => {
+  test('holds plain single words and drops the rest', async ({ page }) => {
+    const known = w => page.evaluate(x => window.HoneycombHive.knows(x), w);
+    expect(await known('piano')).toBe(true);
+    expect(await known('zzzz')).toBe(false);
+    // Vocab carries "Ping-pong" and "Wind-up toy"; neither can be typed on a
+    // hive, and neither may leak in as a bare half of itself.
+    expect(await known('ping-pong')).toBe(false);
+    expect(await known('wind-up toy')).toBe(false);
+  });
+
+  test('a word we already know never reaches the network', async ({ page }) => {
+    await play(page);
+    // The letters are random, so deal until one of them can spell something
+    // the shipped vocabulary holds.
+    let word = null;
+    for (let i = 0; i < 60 && !word; i++) {
+      word = await page.evaluate(() => {
+        const centre = document.querySelector('.hex[data-pos="c"]').dataset.letter;
+        const set = new Set([...document.querySelectorAll('.hex')].map(e => e.dataset.letter));
+        const pool = window.Vocab ? Vocab.pool() : [];
+        for (const entry of pool) {
+          const w = String(entry.word || '').toLowerCase();
+          if (!/^[a-z]{4,}$/.test(w) || w.indexOf(centre) === -1) continue;
+          if ([...w].every(c => set.has(c))) return w;
+        }
+        return null;
+      });
+      if (!word) {
+        await page.locator('#new').click();
+        await page.locator('#again').click();
+      }
+    }
+    expect(word, 'a hive that can spell a vocabulary word').not.toBeNull();
+
+    // Every request is refused, so anything that scores did so locally.
+    await page.unroute(API);
+    await dictionary(page, { abort: true });
+    let asked = 0;
+    page.on('request', req => { if (req.url().includes('dictionaryapi.dev')) asked++; });
+
+    await guess(page, word);
+    await expect(page.locator('#score')).toHaveText(String(await points(page, word)));
+    expect(asked).toBe(0);
+  });
 });
 
 test.describe('a word that does not count', () => {
@@ -650,7 +836,7 @@ test.describe('finishing', () => {
     await expect(page.locator('#board-rows tr')).toHaveCount(0);
   });
 
-  test('an answer that lands after the game ends is not scored late', async ({ page }) => {
+  test('the result waits for a word still out, and counts it', async ({ page }) => {
     await play(page);
     const { centre } = await hive(page);
     const word = centre.repeat(5);
@@ -667,14 +853,83 @@ test.describe('finishing', () => {
     await guess(page, word);
     await expect(page.locator('#flash')).toHaveText('Checking ' + word);
     await page.locator('#new').click();
-    await expect(page.locator('#over')).toHaveAttribute('data-open', '');
 
-    // The clock did not stop for the lookup, so neither does the result.
+    // The word was sent in time, so the finish screen holds rather than
+    // throwing the answer away — see _README.md.
+    await expect(page.locator('#flash')).toHaveText('Finishing — 1 word still out');
+    await expect(page.locator('#over')).not.toHaveAttribute('data-open', '');
+
     release();
+    await expect(page.locator('#over')).toHaveAttribute('data-open', '');
+    await expect(page.locator('#final-score')).toHaveText(String(await points(page, word)));
+    await expect(page.locator('#final-count')).toHaveText('1');
+  });
+
+  test('the finish screen waits for the retry queue too', async ({ page }) => {
+    await page.clock.install();
+    await page.goto(URL);
+    await clearState(page);
+    await play(page);
+    const { centre } = await hive(page);
+    const word = centre.repeat(5);
+
+    let asked = 0;
+    await page.route(API, async route => {
+      asked++;
+      if (asked === 1) return route.fulfill({ status: 503, body: '{}' });
+      await route.fulfill({
+        status: 200, contentType: 'application/json', body: JSON.stringify([{ word }]),
+      });
+    });
+
+    await guess(page, word);
+    await expect(page.locator('#found .word[data-waiting]')).toHaveText(word + '2');
+    await page.locator('#new').click();
+    await expect(page.locator('#over')).not.toHaveAttribute('data-open', '');
+
+    // Once the clock has stopped the queue stops being polite: the retry is
+    // pulled forward to a short gap rather than its full second.
+    await page.clock.runFor(500);
+    await expect(page.locator('#over')).toHaveAttribute('data-open', '');
+    await expect(page.locator('#final-score')).toHaveText(String(await points(page, word)));
+  });
+
+  test('Skip gives up on the queue and shows the result', async ({ page }) => {
+    await play(page);
+    const { centre } = await hive(page);
+    await page.unroute(API);
+    await dictionary(page, { abort: true });
+    await guess(page, centre.repeat(4));
+    await expect(page.locator('#found .word[data-waiting]'))
+      .toHaveText(centre.repeat(4) + '2');
+
+    await page.locator('#new').click();
+    await expect(page.locator('#new')).toHaveText('Skip');
+    await expect(page.locator('#over')).not.toHaveAttribute('data-open', '');
+
+    await page.locator('#new').click();
+    await expect(page.locator('#over')).toHaveAttribute('data-open', '');
     await expect(page.locator('#final-score')).toHaveText('0');
-    await expect(page.locator('#score')).toHaveText('0');
-    await page.reload();
-    await expect(page.locator('#board-rows tr')).toHaveCount(0);
+    await expect(page.locator('#new')).toHaveText('New');
+  });
+
+  test('a dictionary that never answers cannot strand the game', async ({ page }) => {
+    await page.clock.install();
+    await page.goto(URL);
+    await clearState(page);
+    await play(page);
+    const { centre } = await hive(page);
+    await page.unroute(API);
+    // Never resolves at all — no status, no failure, just silence.
+    await page.route(API, () => {});
+
+    await guess(page, centre.repeat(4));
+    await page.locator('#new').click();
+    await expect(page.locator('#over')).not.toHaveAttribute('data-open', '');
+
+    // The wait is capped, so the result arrives whatever the dictionary does.
+    await page.clock.runFor(12500);
+    await expect(page.locator('#over')).toHaveAttribute('data-open', '');
   });
 
   test('Play again deals a new hive without going back to the start sheet', async ({ page }) => {
@@ -859,7 +1114,8 @@ test.describe('the page itself', () => {
       await page.route(API, route => route.abort('failed'));
       const { centre } = await hive(page);
       await guess(page, centre.repeat(4));
-      await expect(page.locator('#flash')).toHaveText('Could not check ' + centre.repeat(4));
+      await expect(page.locator('#flash'))
+        .toHaveText('No answer — will retry ' + centre.repeat(4));
       await expect(page.locator('.hex')).toHaveCount(7);
     } finally {
       await context.setOffline(false);

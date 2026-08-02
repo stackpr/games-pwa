@@ -190,11 +190,12 @@ dictionary, and a real dictionary makes random letters worth having.**
 
 What that costs, stated plainly:
 
-- **No offline play.** The shell still loads from the precache, so the page,
-  the boards and the hive all come up with no network; nothing will score.
-  The start sheet says so up front, driven by `navigator.onLine` and the
-  `online`/`offline` events, rather than letting a player find out one
-  rejected word at a time.
+- **Almost no offline play.** The shell still loads from the precache, so
+  the page, the boards and the hive all come up with no network, and words
+  the shipped vocabulary happens to know still score — but that is a few
+  hundred words, not a game. The start sheet says so up front, driven by
+  `navigator.onLine` and the `online`/`offline` events, rather than letting
+  a player find out one rejected word at a time.
 - **No answer key**, hence no end-of-game list of what you missed. See What
   the end screen can say.
 - **A third party can be slow or down.** See The lookup.
@@ -277,6 +278,80 @@ cached, and the same word can be tried again the moment the connection is
 back. Collapsing "the dictionary says no" into "we could not ask" would
 quietly turn every outage into a game that rejects real words.
 
+### Our own vocabulary first
+
+`js/lib/vocab.js` already ships with every page on the site, so `lookUp()`
+checks it before anything goes near the network. A hit costs no request, no
+wait and no connection at all.
+
+It is a **yes-list only** — a word missing from it proves nothing, so
+everything else still goes to the API. Multi-word and hyphenated entries are
+dropped when the set is built (`/^[a-z]+$/`), because nothing with a space
+or a hyphen in it can be typed on a seven-letter hive, and half of
+`Wind-up toy` must not become a word by accident.
+
+### The retry queue
+
+The API answers inconsistently — a request that fails once often succeeds a
+moment later — so an `'off'` is **queued, not discarded**. `game.retry`
+holds one entry per word, `{ word, tries, due }`, and a single timer
+(`pump()`) is always set for whichever entry is due soonest. One timer for
+the whole queue rather than one per word: easier to cancel, and impossible
+to leak.
+
+- **Five tries in all**, the waits doubling — 1s, 2s, 4s, 8s. After that the
+  word is dropped with `Could not check <word>`. That is not a verdict, and
+  it is still never cached: the same word can be tried again by typing it.
+- **No duplicates.** `queue()` refuses a word already queued or already
+  found, and `submit()` turns a re-typed one into `Still waiting on <word>`
+  rather than a second request. One guess is one place in the queue however
+  often it is typed.
+- **The queue is visible**, at the head of the found-words strip, outlined
+  rather than filled so a word awaiting an answer cannot be mistaken for one
+  that scored. Words past the first try carry the try number.
+
+Putting it in the found strip rather than a row of its own is deliberate:
+that strip already costs a fixed height, and a new row would have to come
+out of the hive's budget or push the bottom controls off a short phone. See
+the layout notes.
+
+### Finishing waits for the queue
+
+A word submitted before the buzzer should score even if the dictionary was
+slow, so the clock stopping no longer ends the game outright. `finish()`
+moves to a **`settling`** phase: the clock stops and typing stops, but the
+result is held while anything is still out. `showOver()` is what actually
+produces the end screen.
+
+- Queued retries are **pulled forward** on entering `settling` — there is
+  nobody left to be polite to, so the doubling waits collapse to one short
+  gap.
+- The whole wait is **capped at 12 seconds**. A dictionary that never
+  answers must not strand a game on a spinner.
+- The **New button becomes Skip**, so the cap is not the only way out.
+- Anything still unanswered when the result appears is abandoned there,
+  rather than scoring into a game that has already been recorded.
+
+This reverses the older rule that an answer arriving after the game had
+ended was dropped. That rule was right when a lookup was one request; with a
+retry queue behind it, dropping the answer would punish a player for the
+API's flakiness rather than for running out of time.
+
+### Tapping the hive
+
+Taps are taken on **`pointerdown`, not `click`**. A click needs press *and*
+release on the same element, and the seven hexagons tile exactly — their hit
+areas touch — so a finger that lands on one and drifts a few pixels onto its
+neighbour before lifting produced no click at all. That is what made tapping
+feel unreliable rather than merely imprecise.
+
+Only one of the two is ever bound (`window.PointerEvent ? 'pointerdown' :
+'click'`), so a tap can never register twice. `preventDefault()` is
+deliberately *not* called, which is what keeps the `:active` brightness on
+the tile. Keyboard players are already served by the document-level
+`keydown` handler, so nothing is lost by not listening for `click` on the
+buttons themselves.
+
 Other things the code is doing on purpose:
 
 - **The cheap rules run first.** Too short, missing the centre letter, and
@@ -289,12 +364,10 @@ Other things the code is doing on purpose:
   status is not worth a storage quota.
 - **`game.checking` holds words already out for an answer**, so
   double-tapping Enter sends one request rather than two.
-- **The clock does not stop for a lookup**, and an answer that arrives after
-  the game has ended is dropped rather than scored late. `submit()` pins the
-  current game in `round` and the callback bails if `game !== round` or the
-  phase is no longer `playing`. A word submitted a moment before time ran
-  out is therefore lost — the honest reading of a clock that has run out,
-  and the alternative is a score that changes after it is recorded.
+- **The clock does not stop for a lookup.** `ask()` pins the current game in
+  `round` and the callback bails if `game !== round`, so a verdict for a
+  game that has been packed away goes nowhere. What it no longer does is
+  bail on the phase — see Finishing waits for the queue.
 - **The word being checked is held on screen** — `flash(text, tone, hold)`
   skips the fade — because a verdict that has not arrived yet has nothing to
   fade to. It is dimmed rather than coloured, since it is not a result.
