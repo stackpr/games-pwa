@@ -149,6 +149,9 @@
     .flash[data-tone="good"] { color: var(--good); }
     .flash[data-tone="bad"] { color: var(--bad); }
     .flash[data-tone="wow"] { color: var(--live); }
+    /* A word still out at the dictionary: dimmer than a verdict, because it
+       is not one yet. */
+    .flash[data-tone="wait"] { color: var(--text-dim); }
     @media (prefers-reduced-motion: no-preference) {
       .flash { transition: opacity 120ms linear; }
     }
@@ -192,6 +195,21 @@
       text-transform: uppercase;
       cursor: pointer;
       touch-action: manipulation;
+      /* Baseline-aligned so the value sits at the foot of the letter, the way
+         it does on a Scrabble tile. The pair is centred as one unit. */
+      display: flex;
+      align-items: baseline;
+      justify-content: center;
+      gap: 0.06em;
+    }
+    /* Small enough to read as an annotation rather than a second letter, and
+       nudged in from the clipped corner so the hexagon never cuts it. */
+    .hex-value {
+      font-size: 0.36em;
+      font-weight: 700;
+      opacity: 0.7;
+      font-variant-numeric: tabular-nums;
+      text-transform: none;
     }
     .hive { container-type: inline-size; }
     .hex:active { filter: brightness(1.35); }
@@ -358,10 +376,6 @@
     /* A class with a display of its own beats the UA's [hidden] rule, so the
        badge has to opt back out explicitly. */
     .badge[hidden] { display: none; }
-    .wordlist { display: flex; flex-wrap: wrap; gap: 0.3rem; margin: 0.3rem 0 1rem; }
-    .wordlist .word[data-missed] { background: none; box-shadow: inset 0 0 0 1px var(--panel-hi);
-      color: var(--text-dim); }
-
     .rules-list { margin: 0; padding-left: 1.1rem; font-size: 0.85rem;
       color: var(--text-dim); line-height: 1.45; }
     .rules-list li + li { margin-top: 0.35rem; }
@@ -412,13 +426,13 @@
 
     <main class="stage">
       <div class="hive" id="hive">
-        <button class="hex" type="button" data-pos="nw"></button>
-        <button class="hex" type="button" data-pos="n"></button>
-        <button class="hex" type="button" data-pos="ne"></button>
-        <button class="hex" type="button" data-pos="c"></button>
-        <button class="hex" type="button" data-pos="sw"></button>
-        <button class="hex" type="button" data-pos="s"></button>
-        <button class="hex" type="button" data-pos="se"></button>
+        <button class="hex" type="button" data-pos="nw"><span class="hex-letter"></span><span class="hex-value"></span></button>
+        <button class="hex" type="button" data-pos="n"><span class="hex-letter"></span><span class="hex-value"></span></button>
+        <button class="hex" type="button" data-pos="ne"><span class="hex-letter"></span><span class="hex-value"></span></button>
+        <button class="hex" type="button" data-pos="c"><span class="hex-letter"></span><span class="hex-value"></span></button>
+        <button class="hex" type="button" data-pos="sw"><span class="hex-letter"></span><span class="hex-value"></span></button>
+        <button class="hex" type="button" data-pos="s"><span class="hex-letter"></span><span class="hex-value"></span></button>
+        <button class="hex" type="button" data-pos="se"><span class="hex-letter"></span><span class="hex-value"></span></button>
       </div>
     </main>
 
@@ -447,6 +461,9 @@
           <tbody id="board-rows"></tbody>
         </table>
         <p class="board-empty" id="board-empty" hidden>No games at this limit yet.</p>
+        <p class="rules-note" id="net-note" hidden>You look offline. Words are
+          checked against an online dictionary, so nothing will score until
+          you have a connection.</p>
       </div>
       <div class="sheet-actions">
         <button class="go" id="play" type="button">Play</button>
@@ -483,8 +500,6 @@
           <tbody id="over-board-rows"></tbody>
         </table>
 
-        <p class="label" style="margin-top:1.1rem">Every word in this hive</p>
-        <div class="wordlist" id="all-words"></div>
       </div>
       <div class="sheet-actions">
         <button class="go" id="again" type="button">Play again</button>
@@ -502,15 +517,23 @@
         <li>Words are four letters or longer.</li>
         <li>No plurals ending in <em>s</em> &mdash; there is never an
           <em>s</em> in the hive.</li>
+        <li>Every hive has at least two vowels, so there is always something
+          to build on.</li>
         <li>Type on a keyboard if you have one: letters, Backspace, Enter.
           <kbd>Space</kbd> shuffles.</li>
       </ul>
       <h3 class="rules-sub">Scoring</h3>
       <table class="score-table">
-        <tr><td>Four letters</td><td>1 point</td></tr>
-        <tr><td>Five or more</td><td>1 point per letter</td></tr>
-        <tr><td>All seven letters</td><td>plus 7 &mdash; a pangram</td></tr>
+        <tr><td>Each letter</td><td>its value, shown on the tile</td></tr>
+        <tr><td>Length</td><td>1, 4, 9, 16, 25&hellip; per letter past four</td></tr>
+        <tr><td>All seven letters</td><td>plus 10 &mdash; a pangram</td></tr>
       </table>
+      <p class="rules-note">
+        Letter values are the familiar ones &mdash; <em>e</em> and <em>a</em>
+        are worth 1, <em>k</em> is 5, <em>q</em> and <em>z</em> are 10. So a
+        short word made of awkward letters can beat a longer easy one, while
+        length wins outright once a word gets really long.
+      </p>
       <h3 class="rules-sub">The clock</h3>
       <ul class="rules-list">
         <li>Pick a limit before you start. A short game is a different game, so
@@ -518,9 +541,10 @@
         <li>A game cannot be paused or resumed: reloading the page ends it.</li>
       </ul>
       <p class="rules-note">
-        The word list is fixed and ships with the page, so the game works
-        offline and a word either scores or it does not &mdash; there is no
-        dictionary lookup going out to anywhere.
+        The seven letters are drawn fresh every game, and a guess is looked up
+        in a real dictionary at dictionaryapi.dev rather than in a list that
+        ships with the page. So the whole language is in play &mdash; and,
+        unlike everything else here, this game needs a connection.
       </p>
       <p class="rules-note">
         A fresh build of a familiar puzzle. The rules are not owned; the usual
@@ -534,7 +558,6 @@
   <script src="../../js/lib/store.js"></script>
   <script src="../../js/lib/modal.js"></script>
   <script src="../../js/lib/timer.js"></script>
-  <script src="puzzles.js"></script>
   <script src="honeycomb-spelling.js"></script>
   <script>
     if ('serviceWorker' in navigator) {

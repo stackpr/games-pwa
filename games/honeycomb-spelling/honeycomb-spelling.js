@@ -1,6 +1,7 @@
-// Honeycomb: Spelling — seven letters, one of them compulsory, against a
-// clock you choose. See _README.md for the rules, the scoring and the shape
-// of the saved state.
+// Honeycomb: Spelling — seven random letters, one of them compulsory,
+// against a clock you choose. Guesses are checked against an online
+// dictionary, so this one needs a connection. See _README.md for the rules,
+// the scoring and the shape of the saved state.
 (function () {
   const STORAGE_KEY = 'games.honeycomb-spelling.v1';
   // Each limit keeps its own top five: a minute and ten minutes are not the
@@ -8,12 +9,9 @@
   const LIMITS = [60, 120, 180, 300, 600];
   const DEFAULT_LIMIT = 180;
   const TOP_N = 5;
-  // How many hives to remember, so the next game is unlikely to repeat one.
-  const RECENT = 12;
   const RING = ['n', 'ne', 'se', 's', 'sw', 'nw'];
   const FLASH_MS = 1100;
-
-  const HIVES = window.Hives || [];
+  const MIN_LENGTH = 4;
 
   function pick(id, tag) {
     const node = document.getElementById(id);
@@ -57,7 +55,7 @@
     finalLongest: pick('final-longest', 'dd'),
     overBoardFor: pick('over-board-for', 'span'),
     overBoardRows: pick('over-board-rows', 'tbody'),
-    allWords: pick('all-words'),
+    netNote: pick('net-note', 'p'),
     again: pick('again', 'button'),
     rules: pick('rules'),
     rulesBtn: pick('rules-btn', 'button')
@@ -79,10 +77,7 @@
       const raw = p.scores && Array.isArray(p.scores[seconds]) ? p.scores[seconds] : [];
       scores[seconds] = raw.filter(isEntry).sort(byScore).slice(0, TOP_N);
     }
-    const recent = Array.isArray(p.recent)
-      ? p.recent.filter(i => Number.isInteger(i) && i >= 0 && i < HIVES.length)
-      : [];
-    return { limit, scores, recent };
+    return { limit, scores };
   }
 
   function isEntry(e) {
@@ -97,7 +92,6 @@
   }
 
   function save() {
-    state.recent = state.recent.slice(-RECENT);
     Store.save(STORAGE_KEY, state);
   }
 
@@ -120,21 +114,126 @@
     return d.toLocaleDateString('en', { month: 'short', day: 'numeric' });
   }
 
+  // Scrabble's letter values, which is the point: they are a scale players
+  // already know, and every tile shows its own. See _README.md.
+  const SCRABBLE = {
+    a: 1, b: 3, c: 3, d: 2, e: 1, f: 4, g: 2, h: 4, i: 1, j: 8, k: 5, l: 1,
+    m: 3, n: 1, o: 1, p: 3, q: 10, r: 1, s: 1, t: 1, u: 1, v: 4, w: 4, x: 8,
+    y: 4, z: 10
+  };
+  const PANGRAM_BONUS = 10;
+
+  // Letters + length + pangram. The length bonus squares how far past the
+  // four-letter floor a word reaches, so it pays nothing at the floor and
+  // carries a long word — which leaves each half a range where it decides
+  // the score.
   function wordScore(word) {
-    // Four letters is the floor and scores one; after that a letter is a
-    // point, and using all seven is worth another seven.
-    const base = word.length === 4 ? 1 : word.length;
-    return base + (new Set(word).size === 7 ? 7 : 0);
+    let letters = 0;
+    for (const ch of word) letters += SCRABBLE[ch] || 0;
+    // Clamped so a word below the floor is worth its letters and nothing
+    // more. submit() rejects those before they get here, but squaring a
+    // negative reach would quietly pay a bonus for being too short.
+    const reach = Math.max(0, word.length - MIN_LENGTH);
+    const pangram = new Set(word).size === HIVE_SIZE ? PANGRAM_BONUS : 0;
+    return letters + reach * reach + pangram;
   }
 
   // --- the hive ------------------------------------------------------------
 
-  function nextHive() {
-    if (!HIVES.length) return -1;
-    const recent = new Set(state.recent);
-    const fresh = HIVES.map((_, i) => i).filter(i => !recent.has(i));
-    const pool = fresh.length ? fresh : HIVES.map((_, i) => i);
-    return pool[Math.floor(Math.random() * pool.length)];
+  // Every game draws its own seven letters. They are weighted by how often
+  // each turns up in English rather than picked flat, because a flat draw
+  // produces hives nothing can be spelled from. There is no `s` in the table
+  // at all — see _README.md.
+  const VOWELS = { a: 8.2, e: 12.7, i: 7.0, o: 7.5, u: 2.8 };
+  const CONSONANTS = {
+    b: 1.5, c: 2.8, d: 4.3, f: 2.2, g: 2.0, h: 6.1, j: 0.15, k: 0.77,
+    l: 4.0, m: 2.4, n: 6.7, p: 1.9, q: 0.10, r: 6.0, t: 9.1, v: 1.0,
+    w: 2.4, x: 0.15, y: 2.0, z: 0.07
+  };
+  // These are spellable but they make a seat in the hive close to wasted, so
+  // they are pushed below even their own low frequency — a q or a z should be
+  // a rare novelty, not a letter you resent. See _README.md.
+  const HARD = ['j', 'q', 'x', 'z'];
+  const HARD_PENALTY = 0.25;
+  for (const ch of HARD) CONSONANTS[ch] *= HARD_PENALTY;
+  // A hive with one vowel is unplayable and one with four is thin on
+  // consonants, so the count is drawn from this range and never outside it.
+  const MIN_VOWELS = 2;
+  const MAX_VOWELS = 3;
+  const HIVE_SIZE = 7;
+
+  // Draws `n` distinct letters, each one's chance being its share of what is
+  // still in the pool.
+  function draw(weights, n) {
+    const pool = Object.keys(weights);
+    const out = [];
+    while (out.length < n && pool.length) {
+      let total = 0;
+      for (const ch of pool) total += weights[ch];
+      let r = Math.random() * total;
+      let i = 0;
+      while (i < pool.length - 1 && (r -= weights[pool[i]]) > 0) i++;
+      out.push(pool.splice(i, 1)[0]);
+    }
+    return out;
+  }
+
+  function weightOf(ch) {
+    return VOWELS[ch] || CONSONANTS[ch] || 1;
+  }
+
+  // A q with no u is a letter you cannot use, so a hive that draws one is
+  // given the other. It costs a vowel seat rather than a consonant one, which
+  // is what keeps the vowel count exactly where it was drawn — and u is a
+  // vowel itself, so the hive is no poorer for it.
+  function withU(vowels, consonants) {
+    if (consonants.indexOf('q') === -1 || vowels.indexOf('u') !== -1) return vowels;
+    return vowels.slice(0, -1).concat('u');
+  }
+
+  function newHive() {
+    const count = MIN_VOWELS + Math.floor(Math.random() * (MAX_VOWELS - MIN_VOWELS + 1));
+    const consonants = draw(CONSONANTS, HIVE_SIZE - count);
+    const letters = withU(draw(VOWELS, count), consonants).concat(consonants);
+    // The centre is weighted the same way, which is what keeps a q or a z off
+    // the one letter every word has to contain.
+    const weights = {};
+    for (const ch of letters) weights[ch] = weightOf(ch);
+    const centre = draw(weights, 1)[0];
+    return { centre: centre, outer: letters.filter(ch => ch !== centre), letters: letters };
+  }
+
+  // The draw is pure, and the specs sample it many thousands of times to
+  // check the vowel floor and the q/u rule — neither is reachable by playing
+  // games at the rate a q turns up. See _README.md.
+  // `score` is here for the same reason: the table is worth asserting on real
+  // words, which random letters cannot be relied on to produce.
+  window.HoneycombHive = { next: newHive, score: wordScore };
+
+  // --- the dictionary ------------------------------------------------------
+
+  // A guess is looked up at dictionaryapi.dev; there is no word list on the
+  // page. Verdicts are kept for the session so a repeat costs no round trip,
+  // and only definite answers are kept — see _README.md.
+  const API = 'https://api.dictionaryapi.dev/api/v2/entries/en/';
+  const verdicts = new Map();
+
+  // Resolves to 'yes', 'no', or 'off' for a question that went unanswered.
+  // 'off' is not a no: it is never remembered and never counts against you.
+  function lookUp(word) {
+    if (verdicts.has(word)) return Promise.resolve(verdicts.get(word));
+    return fetch(API + encodeURIComponent(word))
+      .then(res => {
+        if (res.ok) return remember(word, 'yes');
+        if (res.status === 404) return remember(word, 'no');
+        return 'off';
+      })
+      .catch(() => 'off');
+  }
+
+  function remember(word, verdict) {
+    verdicts.set(word, verdict);
+    return verdict;
   }
 
   function shuffled(letters) {
@@ -150,12 +249,27 @@
     const cells = el.hive.querySelectorAll('.hex');
     for (const cell of cells) {
       const pos = cell.dataset.pos;
-      if (!game) { cell.textContent = ''; continue; }
-      const letter = pos === 'c' ? game.hive.centre : game.ring[RING.indexOf(pos)];
-      cell.textContent = letter || '';
-      cell.setAttribute('aria-label', pos === 'c'
-        ? (letter || '') + ', the middle letter'
-        : (letter || ''));
+      const letter = !game ? ''
+        : (pos === 'c' ? game.hive.centre : game.ring[RING.indexOf(pos)]) || '';
+      // The letter lives in the attribute as well as the markup, so a tap
+      // reads it without having to strip the value back off again.
+      cell.dataset.letter = letter;
+
+      const letterNode = cell.querySelector('.hex-letter');
+      const valueNode = cell.querySelector('.hex-value');
+      if (letterNode) {
+        letterNode.textContent = letter;
+        if (valueNode) valueNode.textContent = letter ? String(SCRABBLE[letter]) : '';
+      } else {
+        // Markup from the neighbouring release has no spans inside the hex.
+        // A hive with no values beats a blank game — see CLAUDE.md.
+        cell.textContent = letter;
+      }
+
+      const value = letter ? ', worth ' + SCRABBLE[letter] : '';
+      cell.setAttribute('aria-label', letter
+        ? letter + value + (pos === 'c' ? ', the middle letter' : '')
+        : '');
     }
   }
 
@@ -174,12 +288,15 @@
     el.typed.append(caret);
   }
 
-  function flash(text, tone) {
+  // `hold` keeps the line up indefinitely, which is what a word still being
+  // looked up needs — it has no verdict to fade to yet.
+  function flash(text, tone, hold) {
     clearFlash();
     el.flash.textContent = text;
     el.flash.dataset.tone = tone;
     el.flash.dataset.show = '';
     el.say.textContent = text;
+    if (hold) return;
     flashHandle = setTimeout(() => {
       delete el.flash.dataset.show;
       flashHandle = 0;
@@ -216,15 +333,31 @@
     paintTyped();
     if (!word) return;
 
-    if (word.length < 4) return flash('Too short', 'bad');
+    if (word.length < MIN_LENGTH) return flash('Too short', 'bad');
     if (word.indexOf(game.hive.centre) === -1) {
       return flash('Missing ' + game.hive.centre.toUpperCase(), 'bad');
     }
     if (game.found.indexOf(word) !== -1) return flash('Already found', 'bad');
-    if (!game.answers.has(word)) return flash('Not in the list', 'bad');
+    if (game.checking.has(word)) return flash('Checking ' + word, 'wait', true);
 
+    // The clock does not stop for a lookup, and an answer that arrives after
+    // the game has ended is dropped rather than scored late. `round` pins the
+    // game the guess belongs to; a verdict for a finished one goes nowhere.
+    const round = game;
+    game.checking.add(word);
+    flash('Checking ' + word, 'wait', true);
+    lookUp(word).then(verdict => {
+      if (game !== round || phase !== 'playing') return;
+      game.checking.delete(word);
+      if (verdict === 'off') return flash('Could not check ' + word, 'bad');
+      if (verdict === 'no') return flash('Not a word', 'bad');
+      if (game.found.indexOf(word) === -1) accept(word);
+    });
+  }
+
+  function accept(word) {
     const points = wordScore(word);
-    const pangram = new Set(word).size === 7;
+    const pangram = new Set(word).size === HIVE_SIZE;
     game.found.unshift(word);
     game.score += points;
     if (word.length > game.longest.length) game.longest = word;
@@ -251,7 +384,7 @@
       const chip = document.createElement('span');
       chip.className = 'word';
       chip.textContent = word;
-      if (new Set(word).size === 7) chip.dataset.pangram = '';
+      if (new Set(word).size === HIVE_SIZE) chip.dataset.pangram = '';
       el.found.append(chip);
     }
   }
@@ -292,7 +425,14 @@
     const rows = paintBoard(el.boardRows, state.limit, -1);
     el.board.hidden = rows === 0;
     el.boardEmpty.hidden = rows > 0;
+    paintNet();
     showIdleClock();
+  }
+
+  // Words are checked over the network, so being offline is worth saying
+  // before the clock starts rather than once per rejected word.
+  function paintNet() {
+    el.netNote.hidden = navigator.onLine !== false;
   }
 
   function buildLimits() {
@@ -325,17 +465,14 @@
   }
 
   function startGame() {
-    const index = nextHive();
-    if (index < 0) return;
-    const hive = HIVES[index];
-    state.recent.push(index);
-    save();
-
+    const hive = newHive();
     game = {
       hive: hive,
       ring: shuffled(hive.outer),
-      answers: new Set(hive.words),
       found: [],
+      // Words submitted but not yet answered for, so the same guess sent
+      // twice in a row does not go out twice.
+      checking: new Set(),
       typed: '',
       score: 0,
       longest: ''
@@ -384,22 +521,14 @@
     el.finalScore.textContent = game.score;
     el.finalCount.textContent = game.found.length;
     el.finalLongest.textContent = game.longest || '—';
+    // No answer key exists to count against, so the line reports what was
+    // found and nothing else. See _README.md.
     el.overSub.textContent = clockText(state.limit) + ' — ' + game.found.length +
-      ' of ' + game.hive.words.length + ' words.';
+      (game.found.length === 1 ? ' word.' : ' words.');
     el.overBadge.hidden = freshAt !== 0;
     el.overBadge.textContent = freshAt === 0 ? 'Best yet at ' + clockText(state.limit) : '';
     el.overBoardFor.textContent = 'at ' + clockText(state.limit);
     paintBoard(el.overBoardRows, state.limit, freshAt);
-
-    el.allWords.textContent = '';
-    for (const word of game.hive.words) {
-      const chip = document.createElement('span');
-      chip.className = 'word';
-      chip.textContent = word;
-      if (game.found.indexOf(word) === -1) chip.dataset.missed = '';
-      else if (new Set(word).size === 7) chip.dataset.pangram = '';
-      el.allWords.append(chip);
-    }
 
     el.over.dataset.open = '';
     showIdleClock();
@@ -409,7 +538,7 @@
 
   on(el.hive, 'click', event => {
     const hex = event.target.closest ? event.target.closest('.hex') : null;
-    if (hex) typeLetter(hex.textContent.trim());
+    if (hex) typeLetter(hex.dataset.letter || hex.textContent.trim());
   });
   on(el.del, 'click', backspace);
   on(el.enter, 'click', submit);
@@ -443,6 +572,9 @@
       event.preventDefault();
     }
   });
+
+  window.addEventListener('online', paintNet);
+  window.addEventListener('offline', paintNet);
 
   buildLimits();
   openStart();

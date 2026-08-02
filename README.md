@@ -31,7 +31,7 @@ installable PWA at **https://games.payne.run**.
 | [Blackjack](games/blackjack/) | Vegas rules, any bet, a bankroll that carries over |
 | [Quik Dice](games/quik-dice/) | Six dice, four colour rows — everyone on their own phone |
 | [Spin Words](games/spin-words/) | Spin the reel, call a letter, solve the puzzle — pass the phone |
-| [Honeycomb: Spelling](games/honeycomb-spelling/) | Seven letters, one clock, one score |
+| [Honeycomb: Spelling](games/honeycomb-spelling/) | Seven random letters, checked online |
 
 ## Development
 

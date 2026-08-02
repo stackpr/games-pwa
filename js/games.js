@@ -141,7 +141,7 @@ const GAMES = [
   {
     name: 'Honeycomb: Spelling',
     section: 'solitaire',
-    description: 'Seven letters, one clock, one score',
+    description: 'Seven random letters, checked online',
     emoji: '\u{1F524}',
     path: 'games/honeycomb-spelling/'
   }
