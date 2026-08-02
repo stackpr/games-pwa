@@ -355,13 +355,43 @@ test.describe('the puzzles', () => {
         categories: SpinPhrases.categories().length,
       };
     });
-    expect(shape.count).toBeGreaterThanOrEqual(120);
+    expect(shape.count).toBeGreaterThanOrEqual(280);
     expect(shape.unique).toBe(shape.count);
     expect(shape.odd).toEqual([]);
     expect(shape.long).toEqual([]);
     expect(shape.short).toEqual([]);
-    expect(shape.categories).toBeGreaterThanOrEqual(4);
+    expect(shape.categories).toBeGreaterThanOrEqual(12);
   });
+
+  test('every category is worth drawing from', async ({ page }) => {
+    // A thin category is a category that repeats, and a puzzle coming round
+    // twice in an evening is what makes the deck feel small.
+    const thin = await page.evaluate(() => {
+      const counts = {};
+      for (const p of SpinPhrases.pool()) counts[p.category] = (counts[p.category] || 0) + 1;
+      return Object.keys(counts).filter(c => counts[c] < 18);
+    });
+    expect(thin).toEqual([]);
+  });
+
+  test('Before and After puzzles pivot on a shared word', async ({ page }) => {
+    // Three words at least, or there is no pivot to share.
+    const short = await page.evaluate(() => SpinPhrases.pool()
+      .filter(p => p.category === 'Before and After')
+      .filter(p => p.text.split(' ').length < 3).map(p => p.text));
+    expect(short).toEqual([]);
+  });
+
+  test('Same Letter puzzles start every word with the same letter',
+    async ({ page }) => {
+      const wrong = await page.evaluate(() => SpinPhrases.pool()
+        .filter(p => p.category === 'Same Letter')
+        .filter(p => {
+          const first = p.text.split(' ').map(w => w[0].toUpperCase());
+          return first.some(c => c !== first[0]);
+        }).map(p => p.text));
+      expect(wrong).toEqual([]);
+    });
 
   test('a puzzle is never a four-letter word', async ({ page }) => {
     const answers = await page.evaluate(() => {
