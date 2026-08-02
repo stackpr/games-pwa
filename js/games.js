@@ -126,10 +126,17 @@ const GAMES = [
   },
   {
     name: 'Blackjack',
-    section: 'other',
+    section: 'solitaire',
     description: 'Vegas rules, your own bankroll',
     emoji: '\u{1F0A1}',
     path: 'games/blackjack/'
+  },
+  {
+    name: 'Honeycomb: Spelling',
+    section: 'solitaire',
+    description: 'Seven letters, one clock, one score',
+    emoji: '\u{1F524}',
+    path: 'games/honeycomb-spelling/'
   }
 ];
 
@@ -139,6 +146,7 @@ const SECTIONS = [
   { key: 'scoring', title: 'Scoring' },
   { key: 'two', title: '2 players' },
   { key: 'group', title: 'Groups' },
+  { key: 'solitaire', title: 'Solitaire' },
   { key: 'other', title: 'Other' }
 ];
 

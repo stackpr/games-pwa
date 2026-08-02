@@ -81,7 +81,7 @@ Use the `add-game` skill, or by hand:
    self-contained; link back to `../../` in a top bar.
 2. Write `games/<slug>/_README.md` (required — see Documenting a game).
 3. Add an entry to `GAMES` in `js/games.js`, including its **`section`**:
-   `scoring`, `two`, `group` or `other`. The home page groups by that and
+   `scoring`, `two`, `group`, `solitaire` or `other`. The home page groups by that and
    sorts alphabetically inside each group, so where the entry sits in the
    array does not matter. An entry with no recognised section falls through
    to *Other* rather than vanishing.
