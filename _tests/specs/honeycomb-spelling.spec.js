@@ -274,9 +274,9 @@ test.describe('scoring a word', () => {
     await expect(page.locator('#flash')).toHaveText('+' + five);
     await expect(page.locator('#count')).toHaveText('2');
     // One more of the same letter: another letter value, and the length
-    // bonus jumping 1 -> 4.
-    expect(five - four).toBe(await points(page, centre) + 3);
-    expect(four).toBe(await points(page, centre) * 4 + 1);
+    // bonus arriving at all — the floor pays none.
+    expect(five - four).toBe(await points(page, centre) + 1);
+    expect(four).toBe(await points(page, centre) * 4);
   });
 
   test('a pangram is worth its letters, its length and ten', async ({ page }) => {
@@ -289,7 +289,7 @@ test.describe('scoring a word', () => {
     await expect(page.locator('#score')).toHaveText(String(worth));
     await expect(page.locator('#found .word[data-pangram]')).toHaveText(pangram);
 
-    // Seven letters, so 16 for the length and 10 for the pangram on top of
+    // Seven letters, so 9 for the length and 10 for the pangram on top of
     // whatever the letters themselves are worth.
     const bare = await page.evaluate(l => {
       const v = { a: 1, b: 3, c: 3, d: 2, e: 1, f: 4, g: 2, h: 4, i: 1, j: 8, k: 5,
@@ -297,7 +297,7 @@ test.describe('scoring a word', () => {
         x: 8, y: 4, z: 10 };
       return l.reduce((sum, ch) => sum + v[ch], 0);
     }, letters);
-    expect(worth).toBe(bare + 16 + 10);
+    expect(worth).toBe(bare + 9 + 10);
   });
 
   test('found words stack up newest first', async ({ page }) => {
@@ -334,13 +334,13 @@ test.describe('the scoring', () => {
   // Real words with the arithmetic written out, so a change to the table or
   // the curve has to be deliberate. Letters + (length - 3)^2 + 10 a pangram.
   const cases = [
-    { word: 'ache', sum: 9, len: 1, pangram: 0 },      // a1 c3 h4 e1
-    { word: 'cheat', sum: 10, len: 4, pangram: 0 },    // c3 h4 e1 a1 t1
-    { word: 'cheetah', sum: 15, len: 16, pangram: 0 }, // c3 h4 e1 e1 t1 a1 h4
-    { word: 'checkmate', sum: 22, len: 36, pangram: 10 },
-    { word: 'quiz', sum: 22, len: 1, pangram: 0 },     // q10 u1 i1 z10
-    { word: 'jinx', sum: 18, len: 1, pangram: 0 },     // j8 i1 n1 x8
-    { word: 'entire', sum: 6, len: 9, pangram: 0 },    // all ones
+    { word: 'ache', sum: 9, len: 0, pangram: 0 },      // a1 c3 h4 e1
+    { word: 'cheat', sum: 10, len: 1, pangram: 0 },    // c3 h4 e1 a1 t1
+    { word: 'cheetah', sum: 15, len: 9, pangram: 0 },  // c3 h4 e1 e1 t1 a1 h4
+    { word: 'checkmate', sum: 22, len: 25, pangram: 10 },
+    { word: 'quiz', sum: 22, len: 0, pangram: 0 },     // q10 u1 i1 z10
+    { word: 'jinx', sum: 18, len: 0, pangram: 0 },     // j8 i1 n1 x8
+    { word: 'entire', sum: 6, len: 4, pangram: 0 },    // all ones
   ];
 
   for (const { word, sum, len, pangram } of cases) {
@@ -360,12 +360,18 @@ test.describe('the scoring', () => {
     expect(await points(page, 'entertain')).toBeGreaterThan(await points(page, 'quiz'));
   });
 
-  test('the length bonus is the square of the reach past three', async ({ page }) => {
+  test('the length bonus is the square of the reach past four', async ({ page }) => {
     // Same letter throughout, so only the curve moves.
     const run = [];
     for (let n = 4; n <= 9; n++) run.push(await points(page, 'e'.repeat(n)));
-    // 'e' is worth 1, so each score is n + (n - 3)^2.
-    expect(run).toEqual([5, 9, 15, 23, 33, 45]);
+    // 'e' is worth 1, so each score is n + (n - 4)^2 — nothing at the floor.
+    expect(run).toEqual([4, 6, 10, 16, 24, 34]);
+  });
+
+  test('the floor pays no length bonus at all', async ({ page }) => {
+    // A four-letter word is scored purely on how awkward its letters are.
+    expect(await points(page, 'ache')).toBe(9);
+    expect(await points(page, 'quiz')).toBe(22);
   });
 
   test('the pangram bonus is exactly ten', async ({ page }) => {

@@ -123,16 +123,17 @@
   };
   const PANGRAM_BONUS = 10;
 
-  // Letters + length + pangram. Length is squared from the four-letter floor,
-  // so it is worth almost nothing on a short word and carries a long one —
-  // which leaves each half a range where it decides the score.
+  // Letters + length + pangram. The length bonus squares how far past the
+  // four-letter floor a word reaches, so it pays nothing at the floor and
+  // carries a long word — which leaves each half a range where it decides
+  // the score.
   function wordScore(word) {
     let letters = 0;
     for (const ch of word) letters += SCRABBLE[ch] || 0;
     // Clamped so a word below the floor is worth its letters and nothing
     // more. submit() rejects those before they get here, but squaring a
     // negative reach would quietly pay a bonus for being too short.
-    const reach = Math.max(0, word.length - MIN_LENGTH + 1);
+    const reach = Math.max(0, word.length - MIN_LENGTH);
     const pangram = new Set(word).size === HIVE_SIZE ? PANGRAM_BONUS : 0;
     return letters + reach * reach + pangram;
   }

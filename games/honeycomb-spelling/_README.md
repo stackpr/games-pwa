@@ -35,20 +35,25 @@ Three parts added together:
 | Part | Points |
 | --- | --- |
 | Each letter used | its Scrabble value — `a`/`e` 1, `k` 5, `q`/`z` 10 |
-| Length | `(n − 3)²` — 1, 4, 9, 16, 25, 36 at 4–9 letters |
+| Length | `(n − 4)²` — 0, 1, 4, 9, 16, 25 at 4–9 letters |
 | All seven letters | +10 — a pangram |
 
-Worked examples: `ache` = 9 + 1 = **10**. `cheat` = 10 + 4 = **14**.
-`cheetah` = 15 + 16 = **31**. `checkmate` = 22 + 36 + 10 = **68**.
+Worked examples: `ache` = 9 + 0 = **9**. `cheat` = 10 + 1 = **11**.
+`cheetah` = 15 + 9 = **24**. `checkmate` = 22 + 25 + 10 = **57**.
 
 **Why these two halves.** Letter values alone would score a four-letter
 word the same as a nine-letter one built from the same letters, and length
 alone would say `entire` and `jinxed` are equally hard. Together each one
-owns a range: the length bonus is 1 at the floor, so a short word is scored
-almost entirely on how awkward its letters are, and it reaches 36 by nine
-letters, so a long word is scored almost entirely on its length. `quiz` (23)
-beats `entire` (15) despite being shorter; `entertain` (45) beats `quiz`
-despite being made of ones.
+owns a range: **the bonus is zero at the four-letter floor**, so the
+shortest legal word is scored purely on how awkward its letters are, and it
+reaches 25 by nine letters, so a long word is scored almost entirely on its
+length. `quiz` (22) beats `entire` (10) despite being shorter;
+`entertain` (34) beats `quiz` despite being made of ones.
+
+Measuring the reach from the floor rather than from one below it is what
+makes the bonus mean "letters past the minimum" — four letters is the price
+of admission, so it earns no bonus, and the fifth letter is the first one
+that has been reached for.
 
 **Why squared.** It had to climb fast enough that a long word feels like the
 prize — linear growth barely separated a six from a nine once letter values
@@ -77,7 +82,7 @@ no ceiling to quote and no such thing as a perfect game. The clock is what
 bounds a round, which is why the limit is a setting rather than a constant.
 
 `wordScore()` clamps the length reach at zero. Nothing below four letters
-reaches it — `submit()` rejects those first — but an unclamped `(n − 3)²`
+reaches it — `submit()` rejects those first — but an unclamped `(n − 4)²`
 pays a *bonus* for being too short, which is the kind of thing that only
 shows up once the function is reused somewhere else.
 
