@@ -118,6 +118,13 @@ const GAMES = [
     path: 'games/honeycomb-3-bees/'
   },
   {
+    name: 'Quik Dice',
+    section: 'group',
+    description: 'Cross off numbers in four colours',
+    emoji: '\u274C',
+    path: 'games/quik-dice/'
+  },
+  {
     name: 'Blackjack',
     section: 'other',
     description: 'Vegas rules, your own bankroll',

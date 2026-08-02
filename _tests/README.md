@@ -179,6 +179,8 @@ specs/shell.spec.js        Home page, manifest, icons, service worker,
 specs/scorekeeper.spec.js  Scoring, tap grouping, undo, reset, persistence,
                            history-line layout
 specs/counter.spec.js      Counting, keyboard, persistence, H/V reflow
+specs/viewport.spec.js     --app-height: measured, capped, and carried by
+                           every full-height page
 specs/publishing.spec.js   Deploy surface: exclude rules, CNAME, no .nojekyll
 specs/tagging.spec.js      Guards the @nodom tag, and that desktop skips
                            nothing else
