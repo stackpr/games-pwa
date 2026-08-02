@@ -19,7 +19,7 @@ test.describe('app shell', () => {
     await page.goto('/');
     const titles = await page.locator('.section-title')
       .evaluateAll(els => els.map(e => e.textContent));
-    expect(titles).toEqual(['Scoring', '2 players', 'Groups', 'Other']);
+    expect(titles).toEqual(['Scoring', '2 players', 'Groups', 'Solitaire', 'Other']);
   });
 
   test('each section is alphabetical', async ({ page }) => {
@@ -29,7 +29,7 @@ test.describe('app shell', () => {
         section: g.dataset.section,
         names: [...g.querySelectorAll('.game-name')].map(n => n.textContent),
       })));
-    expect(groups.length).toBe(4);
+    expect(groups.length).toBe(5);
     for (const group of groups) {
       const sorted = group.names.slice()
         .sort((a, b) => a.localeCompare(b, 'en', { numeric: true }));
@@ -43,7 +43,7 @@ test.describe('app shell', () => {
       registered: GAMES.length,
       shown: document.querySelectorAll('#game-list li a').length,
       // A missing or unknown section must fall through to Other, not vanish.
-      unknown: GAMES.filter(g => !['scoring', 'two', 'group', 'other']
+      unknown: GAMES.filter(g => !['scoring', 'two', 'group', 'solitaire', 'other']
         .includes(g.section)).map(g => g.name),
     }));
     expect(counts.shown).toBe(counts.registered);
@@ -71,7 +71,7 @@ test.describe('app shell', () => {
         const head = id && document.getElementById(id);
         return Boolean(head && head.classList.contains('section-title'));
       }));
-    expect(linked).toEqual([true, true, true, true]);
+    expect(linked).toEqual([true, true, true, true, true]);
   });
 
   test('manifest is valid and uses relative paths', async ({ page }) => {
