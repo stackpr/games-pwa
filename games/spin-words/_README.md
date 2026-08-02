@@ -67,6 +67,53 @@ The coin flip is the point: drawn straight from a combined pool the phrases
 would be one puzzle in twelve, and they are the ones that play like this
 game rather than like a spelling test.
 
+### The phrase categories
+
+Fourteen of them, and the category is half the clue — a board reading
+`_ _ _ _  _ _ _ _  _ _ _ _` is a different puzzle under *Rhyme Time* than
+under *Occupation*.
+
+| Category | What it is |
+| --- | --- |
+| Phrase, Saying | Idioms and proverbs |
+| Place, Event, Occupation, Thing | Nouns with spaces in them |
+| Food and Drink, What Are You Doing, Fun and Games | The everyday ones |
+| **Before and After** | Two phrases sharing a pivot word, read straight through: *ice cream sandwich* + *sandwich bag* = `ICE CREAM SANDWICH BAG` |
+| **Rhyme Time** | Both words rhyme — `DOUBLE TROUBLE` |
+| **Same Letter** | Every word starts with the same letter — `TINY TIN TRUMPET` |
+| **Song Title**, **Nursery Rhyme** | Traditional and public domain only |
+
+Two of those carry a rule a spec enforces, because they are the two that
+stop being their category the moment somebody adds a near miss: Before and
+After needs three words or there is no pivot to share, and Same Letter has
+to actually share the letter. A third spec fails if any category drops
+below 18 entries — a thin category is one that repeats, and a puzzle coming
+round twice in an evening is what makes a deck feel small.
+
+### What may go on the board
+
+Titles are not copyrightable — 37 CFR 202.1(a) excludes names, titles and
+short phrases — so a **title** is safe content and a **lyric** is not. The
+line this file holds is deliberately further back than the law requires:
+
+- **Song and rhyme titles are traditional or public domain**, so there is
+  no live rightsholder even for the work behind the title. That takes the
+  question off the table rather than answering it.
+- **No lyrics, no quotations, no verse.** That is the part copyright
+  actually protects.
+- **No brands, franchises, characters, or film and television titles.**
+  This is a trademark question rather than a copyright one, and it is the
+  one that bites: *Simon Says* and *Leap Frog* were both dropped from Fun
+  and Games over toy brands that share the name, and *Hungry Hungry Hippos*
+  and *Fast and Furious* never made it into Same Letter for the same
+  reason. Being unsure counts as a hit — the same rule *Naming a game* in
+  `CLAUDE.md` applies to the slug applies here to the board.
+- **Before and After, Rhyme Time and Same Letter are written, not
+  collected.** No list was copied from anywhere.
+
+Anything that fails those, leave out and raise it rather than shipping it
+and hoping.
+
 The last 60 answers are remembered so a puzzle does not come round again
 soon. The list survives a New game, which is why a second game does not
 open on the puzzle the first one just finished.

@@ -15,6 +15,24 @@
  * sixth-grade reading level like the shared library, and free of
  * apostrophes and hyphens — every character on the board is either a letter
  * somebody has to call or a space, with nothing in between to explain.
+ *
+ * WHAT MAY GO IN HERE. Titles are not copyrightable — 37 CFR 202.1(a)
+ * excludes names, titles and short phrases — so a title is safe content and
+ * a lyric is not. The line this file holds is deliberately further back
+ * than the law requires:
+ *
+ *   - Song and rhyme titles are traditional or public domain, so there is
+ *     no live rightsholder even for the work behind the title.
+ *   - No lyrics, no quotations, no verse.
+ *   - No brands, franchises, characters or film and television titles.
+ *     That is a trademark question rather than a copyright one, and it is
+ *     the one that actually bites — 'Simon Says' and 'Leap Frog' were both
+ *     dropped from Fun and Games over toy brands that share the name.
+ *   - Before and After, Rhyme Time and Same Letter are written here rather
+ *     than collected from anywhere.
+ *
+ * Anything that fails those, leave out and raise it. See CLAUDE.md on
+ * naming; the same caution applies to what the game puts on the board.
  */
 window.SpinPhrases = (function () {
   const DATA = {
@@ -170,6 +188,224 @@ window.SpinPhrases = (function () {
       'Front Porch Swing',
       'Box of Crayons',
       'Stack of Pancakes'
+    ],
+
+    /*
+     * Two phrases sharing a pivot word, read straight through: "ice cream
+     * sandwich" plus "sandwich bag". Written here rather than collected —
+     * the pivot has to carry both halves, which is why so few of these are
+     * any good and why the list is shorter than it looks like it should be.
+     */
+    'Before and After': [
+      'Ice Cream Sandwich Bag',
+      'Peanut Butter Fingers',
+      'Birthday Cake Walk',
+      'Chocolate Chip Shot',
+      'Cold Shoulder Bag',
+      'Full Moon Walk',
+      'Home Run Away',
+      'Rain Check Mark',
+      'Snow Ball Game',
+      'Fire Drill Team',
+      'Green Thumb Print',
+      'Hot Dog House',
+      'Night Light Bulb',
+      'Paper Clip Board',
+      'Pocket Watch Dog',
+      'Sea Shell Game',
+      'Sun Flower Pot',
+      'Time Out Field',
+      'Fish Bowl Game',
+      'Book Worm Hole',
+      'Card Board Game',
+      'Corn Bread Crumbs',
+      'Down Town Hall',
+      'Foot Ball Field'
+    ],
+
+    'Rhyme Time': [
+      'Double Trouble',
+      'Super Duper',
+      'Wear and Tear',
+      'Wild Child',
+      'Fair Share',
+      'Prime Time',
+      'Hustle and Bustle',
+      'Name Game',
+      'Snail Mail',
+      'Brain Drain',
+      'Chalk Talk',
+      'Dream Team',
+      'Fender Bender',
+      'Hocus Pocus',
+      'Legal Eagle',
+      'Mumbo Jumbo',
+      'Nitty Gritty',
+      'Razzle Dazzle',
+      'Roly Poly',
+      'Silly Billy',
+      'Stranger Danger',
+      'Wheel and Deal',
+      'Meet and Greet',
+      'Wine and Dine'
+    ],
+
+    'Same Letter': [
+      'Big Blue Balloon',
+      'Sunny Summer Sunday',
+      'Purple Painted Pony',
+      'Cool Calm Collected',
+      'Silver Silk Scarf',
+      'Merry Marching Music',
+      'Tiny Tin Trumpet',
+      'Wild Winter Wind',
+      'Bright Blue Bicycle',
+      'Crispy Crunchy Crackers',
+      'Gentle Green Grass',
+      'Lazy Lions Lounging',
+      'Perfectly Pink Peonies',
+      'Salty Sea Spray',
+      'Tall Trees Towering',
+      'Brave Brown Bear',
+      'Curious Cats Climbing',
+      'Six Silly Sailors',
+      'Handsome Happy Horses',
+      'Wooden Wagon Wheels'
+    ],
+
+    'Food and Drink': [
+      'Grilled Cheese Sandwich',
+      'Hot Apple Cider',
+      'Scrambled Eggs and Toast',
+      'Chicken Noodle Soup',
+      'Mashed Potatoes and Gravy',
+      'Fresh Squeezed Lemonade',
+      'Corn on the Cob',
+      'Peanut Butter and Jelly',
+      'Strawberry Milkshake',
+      'Baked Potato',
+      'Iced Tea with Lemon',
+      'Blueberry Pancakes',
+      'Garden Salad',
+      'Vanilla Ice Cream',
+      'Root Beer Float',
+      'Cinnamon Toast',
+      'Homemade Soup',
+      'Buttered Popcorn',
+      'Warm Apple Pie',
+      'Cheese and Crackers',
+      'Orange Juice',
+      'Pot Roast Dinner'
+    ],
+
+    'What Are You Doing': [
+      'Walking the Dog',
+      'Raking the Leaves',
+      'Washing the Dishes',
+      'Reading a Good Book',
+      'Riding a Bicycle',
+      'Building a Snowman',
+      'Making the Bed',
+      'Watering the Garden',
+      'Baking Cookies',
+      'Folding the Laundry',
+      'Climbing a Tree',
+      'Painting the Fence',
+      'Feeding the Ducks',
+      'Packing a Suitcase',
+      'Sweeping the Porch',
+      'Counting the Stars',
+      'Taking a Long Nap',
+      'Learning to Swim',
+      'Setting the Table',
+      'Wrapping a Present',
+      'Shoveling the Driveway',
+      'Chasing Fireflies'
+    ],
+
+    'Fun and Games': [
+      'Kick the Can',
+      'Musical Chairs',
+      'Wheelbarrow Race',
+      'Duck Duck Goose',
+      'Red Light Green Light',
+      'Freeze Tag',
+      'Double Dutch',
+      'Four Square',
+      'Capture the Flag',
+      'Three Legged Race',
+      'Egg and Spoon Race',
+      'Sack Race',
+      'Charades',
+      'Card Tricks',
+      'Water Balloon Toss',
+      'Follow the Leader',
+      'Twenty Questions',
+      'Scavenger Hunt',
+      'Obstacle Course',
+      'Marco Polo',
+      'Rock Paper Scissors',
+      'Blind Mans Bluff'
+    ],
+
+    /*
+     * Traditional and public domain only — see the note at the top. Titles
+     * are not copyrightable in the first place, but a folk song has no live
+     * rightsholder behind the title either, which takes the question off
+     * the table rather than answering it.
+     */
+    'Song Title': [
+      'Amazing Grace',
+      'Auld Lang Syne',
+      'Home on the Range',
+      'Take Me Out to the Ball Game',
+      'When the Saints Go Marching In',
+      'You Are My Sunshine',
+      'Oh Susanna',
+      'Camptown Races',
+      'Yankee Doodle',
+      'Silent Night',
+      'Jingle Bells',
+      'Danny Boy',
+      'Oh My Darling Clementine',
+      'Down by the Riverside',
+      'Swing Low Sweet Chariot',
+      'Scarborough Fair',
+      'Simple Gifts',
+      'The Yellow Rose of Texas',
+      'Sweet Betsy from Pike',
+      'Turkey in the Straw',
+      'Shenandoah',
+      'Greensleeves',
+      'The Erie Canal',
+      'Beautiful Dreamer'
+    ],
+
+    'Nursery Rhyme': [
+      'Humpty Dumpty',
+      'Jack and Jill',
+      'Little Bo Peep',
+      'Hey Diddle Diddle',
+      'Hickory Dickory Dock',
+      'Mary Had a Little Lamb',
+      'Old Mother Hubbard',
+      'Little Jack Horner',
+      'The Muffin Man',
+      'Three Blind Mice',
+      'Rub a Dub Dub',
+      'Pat a Cake',
+      'Little Miss Muffet',
+      'Old King Cole',
+      'Wee Willie Winkie',
+      'This Little Piggy',
+      'Rock a Bye Baby',
+      'The Grand Old Duke of York',
+      'Sing a Song of Sixpence',
+      'Baa Baa Black Sheep',
+      'Twinkle Twinkle Little Star',
+      'Row Row Row Your Boat',
+      'The Wheels on the Bus',
+      'This Old Man'
     ]
   };
 
