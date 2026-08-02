@@ -10,6 +10,13 @@ https://games.payne.run (GitHub Pages, custom domain — do not delete `CNAME`).
 - **No external network dependencies.** No CDNs, no analytics, no fonts or
   scripts fetched from other origins. Everything must work fully offline
   once the service worker has cached the shell.
+  **One deliberate exception:** Honeycomb: Spelling draws random letters and
+  checks guesses against `api.dictionaryapi.dev`, which no shipped word list
+  could replace — its `_README.md` argues the trade. It is an exception, not
+  a precedent: the shell still precaches and still loads offline, the game
+  says so on its start sheet, and its spec asserts that host is the only one
+  the site ever reaches. A new game needing the network has to earn it the
+  same way, in writing.
 - **Persistence is browser-only.** Use `localStorage` for small state
   (scores, settings) and IndexedDB if a game ever needs structured or large
   data. Never assume a backend exists.
