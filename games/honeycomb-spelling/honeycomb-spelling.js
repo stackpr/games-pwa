@@ -12,6 +12,16 @@
   const RING = ['n', 'ne', 'se', 's', 'sw', 'nw'];
   const FLASH_MS = 1100;
   const MIN_LENGTH = 4;
+  // The dictionary answers inconsistently, so a question that went unanswered
+  // is asked again rather than thrown away. Five tries in all, the waits
+  // doubling: 1s, 2s, 4s, 8s. See _README.md.
+  const RETRY_TRIES = 5;
+  const RETRY_BASE_MS = 1000;
+  // Once the clock has stopped the finish screen is waiting on the queue, so
+  // the politeness delays collapse to one short gap — and the whole wait is
+  // capped, because a dictionary that never answers must not strand a game.
+  const SETTLE_GAP_MS = 400;
+  const SETTLE_LIMIT_MS = 12000;
 
   function pick(id, tag) {
     const node = document.getElementById(id);
@@ -65,9 +75,15 @@
   // The game in play. Not persisted: a clock cannot be paused honestly
   // across a reload, so a reload ends the game rather than resuming it.
   let game = null;
+  // 'idle' | 'playing' | 'settling' | 'over'. `settling` is the beat between
+  // the clock stopping and the result appearing, while the queue drains.
   let phase = 'idle';
   let flashHandle = 0;
   let clock = null;
+  let pumpHandle = 0;
+  let settleHandle = 0;
+  let settleUntil = 0;
+  let ranOutOfTime = false;
 
   function load() {
     const p = Store.load(STORAGE_KEY) || {};
@@ -208,7 +224,11 @@
   // games at the rate a q turns up. See _README.md.
   // `score` is here for the same reason: the table is worth asserting on real
   // words, which random letters cannot be relied on to produce.
-  window.HoneycombHive = { next: newHive, score: wordScore };
+  window.HoneycombHive = {
+    next: newHive,
+    score: wordScore,
+    knows: word => VOCAB.has(word)
+  };
 
   // --- the dictionary ------------------------------------------------------
 
@@ -218,9 +238,25 @@
   const API = 'https://api.dictionaryapi.dev/api/v2/entries/en/';
   const verdicts = new Map();
 
+  // The site's own word list, which every page here already ships. It is a
+  // yes-list only — a word missing from it proves nothing — but a hit costs
+  // no request, no wait and no connection. Multi-word and hyphenated entries
+  // are dropped: nothing with a space in it can be typed on a hive.
+  const VOCAB = (function () {
+    const known = new Set();
+    const pool = window.Vocab ? Vocab.pool() : [];
+    for (const entry of pool) {
+      const word = String((entry && entry.word) || '').toLowerCase();
+      if (/^[a-z]+$/.test(word)) known.add(word);
+    }
+    return known;
+  })();
+
   // Resolves to 'yes', 'no', or 'off' for a question that went unanswered.
   // 'off' is not a no: it is never remembered and never counts against you.
   function lookUp(word) {
+    // Our own vocabulary first, before anything goes near the network.
+    if (VOCAB.has(word)) return Promise.resolve('yes');
     if (verdicts.has(word)) return Promise.resolve(verdicts.get(word));
     return fetch(API + encodeURIComponent(word))
       .then(res => {
@@ -338,21 +374,87 @@
       return flash('Missing ' + game.hive.centre.toUpperCase(), 'bad');
     }
     if (game.found.indexOf(word) !== -1) return flash('Already found', 'bad');
+    // Neither a word already out nor one already queued goes out a second
+    // time — one guess is one place in the queue, however often it is typed.
     if (game.checking.has(word)) return flash('Checking ' + word, 'wait', true);
+    if (queued(word)) return flash('Still waiting on ' + word, 'wait', true);
 
-    // The clock does not stop for a lookup, and an answer that arrives after
-    // the game has ended is dropped rather than scored late. `round` pins the
-    // game the guess belongs to; a verdict for a finished one goes nowhere.
+    flash('Checking ' + word, 'wait', true);
+    ask(word, 1);
+  }
+
+  /**
+   * One trip to the dictionary. `tries` counts this attempt, so an answer
+   * that never comes turns into a queued retry until the tries are spent.
+   * `round` pins the game the guess belongs to: a verdict for a game that has
+   * already been packed away goes nowhere.
+   */
+  function ask(word, tries) {
     const round = game;
     game.checking.add(word);
-    flash('Checking ' + word, 'wait', true);
+    paintFound();
     lookUp(word).then(verdict => {
-      if (game !== round || phase !== 'playing') return;
+      if (game !== round || phase === 'idle') return;
       game.checking.delete(word);
-      if (verdict === 'off') return flash('Could not check ' + word, 'bad');
-      if (verdict === 'no') return flash('Not a word', 'bad');
-      if (game.found.indexOf(word) === -1) accept(word);
+      if (verdict === 'yes') {
+        if (game.found.indexOf(word) === -1) accept(word);
+      } else if (verdict === 'no') {
+        flash('Not a word: ' + word, 'bad');
+      } else if (tries < RETRY_TRIES) {
+        queue(word, tries + 1);
+      } else {
+        // Five unanswered asks is not a verdict, but it is enough waiting.
+        flash('Could not check ' + word, 'bad');
+      }
+      paintFound();
+      settle();
     });
+  }
+
+  function queued(word) {
+    return !!game && game.retry.some(entry => entry.word === word);
+  }
+
+  function queue(word, tries) {
+    if (queued(word) || game.found.indexOf(word) !== -1) return;
+    game.retry.push({ word: word, tries: tries, due: Date.now() + delayFor(tries) });
+    flash('No answer — will retry ' + word, 'wait', true);
+    pump();
+  }
+
+  function unqueue(word) {
+    if (game) game.retry = game.retry.filter(entry => entry.word !== word);
+  }
+
+  function delayFor(tries) {
+    // The second ask waits a second, and each one after that doubles.
+    return phase === 'settling' ? SETTLE_GAP_MS : RETRY_BASE_MS * Math.pow(2, tries - 2);
+  }
+
+  // One timer for the whole queue, always set for whichever word is due
+  // soonest. A timer per word would be harder to cancel and easy to leak.
+  function pump() {
+    if (pumpHandle) { clearTimeout(pumpHandle); pumpHandle = 0; }
+    if (!game || !game.retry.length) return;
+
+    let next = game.retry[0];
+    for (const entry of game.retry) if (entry.due < next.due) next = entry;
+    pumpHandle = setTimeout(() => {
+      pumpHandle = 0;
+      if (!game || game.retry.indexOf(next) === -1) return pump();
+      unqueue(next.word);
+      ask(next.word, next.tries);
+      pump();
+    }, Math.max(0, next.due - Date.now()));
+  }
+
+  function outstanding() {
+    return game ? game.checking.size + game.retry.length : 0;
+  }
+
+  function stopQueue() {
+    if (pumpHandle) { clearTimeout(pumpHandle); pumpHandle = 0; }
+    if (settleHandle) { clearTimeout(settleHandle); settleHandle = 0; }
   }
 
   function accept(word) {
@@ -371,15 +473,47 @@
     el.count.textContent = game ? game.found.length : 0;
   }
 
+  /**
+   * The strip under the hive: words still owed an answer at the head, then
+   * the ones that scored. Putting the queue here rather than in a row of its
+   * own is what keeps it visible without costing the hive any height — see
+   * _README.md.
+   */
   function paintFound() {
     el.found.textContent = '';
-    if (!game || !game.found.length) {
+    const waiting = [];
+    if (game) {
+      for (const word of game.checking) waiting.push({ word: word, tries: 0 });
+      for (const entry of game.retry) waiting.push({ word: entry.word, tries: entry.tries });
+    }
+
+    if (!game || (!game.found.length && !waiting.length)) {
       const empty = document.createElement('span');
       empty.className = 'found-empty';
       empty.textContent = 'Found words appear here';
       el.found.append(empty);
       return;
     }
+
+    for (const row of waiting) {
+      const chip = document.createElement('span');
+      chip.className = 'word';
+      chip.dataset.waiting = '';
+      chip.textContent = row.word;
+      // `tries` is the attempt about to be made, so 0 means one is in flight
+      // right now and there is no number worth showing yet.
+      if (row.tries > 1) {
+        const nth = document.createElement('sup');
+        nth.className = 'try';
+        nth.textContent = row.tries;
+        chip.append(nth);
+      }
+      chip.setAttribute('aria-label', row.tries > 1
+        ? row.word + ', no answer yet, try ' + row.tries
+        : row.word + ', being checked');
+      el.found.append(chip);
+    }
+
     for (const word of game.found) {
       const chip = document.createElement('span');
       chip.className = 'word';
@@ -456,6 +590,7 @@
   // --- the game ------------------------------------------------------------
 
   function openStart() {
+    stopQueue();
     phase = 'idle';
     delete el.over.dataset.open;
     el.start.dataset.open = '';
@@ -465,14 +600,18 @@
   }
 
   function startGame() {
+    stopQueue();
     const hive = newHive();
     game = {
       hive: hive,
       ring: shuffled(hive.outer),
       found: [],
-      // Words submitted but not yet answered for, so the same guess sent
-      // twice in a row does not go out twice.
+      // Words out at the dictionary right now, so the same guess sent twice
+      // in a row does not go out twice.
       checking: new Set(),
+      // Words the dictionary would not answer for, waiting to be asked
+      // again. One entry per word — see _README.md.
+      retry: [],
       typed: '',
       score: 0,
       longest: ''
@@ -492,12 +631,48 @@
     clock.start();
   }
 
+  /**
+   * The clock has stopped. Words already sent are still owed an answer, and
+   * a word submitted in time should score even if the dictionary was slow —
+   * so the result waits for the queue rather than abandoning it.
+   */
   function finish(ranOut) {
     if (phase !== 'playing' || !game) return;
-    phase = 'over';
+    phase = 'settling';
+    ranOutOfTime = ranOut;
     if (clock) clock.stop();
+    showIdleClock();
+    el.newBtn.textContent = 'Skip';
+    el.scoresBtn.disabled = false;
+
+    // Nothing is waiting to be polite to any more, so every queued retry is
+    // pulled forward to the short gap.
+    for (const entry of game.retry) entry.due = Date.now() + SETTLE_GAP_MS;
+    settleUntil = Date.now() + SETTLE_LIMIT_MS;
+    settleHandle = setTimeout(showOver, SETTLE_LIMIT_MS);
+    pump();
+    settle();
+  }
+
+  // Called every time the queue moves. It either shows the result or says
+  // what is still holding it up.
+  function settle() {
+    if (phase !== 'settling') return;
+    const left = outstanding();
+    if (!left || Date.now() >= settleUntil) return showOver();
+    flash('Finishing — ' + left + (left === 1 ? ' word' : ' words') + ' still out',
+      'wait', true);
+  }
+
+  function showOver() {
+    if (phase !== 'settling' || !game) return;
+    phase = 'over';
+    stopQueue();
+    // Anything still unanswered is abandoned here rather than scored later.
+    game.retry = [];
+    paintFound();
     clearFlash();
-    el.overTitle.textContent = ranOut ? 'Time!' : 'Done';
+    el.overTitle.textContent = ranOutOfTime ? 'Time!' : 'Done';
     el.newBtn.textContent = 'New';
     el.scoresBtn.disabled = false;
 
@@ -536,10 +711,24 @@
 
   // --- wiring --------------------------------------------------------------
 
-  on(el.hive, 'click', event => {
+  /**
+   * Taps are taken on pointerdown, not click. A click needs press *and*
+   * release on the same element, so a finger that lands on one hex and
+   * drifts a few pixels onto its neighbour before lifting produces no click
+   * at all — which is exactly what a hive of touching hexagons invites, and
+   * what made tapping feel unreliable. Pointerdown fires the moment the
+   * finger lands. See _README.md.
+   *
+   * Only one of the two is ever bound, so a tap cannot register twice.
+   */
+  function tapHive(event) {
     const hex = event.target.closest ? event.target.closest('.hex') : null;
-    if (hex) typeLetter(hex.dataset.letter || hex.textContent.trim());
-  });
+    if (!hex) return;
+    // Left button or any touch/pen contact; a right-click is not a tap.
+    if (event.button !== undefined && event.button !== 0) return;
+    typeLetter(hex.dataset.letter || hex.textContent.trim());
+  }
+  on(el.hive, window.PointerEvent ? 'pointerdown' : 'click', tapHive);
   on(el.del, 'click', backspace);
   on(el.enter, 'click', submit);
   on(el.shuffle, 'click', () => {
@@ -552,6 +741,9 @@
   on(el.scoresBtn, 'click', openStart);
   on(el.newBtn, 'click', () => {
     if (phase === 'playing') finish(false);
+    // Skip: a dictionary that has stopped answering should not be able to
+    // hold the result hostage for the full wait.
+    else if (phase === 'settling') showOver();
     else openStart();
   });
 

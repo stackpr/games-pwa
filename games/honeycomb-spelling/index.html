@@ -269,6 +269,18 @@
       text-transform: capitalize;
     }
     .word[data-pangram] { background: var(--live); color: var(--ink); font-weight: 700; }
+    /* Still owed an answer: outlined rather than filled, so a word waiting on
+       the dictionary can never be mistaken for one that scored. */
+    .word[data-waiting] {
+      background: none;
+      box-shadow: inset 0 0 0 1px var(--panel-hi);
+      color: var(--text-dim);
+    }
+    .word[data-waiting] .try {
+      font-size: 0.7em;
+      margin-left: 0.15em;
+      font-variant-numeric: tabular-nums;
+    }
 
     /*
      * The start and end sheets. Deliberately not js/lib/modal.js: that one
@@ -461,9 +473,9 @@
           <tbody id="board-rows"></tbody>
         </table>
         <p class="board-empty" id="board-empty" hidden>No games at this limit yet.</p>
-        <p class="rules-note" id="net-note" hidden>You look offline. Words are
-          checked against an online dictionary, so nothing will score until
-          you have a connection.</p>
+        <p class="rules-note" id="net-note" hidden>You look offline. Only
+          words from the site&rsquo;s own small vocabulary will score until you
+          have a connection &mdash; everything else is checked online.</p>
       </div>
       <div class="sheet-actions">
         <button class="go" id="play" type="button">Play</button>
@@ -541,10 +553,12 @@
         <li>A game cannot be paused or resumed: reloading the page ends it.</li>
       </ul>
       <p class="rules-note">
-        The seven letters are drawn fresh every game, and a guess is looked up
-        in a real dictionary at dictionaryapi.dev rather than in a list that
-        ships with the page. So the whole language is in play &mdash; and,
-        unlike everything else here, this game needs a connection.
+        The seven letters are drawn fresh every game. A guess is checked first
+        against the site&rsquo;s own small vocabulary and then, if that does not
+        know it, in a real dictionary at dictionaryapi.dev &mdash; so the whole
+        language is in play, and, unlike everything else here, this game needs
+        a connection. If the dictionary does not answer, the word waits in the
+        strip below the hive and is asked about again.
       </p>
       <p class="rules-note">
         A fresh build of a familiar puzzle. The rules are not owned; the usual
@@ -558,6 +572,7 @@
   <script src="../../js/lib/store.js"></script>
   <script src="../../js/lib/modal.js"></script>
   <script src="../../js/lib/timer.js"></script>
+  <script src="../../js/lib/vocab.js"></script>
   <script src="honeycomb-spelling.js"></script>
   <script>
     if ('serviceWorker' in navigator) {
