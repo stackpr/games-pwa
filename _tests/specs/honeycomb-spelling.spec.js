@@ -476,7 +476,7 @@ test.describe('the dictionary', () => {
     });
 
     await guess(page, word);
-    await expect(page.locator('#flash')).toHaveText('Checking ' + word);
+    await expect(page.locator('#flash')).toHaveText(word);
     await expect(page.locator('#flash')).toHaveAttribute('data-tone', 'wait');
     // Nothing is scored on the strength of the guess alone.
     await expect(page.locator('#score')).toHaveText('0');
@@ -503,7 +503,7 @@ test.describe('the dictionary', () => {
     });
 
     await guess(page, word);
-    await expect(page.locator('#flash')).toHaveText('Checking ' + word);
+    await expect(page.locator('#flash')).toHaveText(word);
     await guess(page, word);
     release();
     await expect(page.locator('#score')).toHaveText(String(await points(page, word)));
@@ -550,10 +550,10 @@ test.describe('the dictionary', () => {
       await dictionary(page, dict);
 
       await guess(page, word);
-      await expect(page.locator('#flash')).toHaveText('No answer — will retry ' + word);
+      await expect(page.locator('#flash')).toHaveText(word);
       await expect(page.locator('#score')).toHaveText('0');
       // Visibly waiting rather than silently dropped.
-      await expect(page.locator('#found .word[data-waiting]')).toHaveText(word + '2');
+      await expect(page.locator('#found .word[data-waiting]')).toHaveText(word);
 
       // Nothing was learned, so the word is asked about again rather than
       // being remembered as a rejection.
@@ -600,20 +600,27 @@ test.describe('the retry queue', () => {
     await page.unroute(API);
     await dictionary(page, { status: 503 });
 
+    let asked = 0;
+    page.on('request', req => { if (req.url().includes('dictionaryapi.dev')) asked++; });
+
     await guess(page, word);
     const chip = page.locator('#found .word[data-waiting]');
-    await expect(chip).toHaveText(word + '2');
+    await expect(chip).toHaveText(word);
+    await expect.poll(() => asked).toBe(1);
 
     // The waits double: a second to the 2nd try, two more to the 3rd, four
-    // to the 4th. Nothing moves early.
+    // to the 4th. Nothing moves early. The chip says only that the word is
+    // still out — how many times it has been asked is the network's
+    // business, not the player's. See _README.md.
     await page.clock.runFor(900);
-    await expect(chip).toHaveText(word + '2');
+    await expect.poll(() => asked).toBe(1);
     await page.clock.runFor(200);
-    await expect(chip).toHaveText(word + '3');
+    await expect.poll(() => asked).toBe(2);
     await page.clock.runFor(2100);
-    await expect(chip).toHaveText(word + '4');
+    await expect.poll(() => asked).toBe(3);
     await page.clock.runFor(4100);
-    await expect(chip).toHaveText(word + '5');
+    await expect.poll(() => asked).toBe(4);
+    await expect(chip).toHaveText(word);
   });
 
   test('five unanswered tries is as far as it goes', async ({ page }) => {
@@ -632,7 +639,8 @@ test.describe('the retry queue', () => {
     // 1s + 2s + 4s + 8s covers every retry there is.
     await page.clock.runFor(16000);
 
-    await expect(page.locator('#flash')).toHaveText('Could not check ' + word);
+    // Nothing is said about it: the word simply stops being listed.
+    await expect(page.locator('#flash')).not.toHaveAttribute('data-show', '');
     await expect(page.locator('#found .word[data-waiting]')).toHaveCount(0);
     await expect(page.locator('#score')).toHaveText('0');
     expect(asked).toBe(5);
@@ -651,13 +659,13 @@ test.describe('the retry queue', () => {
     await guess(page, word);
     // The chip covers a word in flight too, so wait for the try number: that
     // is what says it has failed once and is sitting in the queue.
-    await expect(page.locator('#found .word[data-waiting]')).toHaveText(word + '2');
+    await expect(page.locator('#found .word[data-waiting]')).toHaveText(word);
 
     // Typing it again while it waits changes nothing but the message.
     await guess(page, word);
-    await expect(page.locator('#flash')).toHaveText('Still waiting on ' + word);
+    await expect(page.locator('#flash')).toHaveText(word);
     await expect(page.locator('#found .word[data-waiting]')).toHaveCount(1);
-    await expect(page.locator('#found .word[data-waiting]')).toHaveText(word + '2');
+    await expect(page.locator('#found .word[data-waiting]')).toHaveText(word);
   });
 
   test('a new game starts with an empty queue', async ({ page }) => {
@@ -667,7 +675,7 @@ test.describe('the retry queue', () => {
     await dictionary(page, { status: 503 });
     await guess(page, centre.repeat(4));
     await expect(page.locator('#found .word[data-waiting]'))
-      .toHaveText(centre.repeat(4) + '2');
+      .toHaveText(centre.repeat(4));
 
     await page.locator('#new').click();
     await page.locator('#again').click();
@@ -851,12 +859,12 @@ test.describe('finishing', () => {
     });
 
     await guess(page, word);
-    await expect(page.locator('#flash')).toHaveText('Checking ' + word);
+    await expect(page.locator('#flash')).toHaveText(word);
     await page.locator('#new').click();
 
     // The word was sent in time, so the finish screen holds rather than
     // throwing the answer away — see _README.md.
-    await expect(page.locator('#flash')).toHaveText('Finishing — 1 word still out');
+    await expect(page.locator('#flash')).toHaveText(word);
     await expect(page.locator('#over')).not.toHaveAttribute('data-open', '');
 
     release();
@@ -883,7 +891,7 @@ test.describe('finishing', () => {
     });
 
     await guess(page, word);
-    await expect(page.locator('#found .word[data-waiting]')).toHaveText(word + '2');
+    await expect(page.locator('#found .word[data-waiting]')).toHaveText(word);
     await page.locator('#new').click();
     await expect(page.locator('#over')).not.toHaveAttribute('data-open', '');
 
@@ -901,7 +909,7 @@ test.describe('finishing', () => {
     await dictionary(page, { abort: true });
     await guess(page, centre.repeat(4));
     await expect(page.locator('#found .word[data-waiting]'))
-      .toHaveText(centre.repeat(4) + '2');
+      .toHaveText(centre.repeat(4));
 
     await page.locator('#new').click();
     await expect(page.locator('#new')).toHaveText('Skip');
@@ -1004,11 +1012,12 @@ test.describe('the top-score boards', () => {
     expect((await saved(page)).scores['600'].length).toBe(1);
   });
 
-  test('only the top five are kept, highest first', async ({ page }) => {
-    const at = n => '2026-01-0' + n + 'T00:00:00.000Z';
+  test('only the top ten are kept, highest first', async ({ page }) => {
+    const at = n => '2026-01-' + String(n).padStart(2, '0') + 'T00:00:00.000Z';
+    const seeded = [10, 9, 8, 7, 6, 5, 4, 3, 2, 1];
     await play(page, {
       scores: {
-        180: [5, 4, 3, 2, 1].map((s, i) => ({ score: s, words: 1, longest: 'ache', at: at(i + 1) })),
+        180: seeded.map((s, i) => ({ score: s, words: 1, longest: 'ache', at: at(i + 1) })),
       },
     });
     const { letters } = await hive(page);
@@ -1017,12 +1026,13 @@ test.describe('the top-score boards', () => {
     await expect(page.locator('#score')).toHaveText(String(worth));
     await page.locator('#new').click();
 
-    // A pangram clears 5 in any hive, so the new score takes the top slot.
-    expect(worth).toBeGreaterThan(5);
+    // A pangram clears 10 in any hive, so the new score takes the top slot
+    // and the last seeded one falls off the bottom.
+    expect(worth).toBeGreaterThan(10);
     await expect(page.locator('#over-board-rows .pts'))
-      .toHaveText([String(worth), '5', '4', '3', '2']);
+      .toHaveText([String(worth), '10', '9', '8', '7', '6', '5', '4', '3', '2']);
     await expect(page.locator('#over-badge')).toHaveText('Best yet at 3:00');
-    expect((await saved(page)).scores['180'].length).toBe(5);
+    expect((await saved(page)).scores['180'].length).toBe(10);
   });
 });
 
@@ -1058,12 +1068,80 @@ test.describe('the clock', () => {
     await expect(page.locator('#clock')).not.toHaveAttribute('data-low', '');
   });
 
+  test('the letters on the line go out when the clock does', async ({ page }) => {
+    await play(page, { limit: 60 });
+    const { centre } = await hive(page);
+    const word = centre.repeat(4);
+    const worth = await points(page, word);
+    // Typed but never entered — Enter is optional on the last word.
+    await page.keyboard.type(word);
+    await expect(page.locator('#typed')).toHaveText(word);
+    await page.clock.runFor(61000);
+
+    await expect(page.locator('#over')).toHaveAttribute('data-open', '');
+    await expect(page.locator('#final-score')).toHaveText(String(worth));
+    await expect(page.locator('#final-count')).toHaveText('1');
+  });
+
+  test('Done does not send the letters on the line', async ({ page }) => {
+    await play(page, { limit: 60 });
+    const { centre } = await hive(page);
+    await page.keyboard.type(centre.repeat(4));
+    await page.locator('#new').click();
+
+    // Ending the game early is deliberate; a half-typed word is not a guess.
+    await expect(page.locator('#over')).toHaveAttribute('data-open', '');
+    await expect(page.locator('#final-score')).toHaveText('0');
+  });
+
   test('nothing is typed once time is up', async ({ page }) => {
     await play(page, { limit: 60 });
     await page.clock.runFor(61000);
     const { centre } = await hive(page);
     await page.keyboard.type(centre.repeat(4));
     await expect(page.locator('#typed')).toHaveText('');
+  });
+});
+
+test.describe('fresh letters', () => {
+  test('New deals a different hive and restarts the clock', async ({ page }) => {
+    await page.clock.install();
+    await page.goto(URL);
+    await clearState(page);
+    await play(page, { limit: 60 });
+    const before = await hive(page);
+    await guess(page, before.centre.repeat(4));
+    await expect(page.locator('#score')).not.toHaveText('0');
+    await page.clock.runFor(20000);
+    await expect(page.locator('#clock')).toHaveText('0:40');
+
+    // Not every redeal produces a different hive, so this asks until one
+    // does rather than asserting on a single draw.
+    let after = before;
+    for (let i = 0; i < 20 && after.letters.join('') === before.letters.join(''); i++) {
+      await page.locator('#fresh').click();
+      after = await hive(page);
+    }
+    expect(after.letters.join('')).not.toBe(before.letters.join(''));
+    await expect(page.locator('#clock')).toHaveText('1:00');
+    await expect(page.locator('#score')).toHaveText('0');
+    await expect(page.locator('#count')).toHaveText('0');
+    await expect(page.locator('#over')).not.toHaveAttribute('data-open', '');
+
+    // The old clock went with the old hive: this is a whole minute, not the
+    // forty seconds that were left.
+    await page.clock.runFor(45000);
+    await expect(page.locator('#over')).not.toHaveAttribute('data-open', '');
+    await page.clock.runFor(16000);
+    await expect(page.locator('#over')).toHaveAttribute('data-open', '');
+  });
+
+  test('New only offers itself while a game is on', async ({ page }) => {
+    await expect(page.locator('#fresh')).toBeHidden();
+    await play(page);
+    await expect(page.locator('#fresh')).toBeVisible();
+    await page.locator('#new').click();
+    await expect(page.locator('#fresh')).toBeHidden();
   });
 });
 
@@ -1114,8 +1192,7 @@ test.describe('the page itself', () => {
       await page.route(API, route => route.abort('failed'));
       const { centre } = await hive(page);
       await guess(page, centre.repeat(4));
-      await expect(page.locator('#flash'))
-        .toHaveText('No answer — will retry ' + centre.repeat(4));
+      await expect(page.locator('#flash')).toHaveText(centre.repeat(4));
       await expect(page.locator('.hex')).toHaveCount(7);
     } finally {
       await context.setOffline(false);

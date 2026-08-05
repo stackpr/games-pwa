@@ -107,7 +107,7 @@ Two things follow from putting a second thing inside the button:
 Five limits: 1:00, 2:00, 3:00, 5:00, 10:00. The limit is chosen on the
 start sheet and remembered between visits.
 
-**Each limit keeps its own top five.** A minute and ten minutes are not
+**Each limit keeps its own top ten.** A minute and ten minutes are not
 the same game and their scores are not comparable, so ranking them in one
 list would make the longest limit the only one worth playing. The start
 sheet shows the board for whichever limit is selected, which is also how
@@ -127,6 +127,21 @@ Pressing **Done** during a game ends it early and records the score. That
 is a real move — once the answers dry up there is no reason to sit out the
 rest of the clock — and it cannot inflate a score, only cut it short.
 
+**Enter is optional on the last word.** When the clock runs out, whatever
+letters are on the line are submitted as a guess before the game settles.
+A word typed in time is a word typed in time, and the settling wait
+(below) already exists to collect the answer. Pressing Done does *not* do
+this: ending the game early is a deliberate act, and the letters left on
+the line are as likely to be an abandoned attempt as a finished word.
+
+**New, next to Done, deals seven fresh letters** and restarts the clock.
+Some hives are simply not viable, and there is nothing to be gained by
+making a player sit out three minutes to find that out. It only appears
+while a game is on — outside one, the New button already means this — and
+it takes no confirmation, because it is only ever reached from a game the
+player has already decided is not worth finishing. The score so far is
+lost with the hive.
+
 ## What goes on the board
 
 An entry is `{ score, words, longest, at }`. `longest` is the longest word
@@ -145,7 +160,7 @@ with blanks would take that away.
 ```js
 {
   limit: 180,                  // the selected limit, in seconds
-  scores: {                    // one top-five per limit, highest first
+  scores: {                    // one top-ten per limit, highest first
     "60": [], "120": [],
     "180": [{ score: 42, words: 9, longest: 'checkmate', at: '2026-08-02T…' }],
     "300": [], "600": []
@@ -230,10 +245,27 @@ Three rules fall out of that, and each has a spec:
 its share of what is left in the pool — recomputing the total each time is
 what keeps the distribution right as letters are removed.
 
+### Flattened, not raw, frequency
+
+The consonant table is raised to the power of `FLATTEN` (0.75) before
+anything is drawn from it. Raw English frequency is the right *order* and
+the wrong *spread*: `t` at 9.1 against `k` at 0.77 means a hive is nearly
+always built from the same dozen cheap letters, and the letters that pay —
+`k`, `v`, `w`, `y`, `f`, `h` — sit on the bench. Since a word's score is
+mostly its Scrabble letters, that made a high score something you waited
+for rather than played for.
+
+Flattening keeps every letter in its place (`t` is still the commonest)
+while pulling the tail up: `k` moves from roughly one hive in sixteen to
+one in eleven, `v` and `w` similarly. It is a spread control, not a
+re-ranking, which is why it is one exponent rather than a hand-tuned second
+table. Vowels are left alone — `u` is a one-point letter and making it
+commoner would buy nothing.
+
 ### The hard letters
 
 `j`, `q`, `x` and `z` are listed in `HARD` and have their weight multiplied
-by `HARD_PENALTY` (0.25) when the table is built. English frequency alone
+by `HARD_PENALTY` (0.4) when the table is built. English frequency alone
 already makes them uncommon, but seven letters are drawn from twenty-one, so
 raw frequency still puts one of them in the hive more often than the game
 wants. A hive has seven seats and one of these spends a seat: it is not
@@ -273,9 +305,8 @@ key, no configuration and no fallback host.
 
 **The three-verdict shape is the important bit.** `lookUp()` resolves to
 `'yes'`, `'no'` or `'off'`, and `'off'` — a network failure, a 429, a 500 —
-is *not* a `'no'`. It is reported as `Could not check <word>`, it is never
-cached, and the same word can be tried again the moment the connection is
-back. Collapsing "the dictionary says no" into "we could not ask" would
+is *not* a `'no'`. It is never cached, and the same word can be tried again
+the moment the connection is back. Collapsing "the dictionary says no" into "we could not ask" would
 quietly turn every outage into a game that rejects real words.
 
 ### Our own vocabulary first
@@ -300,15 +331,37 @@ the whole queue rather than one per word: easier to cancel, and impossible
 to leak.
 
 - **Five tries in all**, the waits doubling — 1s, 2s, 4s, 8s. After that the
-  word is dropped with `Could not check <word>`. That is not a verdict, and
-  it is still never cached: the same word can be tried again by typing it.
+  word is dropped. That is not a verdict, and it is still never cached: the
+  same word can be tried again by typing it.
 - **No duplicates.** `queue()` refuses a word already queued or already
-  found, and `submit()` turns a re-typed one into `Still waiting on <word>`
+  found, and `submit()` turns a re-typed one back into the waiting line
   rather than a second request. One guess is one place in the queue however
   often it is typed.
 - **The queue is visible**, at the head of the found-words strip, outlined
   rather than filled so a word awaiting an answer cannot be mistaken for one
-  that scored. Words past the first try carry the try number.
+  that scored.
+
+### Waiting is shown, never explained
+
+The line above the hive names the words that are still out — `hive`, or
+`hive, honey, phone` once several are — and says nothing else about them.
+There is no *checking*, no *no answer, will retry*, no *could not check*
+and no *finishing, 2 words still out*.
+
+A retry, a fifth failed ask and a slow first request are all the same thing
+from where the player sits: **that word has not come back yet.** The
+difference between them is a fact about a third-party API, which is
+interesting to whoever maintains this and to nobody holding the phone. So
+the word appears when it goes out and vanishes when it resolves, and the
+try count is gone from the chips for the same reason.
+
+Comma-separating is what makes that affordable: the line is one row shared
+with the word being typed, and a sentence per waiting word would not fit
+three of them.
+
+A verdict *is* worth words — `+14`, `Pangram! +26`, `Not a word: hive` —
+and those still flash for their beat. When one fades and something is still
+out, the waiting line comes back rather than leaving the row empty.
 
 Putting it in the found strip rather than a row of its own is deliberate:
 that strip already costs a fixed height, and a new row would have to come

@@ -1,97 +1,134 @@
-# Blackjack
+# Honeycomb: 3 Bees
 
-Vegas rules, one seat that matters, a bankroll that carries over.
+Two players, one phone, one shared pool of bees and a comb that shrinks
+under both of them.
 
-## The table
+*(This file previously held a copy of Blackjack's README, checked in by
+mistake with the game. What follows is the real thing.)*
 
-**You always sit in the middle.** The other players are set in settings (0
-to 4), and your seat is `floor(total / 2)` — so three at the table puts you
-in the middle, five puts you in the middle, and an even table puts you just
-right of centre. Your seat is the wide one, ringed in chip gold; theirs are
-narrow.
+## The name
 
-The other players exist for **the cards they use up**, which is the whole
-reason the setting is there: a shoe dealt to five is a different shoe from
-one dealt heads-up. Their money is not tracked and they do not talk. They
-play a fixed, simple line — stand on hard 17, stand on 13–16 against a
-dealer 2–6, hit soft totals under 18 — rather than full basic strategy,
-because a bot playing a *slightly* wrong hand is not something anyone at
-this table can act on, and pretending otherwise would invite blame for
-losses it did not cause.
+The published game this reimplements has a registered trademark for a name.
+Rules are free to reimplement, names are not — so nothing here, in the slug,
+in the storage key or in the commit history uses it. See *Naming a game* in
+`CLAUDE.md`.
 
-## House rules
+## Use case
 
-- **Blackjack pays 3 to 2**, rounded down on an odd bet. A win pays even
-  money; a push returns the stake.
-- **Dealer stands on all 17s**, soft ones included.
-- **Double** on any two cards, including after a split. Exactly one card.
-- **Split** any pair, once. Split aces get one card each, and 21 after a
-  split is a plain 21 rather than a blackjack — the usual rule and the one
-  that stops a split into aces paying 3:2 twice.
-- **The dealer peeks** on a 21, so a dealer blackjack ends the hand before
-  anybody has doubled into it.
-- The dealer **does not draw at all** when every one of your hands has
-  already busted. There is nothing left to resolve and drawing would only
-  burn cards.
+A short abstract for two people passing one phone. There is nothing hidden,
+no clock and no deck: the whole position is on screen, which is what makes
+it playable across a table rather than side by side.
 
-## Saying why, before saying how much
+## The board
 
-A hand that ends says what happened before it says what it cost:
-*"Bust! You lose $10."* — not *"You lose $10."* on its own, which reads as
-though the dealer beat you when in fact you beat yourself and the dealer
-never drew a card. That is a real confusion here, because of the rule above:
-bust every hand and the dealer stands on whatever it was showing, so the
-board offers no explanation of its own.
+A hexagon of radius 3 — 37 cells — addressed in axial coordinates and keyed
+`"q,r"`. `CELLS` fixes the order once, `KEYS` and `INDEX` hang off it, and
+every later loop walks `KEYS` so the result never depends on object
+insertion order.
 
-The line names, in order of what a player wants to know: a blackjack, a
-dealer blackjack, your bust (**Bust!**, or *One hand bust* after a split
-where only one went over), then a dealer bust. The seat itself carries the
-total that did it — `Bust 26` rather than a bare *Lose* — so a split shows
-which half went where.
+`state.cells` holds only the cells that are **still on the board**: a key
+that has been removed is deleted rather than set empty. So `k in state.cells`
+means "there is a ring here" and `state.cells[k]` means "a bee is on it".
+That distinction carries the whole game and is worth keeping straight when
+changing anything here.
 
-Not offered, deliberately: insurance, surrender, and resplitting past two
-hands. Each is a rule most tables skip, and each costs a decision point
-mid-hand for a small edge.
+Cells are positioned from `--x`/`--y` custom properties as multiples of one
+hex step, with a second pair for the rotated layout; the stylesheet picks.
+No layout JS, no resize handler.
 
-## Betting
+## Nobody owns the bees
 
-Six buttons — ±1, ±5, ±25 — around the bet. That is "any number" without a
-keypad, which would mean a keyboard covering the table on every hand. Each
-button disables itself when it would take the bet below 1 or above the
-bankroll, so the bet can never exceed what is there to lose.
+Both players draw from one pool — 6 light, 8 mid, 10 dark — and both take
+from the same board. Win by holding **3 light, 4 mid, 5 dark, or 2 of every
+kind**. Since there is one pool, taking a colour is as much about denying it
+as collecting it.
 
-**The stake leaves the bankroll the moment the hand is dealt**, and payouts
-return the stake plus the winnings. That ordering matters: it means the
-balance on screen is always money you actually have, and a double or a split
-can be refused honestly because the bankroll has already been debited.
+The three kinds differ by **lightness, not hue**, so the game reads the same
+with no colour vision. They are not the site's player colours and must not
+become them: these are pieces, not identities.
 
-The bankroll starts at $500 and persists. There is a reset in settings; it
-is not automatic, because a bankroll that quietly refills is not a bankroll.
+## A turn
 
-## Cards
+1. **Jumping is compulsory.** If any bee can jump an adjacent bee into the
+   empty cell beyond it, it must, and the same bee keeps jumping while it
+   can (`state.chain` pins it). The jumped bee is taken.
+2. Otherwise **place a bee and take a cell away** — one move, not two.
+   `state.phase` goes to `'remove'` after the placement and the turn does not
+   end until a cell comes off.
+3. **If no cell can be removed**, the placement is the whole move. This is
+   checked *before* handing over, which is why `place()` looks at
+   `removableCells()` rather than assuming there is always one.
+4. When the pool is empty a player places **from what they have taken**,
+   which is a real cost late on — `placeable()` returns the pool, or that
+   player's own stack once the pool dries up.
+5. A player with **no move at all loses** (`stuck()`).
 
-`js/lib/deck.js` and `css/cards.css` are new and shared-by-intent. A card is
-a rounded rectangle with a rank and a suit pip drawn in CSS — one rule set
-rather than fifty-two images, and it scales without density variants. See
-Images in `CLAUDE.md`.
+**A cell only comes off the edge.** `removable()` asks for two *consecutive*
+open sides, walking `DIRS` as a cycle — anything else would have to slide
+out past its neighbours. That is the whole rule, and it is why `DIRS` is in
+cycle order rather than any convenient order.
 
-The shoe **never reshuffles itself.** It deals until empty and exposes
-`needsShuffle()`; the game asks between hands and calls `shuffle()` itself.
-That shape exists to make a mid-hand reshuffle impossible, which is the bug
-a self-managing shoe invites.
+### Cutting the comb
 
-Cards overlap by a negative margin so a six-card hand still fits the seat it
-was dealt to, and the whole row is sized from one `font-size` on `.hand`.
+Removing a cell (or a jump landing where it does) can split the comb.
+**Every group that is not the largest leaves the board, and the player who
+cut it off takes any bees that were on it** — full group or not.
+
+An earlier version only claimed a group when *every* cell in it held a bee,
+and left anything else sitting there detached. That was wrong twice over: a
+detached ring can never be jumped to or from again, so it is clutter that
+counts towards nothing, and a player who cuts off two bees and an empty ring
+had done exactly the thing the rule is meant to reward.
+
+`claimIsolated()` therefore:
+
+- builds the connected groups by walking `KEYS`, so the order is stable;
+- keeps the **largest** as the comb, ties going to the group holding the
+  earliest cell in board order — never to whatever the store happened to
+  iterate first;
+- deletes the rest and adds their bees to the mover's stack.
+
+It runs after a placement that ends the turn, after a removal, and after
+each jump — before `endTurn()`, so bees claimed this way can win the game on
+the move that took them.
+
+## Undo
+
+`undoStack` is in memory only, like the other board games'. A reload keeps
+the position and loses the ability to take moves back, which is the honest
+trade: the alternative is persisting a history that a second player never
+agreed to.
 
 ## Persisted state
 
-`localStorage` key `games.blackjack.v1`:
+`localStorage` key `games.honeycomb-3-bees.v1`:
 
 ```json
-{ "decks": 6, "others": 2, "bank": 480, "bet": 10 }
+{
+  "cells": "wg.b--..…",
+  "pool":  { "w": 4, "g": 6, "b": 8 },
+  "caps":  [{ "w": 1, "g": 1, "b": 1 }, { "w": 0, "g": 1, "b": 0 }],
+  "turn": 1,
+  "phase": "move",
+  "chain": null,
+  "winner": 0
+}
 ```
 
-**The hand in play is deliberately not saved.** A shoe is rebuilt on load, so
-a resumed hand would be finished against cards that had nothing to do with
-the ones it was dealt from — worse than losing it. A reload returns to
-betting with the bankroll intact, which is the honest resting state.
+`cells` is 37 characters in `KEYS` order: `-` removed, `.` empty, or the bee
+on it.
+
+**Bees are conserved, and `load()` checks it.** Board plus both stacks plus
+the pool has to equal the supply for every colour, or the save is not a
+position this game could have reached and a fresh board is started instead.
+That check is the reason the encoding is worth its awkwardness: it makes a
+corrupt or hand-edited save fail loudly rather than quietly hand somebody
+extra bees.
+
+## Player colours
+
+The turn indicator uses the shared pattern from `CLAUDE.md` — the piece
+carries the identity, the words carry the state, and a `.visually-hidden`
+label holds the full sentence for screen readers. The hint line under it
+says what the phase wants ("Now take a cell off the edge"), and that same
+sentence is appended to the screen-reader label, so nothing is colour-only.

@@ -181,6 +181,17 @@
       font-weight: 700;
       font-variant-numeric: tabular-nums;
     }
+    /* Empty for most seats most of the time, so it takes no height until
+       there is something to say. */
+    .seat-held {
+      display: block;
+      font-size: 0.68rem;
+      font-weight: 700;
+      line-height: 1.1;
+      color: var(--cash);
+      font-variant-numeric: tabular-nums;
+    }
+    .seat-held:empty { display: none; }
 
     .side { flex: none; display: flex; flex-direction: column; }
     .turn {
@@ -281,7 +292,8 @@
       font-variant-numeric: tabular-nums;
       color: var(--guess);
     }
-    body[data-phase="solve"] .clock { display: inline; }
+    body[data-phase="solve"] .clock,
+    body[data-phase="pick"] .clock { display: inline; }
     .clock[data-low] { color: var(--bust); }
 
     /* Our own keyboard, not the system one: the game has to grey out the

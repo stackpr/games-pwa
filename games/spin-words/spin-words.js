@@ -7,6 +7,8 @@
   const PUZZLE_COUNTS = [3, 5, 7];
   const VOWEL_COST = 250;
   const SOLVE_SECONDS = 10;
+  // Calling a letter is on a clock too — see _README.md.
+  const PICK_SECONDS = 10;
   const BACKSPACE = '\u232B';
   const VOWELS = 'AEIOU';
   const REMEMBER = 60;          // puzzles kept back from being dealt again
@@ -121,7 +123,9 @@
       names: Array.from({ length: seats }, (_, i) => (names && names[i]) || ''),
       banks: Array(seats).fill(0),
       current: 0,
-      roundMoney: 0,
+      // What each seat has won on this puzzle and not yet banked. One per
+      // seat, because it survives the turn passing — see _README.md.
+      round: Array(seats).fill(0),
       solvedCount: 0,
       answer: puzzle.answer,
       category: puzzle.category,
@@ -151,7 +155,15 @@
       banks: Array.from({ length: players }, (_, i) =>
         Number.isFinite(p.banks && p.banks[i]) ? Math.floor(p.banks[i]) : 0),
       current: clamp(p.current, 0, players - 1, 0),
-      roundMoney: Number.isFinite(p.roundMoney) ? Math.max(0, Math.floor(p.roundMoney)) : 0,
+      round: Array.from({ length: players }, (_, i) => {
+        // A save from before puzzle money was per-seat carries one number,
+        // which belonged to whoever was up.
+        if (!Array.isArray(p.round)) {
+          return i === clamp(p.current, 0, players - 1, 0)
+            && Number.isFinite(p.roundMoney) ? Math.max(0, Math.floor(p.roundMoney)) : 0;
+        }
+        return Number.isFinite(p.round[i]) ? Math.max(0, Math.floor(p.round[i])) : 0;
+      }),
       solvedCount: clamp(p.solvedCount, 0, 99, 0),
       answer,
       category: typeof p.category === 'string' ? p.category : '',
@@ -172,7 +184,6 @@
     // is spent, exactly as if the clock had run out on the phone. See
     // _README.md.
     if (s.phase === 'solve') {
-      s.roundMoney = 0;
       s.current = (s.current + 1) % s.players;
       s.message = 'The clock ran out.';
       s.phase = 'pass';
@@ -223,7 +234,8 @@
   const consonantsLeft = () => hidden().some(c => !isVowel(c));
   const vowelsLeft = () => hidden().some(isVowel);
   const solved = () => hidden().length === 0;
-  const canBuyVowel = () => state.roundMoney >= VOWEL_COST && vowelsLeft();
+  const pot = () => state.round[state.current] || 0;
+  const canBuyVowel = () => pot() >= VOWEL_COST && vowelsLeft();
 
   function setPhase(p) {
     state.phase = p;
@@ -232,10 +244,14 @@
 
   /* ---- turns ---------------------------------------------------------- */
 
+  /**
+   * The turn passes. What the player has won on this puzzle stays with them
+   * — a missed letter, a lost turn and a failed solve cost the turn and
+   * nothing else. Only Bankrupt takes money. See _README.md.
+   */
   function endTurn(message) {
-    clock.stop();
+    stopClocks();
     state.typed = '';
-    state.roundMoney = 0;
     state.current = (state.current + 1) % state.players;
     state.message = message;
     setPhase('pass');
@@ -262,21 +278,21 @@
     spinReel(at, () => {
       const value = WHEEL[at];
       if (value === BANKRUPT) {
-        const lost = state.roundMoney;
+        const lost = pot();
+        state.round[state.current] = 0;
         endTurn(name(state.current) + ' hit Bankrupt'
           + (lost ? ' and lost ' + money(lost) : ''));
       } else if (value === LOSE) {
         endTurn(name(state.current) + ' lost a turn');
       } else {
-        setPhase('pick');
-        save();
-        render();
+        startPick();
       }
     });
   }
 
   function doPick(ch) {
     if (state.phase !== 'pick' || called(ch) || isVowel(ch)) return;
+    pickClock.stop();
     const hits = countIn(ch);
     state.called += ch;
     justCalled = ch;
@@ -284,8 +300,9 @@
       endTurn('No ' + ch + '. ' + name(state.current) + ' passes.');
       return;
     }
-    state.roundMoney += hits * WHEEL[state.wedge];
+    state.round[state.current] += hits * WHEEL[state.wedge];
     state.message = hits + ' × ' + ch + ' at ' + money(WHEEL[state.wedge]);
+    stopClocks();
     setPhase('spin');
     save();
     render();
@@ -300,7 +317,7 @@
 
   function doVowel(ch) {
     if (state.phase !== 'vowel' || called(ch) || !isVowel(ch)) return;
-    state.roundMoney -= VOWEL_COST;
+    state.round[state.current] -= VOWEL_COST;
     state.called += ch;
     justCalled = ch;
     if (!countIn(ch)) {
@@ -330,7 +347,7 @@
       finishSolve(true);
       return;
     }
-    clock.start();
+    solveClock.start();
     paintClock(SOLVE_SECONDS * 1000);
   }
 
@@ -356,7 +373,7 @@
   }
 
   function finishSolve(right) {
-    clock.stop();
+    solveClock.stop();
     if (!right) {
       state.typed = '';
       endTurn(name(state.current) + ' did not have it.');
@@ -372,10 +389,15 @@
     endTurn('Out of time.');
   }
 
+  /**
+   * The solver banks this puzzle's winnings; everybody else's go nowhere.
+   * That is the whole shape of the game — money is *held* against a puzzle
+   * and only *won* by solving it.
+   */
   function bankPuzzle() {
-    state.banks[state.current] += state.roundMoney;
-    state.message = name(state.current) + ' solved it for ' + money(state.roundMoney);
-    state.roundMoney = 0;
+    state.banks[state.current] += pot();
+    state.message = name(state.current) + ' solved it for ' + money(pot());
+    state.round = Array(state.players).fill(0);
     // Revealing the whole puzzle is what the board is for at this point.
     for (const c of letters(state.answer)) {
       if (!called(c)) state.called += c;
@@ -394,7 +416,7 @@
     state.used = state.used.concat([puzzle.answer]).slice(-REMEMBER);
     state.called = '';
     state.typed = '';
-    state.roundMoney = 0;
+    state.round = Array(state.players).fill(0);
     // The solver has had their turn, so the next puzzle opens on the seat
     // after them rather than handing them a second start.
     state.current = (state.current + 1) % state.players;
@@ -407,7 +429,7 @@
 
   function startGame(players, puzzles, names) {
     stopSpin();
-    clock.stop();
+    stopClocks();
     const keep = state ? state.used : [];
     state = freshGame(
       players === undefined ? state.players : players,
@@ -422,20 +444,49 @@
     render();
   }
 
-  /* ---- the solve clock ------------------------------------------------ */
+  /* ---- the clocks ----------------------------------------------------- */
 
   /*
+   * Two ten-second clocks, one per thing a player can sit on: calling a
+   * letter and typing an answer. Both paint the same digits in the hint
+   * line.
+   *
    * Timer paints mm:ss, which reads wrong for ten seconds — so the element
    * is left off and the digits are painted from onTick instead. The library
    * is still worth having: it derives the time left from a timestamp rather
    * than counting a variable down, so a phone that throttles the tab comes
    * back with the right answer. See js/lib/timer.js.
    */
-  const clock = Timer.create(null, {
+  const solveClock = Timer.create(null, {
     seconds: SOLVE_SECONDS,
     onTick: paintClock,
     onEnd: outOfTime
   });
+
+  const pickClock = Timer.create(null, {
+    seconds: PICK_SECONDS,
+    onTick: paintClock,
+    onEnd: outOfPick
+  });
+
+  function stopClocks() {
+    solveClock.stop();
+    pickClock.stop();
+  }
+
+  /** The reel has landed on cash; the letter is owed inside ten seconds. */
+  function startPick() {
+    setPhase('pick');
+    save();
+    render();
+    pickClock.start();
+    paintClock(PICK_SECONDS * 1000);
+  }
+
+  function outOfPick() {
+    if (state.phase !== 'pick') return;
+    endTurn(name(state.current) + ' ran out of time.');
+  }
 
   function paintClock(left) {
     if (!el.clock) return;
@@ -576,9 +627,14 @@
       who.className = 'seat-name';
       const bank = document.createElement('span');
       bank.className = 'seat-bank';
-      seat.append(who, bank);
+      // Money held against this puzzle, which is not banked and can still be
+      // lost to Bankrupt — so it is shown apart from the bank rather than
+      // added into it.
+      const held = document.createElement('span');
+      held.className = 'seat-held';
+      seat.append(who, bank, held);
       el.seats.append(seat);
-      seatNodes.push({ seat, who, bank });
+      seatNodes.push({ seat, who, bank, held });
     }
   }
 
@@ -692,6 +748,9 @@
       const node = seatNodes[i];
       node.who.textContent = name(i);
       node.bank.textContent = money(state.banks[i]);
+      if (node.held) {
+        node.held.textContent = state.round[i] ? '+' + money(state.round[i]) : '';
+      }
       if (i === state.current && state.phase !== 'over') node.seat.dataset.active = '';
       else delete node.seat.dataset.active;
     }
@@ -703,8 +762,8 @@
       el.turn.textContent = 'Game over';
       return;
     }
-    const round = state.roundMoney
-      ? ' · ' + money(state.roundMoney) + ' this puzzle' : '';
+    const round = pot()
+      ? ' · ' + money(pot()) + ' this puzzle' : '';
     el.turn.textContent = name(state.current) + round;
   }
 
@@ -837,4 +896,7 @@
   buildSettings();
   placeReel(state.wedge);
   render();
+  // A reload mid-call starts the ten seconds again rather than spending the
+  // turn. Unlike a solve, nothing has been committed to yet.
+  if (state.phase === 'pick') startPick();
 })();

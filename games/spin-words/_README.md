@@ -21,17 +21,40 @@ and does nothing until somebody taps Ready.
 ## A turn
 
 1. **Spin.** The reel lands on a cash value, `BANKRUPT` or `LOSE A TURN`.
-2. On cash, **call a consonant.** Every one of that letter in the puzzle
-   pays the value the reel landed on, and the phone stays put — spin again,
-   buy a vowel, or solve. Call a letter that is not there and the turn ends.
+2. On cash, **call a consonant, inside ten seconds.** Every one of that
+   letter in the puzzle pays the value the reel landed on, and the phone
+   stays put — spin again, buy a vowel, or solve. Call a letter that is not
+   there and the turn ends; call nothing at all and the clock ends it.
 3. **Buy a vowel** costs $250 out of this puzzle's winnings and pays
    nothing. It needs the $250 to be there first, which is why the button is
    dead until the player has won something.
 4. **Solve** at any point — see below.
 
-`BANKRUPT` takes this puzzle's winnings and nothing else: what a player has
-already banked by solving is safe. That split is the whole tension of a
-spin, so it is worth being exact about.
+## Money is held per player, and only Bankrupt takes it
+
+Each seat has two numbers: `banks[i]`, won for good, and `round[i]`, held
+against the puzzle being played.
+
+- **Calling a letter that is not there costs the turn, not the money.** So
+  does `LOSE A TURN`, so does a failed solve, and so does the ten-second
+  call clock running out. The money is still there when the phone comes
+  back round.
+- **`BANKRUPT` is the only thing that takes it**, and it takes only the
+  spinner's held money — never their bank, and never anybody else's held
+  money. That is the whole tension of a spin, and it is why the two numbers
+  exist separately.
+- **Solving banks it.** The solver's held money moves into their bank; every
+  other seat's held money goes to zero, because it was only ever held
+  *against this puzzle*. Money is held by playing and won by solving.
+
+An earlier version kept one `roundMoney` for the table and zeroed it
+whenever the turn passed, so $700 and a wrong letter left the next screen
+reading $0 — the player had lost, on a miss, what the rules only take on a
+Bankrupt. `load()` still understands that shape and gives the single number
+to whoever was up.
+
+The seats show held money on a second line, `+$700`, under the bank rather
+than added into it: it is not banked, and a spin can still take it.
 
 ## Solving is a commitment
 
@@ -67,9 +90,10 @@ So a solve is typed, against a clock, and cannot be taken back.
 - **A board with no blanks left solves on the tap**, without starting a
   clock nobody can spend.
 
-Right, and this puzzle's winnings are banked for good. Wrong or out of
-time, and the phone moves on with the winnings lost — the same cost as a
-`BANKRUPT`, which is what makes solving early a real gamble.
+Right, and this puzzle's winnings are banked for good, and every other
+seat's held money is gone. Wrong or out of time, and the phone moves on
+with the winnings *kept* but the puzzle still open — the gamble is that
+somebody else now gets the chance to bank theirs.
 
 **Vowels are free to type.** They had to be bought to be *called*, because
 calling one reveals it for everybody; typing one into your own guess
@@ -77,6 +101,10 @@ reveals nothing.
 
 ### Edge cases
 
+- **The call clock is the same ten seconds as a solve**, painted by the
+  same digits in the hint line, and it is a separate `Timer` so the two can
+  never both be running. Buying a vowel is deliberately untimed: the money
+  is already spent, and the five-key pad is not where a table stalls.
 - **No consonants left** disables Spin, because a spin could only ever pay
   for a letter that is already showing. Buy a vowel and Solve remain, and
   Solve is never disabled, so there is no way to reach a turn with nothing
@@ -198,7 +226,7 @@ and a category picker would be four taps in the way of starting.
   "names":       ["", "", ""],
   "banks":       [0, 0, 0],
   "current":     0,
-  "roundMoney":  0,
+  "round":       [0, 0, 0],
   "solvedCount": 0,
   "answer":      "BETTER LATE THAN NEVER",
   "category":    "Phrase",
@@ -214,8 +242,12 @@ and a category picker would be four taps in the way of starting.
 characters and `indexOf` is the only question ever asked of it. `answer` is
 stored upper case, and the board derives everything else from it — there is
 no separate "revealed" list to drift out of step with the letters called.
+`round` is one held total per seat; a save from before it was per-seat
+carries `roundMoney` instead, and that number is given to `current`.
 `phase` is never stored as `spinning`: the reel cannot be resumed, so a
-reload mid-spin lands on `spin` with the wedge already drawn. `solve` *is*
+reload mid-spin lands on `spin` with the wedge already drawn. A reload
+during `pick` restarts the ten seconds rather than spending the turn —
+nothing has been committed to, unlike a solve. `solve` *is*
 stored, and a reload spends the turn rather than resuming it — the ten
 seconds are the whole of that phase, so there is nothing honest to come
 back to. The letters typed into the blanks are not persisted at all for the

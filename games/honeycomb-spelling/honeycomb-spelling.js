@@ -8,7 +8,7 @@
   // same game, so their scores are not the same list.
   const LIMITS = [60, 120, 180, 300, 600];
   const DEFAULT_LIMIT = 180;
-  const TOP_N = 5;
+  const TOP_N = 10;
   const RING = ['n', 'ne', 'se', 's', 'sw', 'nw'];
   const FLASH_MS = 1100;
   const MIN_LENGTH = 4;
@@ -48,6 +48,7 @@
     enter: pick('enter', 'button'),
     found: pick('found'),
     newBtn: pick('new', 'button'),
+    freshBtn: pick('fresh', 'button'),
     scoresBtn: pick('scores-btn', 'button'),
     start: pick('start', 'section'),
     limits: pick('limits'),
@@ -166,11 +167,20 @@
     l: 4.0, m: 2.4, n: 6.7, p: 1.9, q: 0.10, r: 6.0, t: 9.1, v: 1.0,
     w: 2.4, x: 0.15, y: 2.0, z: 0.07
   };
+  // English frequency alone hands out t, n and r nearly every game and keeps
+  // the letters that actually pay off the bench, so the consonant table is
+  // flattened towards even before it is drawn from. The order is unchanged —
+  // t is still the commonest — but a k, a v or a w turns up often enough to
+  // build a scoring hive on. See _README.md.
+  const FLATTEN = 0.75;
+  for (const ch of Object.keys(CONSONANTS)) {
+    CONSONANTS[ch] = Math.pow(CONSONANTS[ch], FLATTEN);
+  }
   // These are spellable but they make a seat in the hive close to wasted, so
-  // they are pushed below even their own low frequency — a q or a z should be
-  // a rare novelty, not a letter you resent. See _README.md.
+  // they stay below even their own low frequency — a q or a z should be a
+  // rare novelty, not a letter you resent.
   const HARD = ['j', 'q', 'x', 'z'];
-  const HARD_PENALTY = 0.25;
+  const HARD_PENALTY = 0.4;
   for (const ch of HARD) CONSONANTS[ch] *= HARD_PENALTY;
   // A hive with one vowel is unplayable and one with four is thin on
   // consonants, so the count is drawn from this range and never outside it.
@@ -336,7 +346,29 @@
     flashHandle = setTimeout(() => {
       delete el.flash.dataset.show;
       flashHandle = 0;
+      // A verdict is transient; a word still out is not, so the line goes
+      // back to naming what is still waiting.
+      if (pendingWords().length) showPending();
     }, FLASH_MS);
+  }
+
+  /**
+   * Words still out at the dictionary, named and nothing more. Whether one is
+   * on its first ask, its fourth, or has just run out of asks is a detail
+   * about the network rather than about the game, so the line carries the
+   * words alone and they simply stop being listed once they resolve. Several
+   * at once are comma-separated, which is all the room there is.
+   * See _README.md.
+   */
+  function pendingWords() {
+    if (!game) return [];
+    return Array.from(game.checking).concat(game.retry.map(entry => entry.word));
+  }
+
+  function showPending() {
+    const words = pendingWords();
+    if (words.length) flash(words.join(', '), 'wait', true);
+    else clearFlash();
   }
 
   // The verdict shares a line with the word being typed, so starting the next
@@ -376,10 +408,8 @@
     if (game.found.indexOf(word) !== -1) return flash('Already found', 'bad');
     // Neither a word already out nor one already queued goes out a second
     // time — one guess is one place in the queue, however often it is typed.
-    if (game.checking.has(word)) return flash('Checking ' + word, 'wait', true);
-    if (queued(word)) return flash('Still waiting on ' + word, 'wait', true);
+    if (game.checking.has(word) || queued(word)) return showPending();
 
-    flash('Checking ' + word, 'wait', true);
     ask(word, 1);
   }
 
@@ -393,18 +423,21 @@
     const round = game;
     game.checking.add(word);
     paintFound();
+    showPending();
     lookUp(word).then(verdict => {
       if (game !== round || phase === 'idle') return;
       game.checking.delete(word);
       if (verdict === 'yes') {
         if (game.found.indexOf(word) === -1) accept(word);
+        else showPending();
       } else if (verdict === 'no') {
         flash('Not a word: ' + word, 'bad');
       } else if (tries < RETRY_TRIES) {
         queue(word, tries + 1);
       } else {
         // Five unanswered asks is not a verdict, but it is enough waiting.
-        flash('Could not check ' + word, 'bad');
+        // The word simply stops being listed; why is the network's business.
+        showPending();
       }
       paintFound();
       settle();
@@ -418,7 +451,7 @@
   function queue(word, tries) {
     if (queued(word) || game.found.indexOf(word) !== -1) return;
     game.retry.push({ word: word, tries: tries, due: Date.now() + delayFor(tries) });
-    flash('No answer — will retry ' + word, 'wait', true);
+    showPending();
     pump();
   }
 
@@ -495,22 +528,14 @@
       return;
     }
 
+    // How many times a word has been asked for is not shown: waiting is
+    // waiting. See _README.md.
     for (const row of waiting) {
       const chip = document.createElement('span');
       chip.className = 'word';
       chip.dataset.waiting = '';
       chip.textContent = row.word;
-      // `tries` is the attempt about to be made, so 0 means one is in flight
-      // right now and there is no number worth showing yet.
-      if (row.tries > 1) {
-        const nth = document.createElement('sup');
-        nth.className = 'try';
-        nth.textContent = row.tries;
-        chip.append(nth);
-      }
-      chip.setAttribute('aria-label', row.tries > 1
-        ? row.word + ', no answer yet, try ' + row.tries
-        : row.word + ', being checked');
+      chip.setAttribute('aria-label', row.word + ', being checked');
       el.found.append(chip);
     }
 
@@ -595,12 +620,16 @@
     delete el.over.dataset.open;
     el.start.dataset.open = '';
     el.newBtn.textContent = 'New';
+    el.freshBtn.hidden = true;
     el.scoresBtn.disabled = true;
     paintStartSheet();
   }
 
   function startGame() {
     stopQueue();
+    // Reachable mid-game through New, so the clock in play is stopped rather
+    // than left running to end a game that no longer exists.
+    if (clock) clock.stop();
     const hive = newHive();
     game = {
       hive: hive,
@@ -621,6 +650,10 @@
     delete el.start.dataset.open;
     delete el.over.dataset.open;
     el.newBtn.textContent = 'Done';
+    // Only while a game is on: a hive nothing can be spelled from is worth
+    // trading in, and there is no cost to doing it — the score is nothing yet
+    // if it is being traded in for a reason.
+    el.freshBtn.hidden = false;
     el.scoresBtn.disabled = false;
     paintHive();
     paintTyped();
@@ -638,11 +671,16 @@
    */
   function finish(ranOut) {
     if (phase !== 'playing' || !game) return;
+    // A word half-typed when the clock stops is still a word that was typed
+    // in time, so Enter is optional on the last one: the letters on the line
+    // go out as a guess and the settling wait covers the answer.
+    if (ranOut && game.typed) submit();
     phase = 'settling';
     ranOutOfTime = ranOut;
     if (clock) clock.stop();
     showIdleClock();
     el.newBtn.textContent = 'Skip';
+    el.freshBtn.hidden = true;
     el.scoresBtn.disabled = false;
 
     // Nothing is waiting to be polite to any more, so every queued retry is
@@ -658,10 +696,8 @@
   // what is still holding it up.
   function settle() {
     if (phase !== 'settling') return;
-    const left = outstanding();
-    if (!left || Date.now() >= settleUntil) return showOver();
-    flash('Finishing — ' + left + (left === 1 ? ' word' : ' words') + ' still out',
-      'wait', true);
+    if (!outstanding() || Date.now() >= settleUntil) return showOver();
+    showPending();
   }
 
   function showOver() {
@@ -738,6 +774,9 @@
   });
   on(el.play, 'click', startGame);
   on(el.again, 'click', startGame);
+  // Seven letters again, from the top. Deliberately no confirmation: it is
+  // only reachable mid-game, where the alternative is a wasted clock.
+  on(el.freshBtn, 'click', startGame);
   on(el.scoresBtn, 'click', openStart);
   on(el.newBtn, 'click', () => {
     if (phase === 'playing') finish(false);

@@ -200,17 +200,12 @@
     return COLOURS.reduce((n, c) => n + state.pool[c], 0) === 0;
   }
 
-  /**
-   * Cells still joined to each other. Any group that comes away from the
-   * rest and is full of bees is claimed by the player who cut it off.
-   */
-  function claimIsolated() {
+  /** The connected groups of cells, in a stable order. */
+  function groups() {
     const seen = new Set();
-    const taken = { w: 0, g: 0, b: 0 };
-    let any = false;
-
-    for (const start of Object.keys(state.cells)) {
-      if (seen.has(start)) continue;
+    const out = [];
+    for (const start of KEYS) {
+      if (!(start in state.cells) || seen.has(start)) continue;
       const group = [];
       const queue = [start];
       seen.add(start);
@@ -225,22 +220,42 @@
           }
         }
       }
-      // The whole board is one group until something is cut off, and the
-      // whole board being full is not an isolation — it is a finished game.
-      if (group.length === Object.keys(state.cells).length) continue;
-      if (!group.every(k => state.cells[k])) continue;
-      for (const k of group) {
-        taken[state.cells[k]]++;
-        delete state.cells[k];
-      }
-      any = true;
+      out.push(group);
+    }
+    return out;
+  }
+
+  /**
+   * A ring that comes away from the comb is off the board — it cannot be
+   * jumped to or from again, so leaving it there would only be clutter that
+   * counts towards nothing. Every group but the largest is removed, and any
+   * bees riding on those rings go to the player whose move cut them off,
+   * whether or not the group was full. See _README.md.
+   */
+  function claimIsolated() {
+    const all = groups();
+    if (all.length < 2) return null;
+
+    // The comb is whatever is left of the main body; ties go to the group
+    // holding the first cell in board order, so the result never depends on
+    // the order the cells happen to be stored in.
+    let main = 0;
+    for (let i = 1; i < all.length; i++) {
+      if (all[i].length > all[main].length) main = i;
     }
 
-    if (any) {
-      const mine = state.caps[state.turn - 1];
-      for (const c of COLOURS) mine[c] += taken[c];
+    const taken = { w: 0, g: 0, b: 0 };
+    for (let i = 0; i < all.length; i++) {
+      if (i === main) continue;
+      for (const k of all[i]) {
+        if (state.cells[k]) taken[state.cells[k]]++;
+        delete state.cells[k];
+      }
     }
-    return any ? taken : null;
+
+    const mine = state.caps[state.turn - 1];
+    for (const c of COLOURS) mine[c] += taken[c];
+    return taken;
   }
 
   function hasWon(caps) {

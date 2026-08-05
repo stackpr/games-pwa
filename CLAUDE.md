@@ -3,6 +3,17 @@
 A collection of small games and tools served as a single installable PWA at
 https://games.payne.run (GitHub Pages, custom domain — do not delete `CNAME`).
 
+## How to report work here
+
+**Keep the summary terse.** A few lines: what changed, per game, and
+anything that was not done. No walkthrough of the diff, no restating the
+request, no bullet list of every file touched — the diff and the
+`_README.md` files are where the detail belongs, and the site itself is
+where the owner checks the result.
+
+Say what actually ran, and say what is still open. Brevity is not a licence
+to leave out a caveat.
+
 ## Hard constraints
 
 - **100% static.** No build step, no bundler, no framework, no server-side
@@ -309,7 +320,7 @@ Application → "Update on reload", or bump `CACHE_VERSION`.
 worker, offline, install prompt), one spec per game, and `publishing.spec.js`
 guarding what reaches the deployed site.
 
-### Run a segment while you work, the suite before you merge
+### Run a segment while you work
 
 The suite is over seven hundred tests and takes minutes. **Do not run it
 after every edit.** A game can only break its own spec, the specs of the
@@ -328,35 +339,18 @@ uncommitted working tree, and anything it cannot place falls back to
 running everything — so it is never the reason something went untested.
 `_tests/README.md` has the mapping.
 
-**Run the full `npm test` once before merging to `gh-pages`**, and quote
-the real number in the PR. The segments are a working aid, not the gate.
+**The affected segment is the default gate, not the full suite.** The repo
+owner plays the site themselves after every change — it is a static
+client-side app and that is the faster feedback loop — so `npm run affected`
+(or a named segment) before pushing is enough. Run the full `npm test` when
+the change reaches every game: `js/lib/`, `sw.js`, `js/games.js`, the shared
+stylesheets. Saying "full test" asks for it explicitly; saying "no tests"
+asks for none.
 
-### Turning the full run off for a thread
-
-Some iterations do not warrant eight minutes. Saying any of these **stands
-for the rest of the conversation**, not just the next reply:
-
-| Say | Means |
-| --- | --- |
-| "partial test only" / "no full test" / "affected only" | run `npm run affected` or a named segment; **do not** run `npm test`, including before a merge or a PR |
-| "no tests" | run nothing; commit and push on the strength of the change alone |
-| "full test" / "run everything" | back to the default |
-
-Two things do not change when it is off:
-
-- **Never claim a run that did not happen.** Quote what actually ran —
-  *"43 passing (`npm run game mancala`); full suite not run this thread at
-  your request"* — in the reply and in the PR body. A number in a PR is
-  read as the whole suite unless it says otherwise, and inventing one is
-  worse than skipping the run.
-- **Say when the skip starts to matter.** A one-line CSS tweak is a fine
-  thing to skip a full run on; touching `js/lib/`, `sw.js` or
-  `js/games.js` reaches every game, and the segments already cover that
-  breadth — so say what a full run would have added, once, and carry on.
-  It is the repo owner's call, not a decision to re-litigate each time.
-
-Do not infer the opt-out from impatience, from a short deadline, or from
-having run the suite recently. It has to be asked for.
+**Never claim a run that did not happen.** Quote what actually ran — *"43
+passing (`npm run game mancala`); full suite not run"* — rather than a
+number that reads as the whole suite. Inventing one is worse than skipping
+the run.
 
 **Segmenting is about which specs a run needs, never about dropping a
 viewport.** Both projects — phone and desktop — run everything that
@@ -429,34 +423,26 @@ guard it, or accept that one missing element takes the page with it.
 ## Deploying
 
 GitHub Pages serves the `gh-pages` branch, which is also the default
-branch — there is no staging step, so merging to `gh-pages` publishes
-immediately. Feature work happens on `claude/*` branches. Keep `CNAME`
-(`games.payne.run`) at the repo root on the deployed branch.
+branch — there is no staging step, so a push to `gh-pages` publishes
+immediately. Keep `CNAME` (`games.payne.run`) at the repo root.
 
-### A merged PR ends its branch's life
+**Commit and push straight to `gh-pages`.** No feature branch, no pull
+request: the owner reviews by playing the site, and a branch waiting on a
+PR is a change that is not being reviewed at all. Pull before pushing if
+the branch has moved.
 
-Once a PR merges, that branch is spent. Start the next piece of work from
-a fresh base:
-
-```bash
-git fetch origin gh-pages
-git checkout -B <branch-name> origin/gh-pages
-```
-
-Pushing another commit to a branch whose PR already merged is the failure
-mode to avoid: the commit lands on GitHub, the branch looks updated, and
-nothing deploys, because no PR is open to carry it. That is exactly how the
-footer-version commit got stranded. **Push first, then say it is ready to
-merge** — never the reverse. If the branch still holds unmerged commits,
-rebase them onto the new base rather than discarding them.
+Only take work to a `claude/*` branch when the change is genuinely
+unfinished or wants a second opinion before it is live — and say so, since
+nothing on a branch reaches the site until it lands on `gh-pages`.
 
 ### When a change isn't live
 
 Work down this list; it is ordered by how often each one is the answer.
 
-1. **The commit never merged.** Check that the change is actually in
-   `origin/gh-pages` (`git log origin/gh-pages --oneline`), not just pushed
-   to a branch. Every deploy gap found so far has been this.
+1. **The commit never landed.** Check that the change is actually in
+   `origin/gh-pages` (`git log origin/gh-pages --oneline`), not just
+   committed locally or pushed to a branch. Every deploy gap found so far
+   has been this.
 2. **`CACHE_VERSION` wasn't bumped.** Installed clients keep serving the
    old precache until the version changes. Compare the version the live
    site reports in the home-page footer against `sw.js` on `gh-pages`.

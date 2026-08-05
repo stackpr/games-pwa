@@ -302,15 +302,38 @@ test.describe('cutting a group off', () => {
     await expect(cell(page, '3,-3')).toHaveAttribute('data-gone', '');
   });
 
-  test('a group with an empty cell in it stays on the board', async ({ page }) => {
-    const keep = ['3,-3', '2,-3', '1,-3', '0,-3'];
+  test('a group with an empty cell in it comes off too', async ({ page }) => {
+    // Same shape, but the cut-off pair is one bee and one empty ring. It
+    // still leaves the board, and the bee on it is still claimed — a
+    // detached ring can never be played to or from again. See _README.md.
+    // Six cells in a line; cutting 1,-3 leaves two on the corner side and
+    // three on the other, so the larger side is unambiguously the comb.
+    const keep = ['3,-3', '2,-3', '1,-3', '0,-3', '-1,-2', '-2,-1'];
     const gone = KEYS.filter(k => !keep.includes(k));
-    await position(page, { gone, bees: { '0,-3': 'w' }, phase: 'remove' });
-    await cell(page, '2,-3').click();
+    await position(page, {
+      gone, bees: { '3,-3': 'b', '0,-3': 'w' }, phase: 'remove',
+    });
+    await cell(page, '1,-3').click();
 
-    expect(await capsOf(page, 1)).toEqual([0, 0, 0]);
-    await expect(cell(page, '3,-3')).not.toHaveAttribute('data-gone', /.*/);
+    // 3,-3 and 2,-3 come away together: one dark bee to the mover.
+    expect(await capsOf(page, 1)).toEqual([0, 0, 1]);
+    await expect(cell(page, '3,-3')).toHaveAttribute('data-gone', '');
+    await expect(cell(page, '2,-3')).toHaveAttribute('data-gone', '');
+    // The larger side is the comb and stays put.
+    await expect(cell(page, '0,-3')).not.toHaveAttribute('data-gone', /.*/);
   });
+
+  test('an empty group that comes away is removed and claims nothing',
+    async ({ page }) => {
+      const keep = ['3,-3', '2,-3', '1,-3', '0,-3', '-1,-2', '-2,-1'];
+      const gone = KEYS.filter(k => !keep.includes(k));
+      await position(page, { gone, bees: { '0,-3': 'w' }, phase: 'remove' });
+      await cell(page, '1,-3').click();
+
+      expect(await capsOf(page, 1)).toEqual([0, 0, 0]);
+      await expect(cell(page, '3,-3')).toHaveAttribute('data-gone', '');
+      await expect(cell(page, '2,-3')).toHaveAttribute('data-gone', '');
+    });
 });
 
 test.describe('winning', () => {
