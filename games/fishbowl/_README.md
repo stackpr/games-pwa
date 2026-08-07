@@ -49,8 +49,13 @@ and three people writing one each is over before it starts.
   they are all filled, and discards them otherwise — a part-filled form at
   that point is somebody who changed their mind, not an answer.
 - The first player can use either button, so a bowl filled by one person
-  works. **No more players** is only dead when the bowl is empty *and* the
-  form is not full, which is the one case with nothing to play.
+  works.
+- **No more players is never disabled.** It was, when there was nothing in
+  the bowl to play with, and it was reported as a *missing* button: dimmed
+  to 40% on a dark panel, a secondary button does not read as unavailable,
+  it reads as absent. The button that ends a phase is the wrong one to hide
+  — it says what is missing when it is tapped instead. Next player still
+  dims, because the empty boxes above it explain it.
 - **Repeats are refused by default**, by name — two identical slips are
   indistinguishable in play and the second one is nearly always a mistake.
   It is a setting rather than a rule because on a narrow question ("a
@@ -64,6 +69,33 @@ How many players there are is never asked for as a setting: it is the
 length of `players`, one entry per person who has finished, which is also
 what "Player 4" at the top counts. A reload mid-typing loses only the line
 being typed.
+
+## Getting out of a screen
+
+Two screens scroll — setup and filling the bowl — and on both of them the
+button that leaves is **pinned to the bottom of the window** with
+`position: sticky`, over a fade.
+
+That is not decoration. The setup screen has six fields and stands 946px
+tall on a 664px phone, so *Fill the bowl* sat 350px below the fold: the
+screen looked complete, the way out was off-screen, and the game read as a
+dead end. Sticky rather than fixed keeps the button in the flow, so the
+on-screen keyboard pushes it up the page instead of covering it.
+
+Anything added to either screen has to keep that true. There is a spec that
+measures both buttons against `window.innerHeight` at 320×568.
+
+## Starting again
+
+Three ways, and they are deliberately different sizes:
+
+- **New**, in the top bar, and **Start over** in Settings do the same
+  thing — empty the bowl, keep the settings, go back to the question. Both
+  exist because the top bar's *New* is read by some people as "next round";
+  Settings is where somebody looks when they want out of a game.
+- **Play again**, on the final screen, keeps the settings and the question
+  and sends the phone round for a fresh bowl. The old answers are spent —
+  everyone has heard them three times.
 
 ## A turn
 

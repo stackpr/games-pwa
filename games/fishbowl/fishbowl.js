@@ -94,6 +94,7 @@
     setupBtn: pick('setup-btn', 'button'),
     settings: pick('settings'),
     settingsBtn: pick('settings-btn', 'button'),
+    startOver: pick('start-over', 'button'),
     namesLabel: pick('names-label', 'p'),
     teamNames: pick('team-names'),
     rules: pick('rules'),
@@ -296,14 +297,14 @@
   }
 
   /**
-   * Next player wants a full form; No more players wants a bowl. The first
-   * player can do both at once, which is why this looks at the form as well
-   * as at how many have finished.
+   * Next player wants a full form and says so by going dim. **No more
+   * players never does** — a dimmed button on a dark panel reads as a
+   * button that is not there, and this is the one that ends a phase. It
+   * says what is missing when it is tapped instead. See _README.md.
    */
   function paintWriteActions() {
     const full = slipInputs.length > 0 && typed().every(Boolean);
     el.nextPlayer.disabled = !full;
-    el.noMore.disabled = state.players.length === 0 && !full;
   }
 
   /* ---- the bowl -------------------------------------------------------- */
@@ -731,11 +732,12 @@
     }
   });
   on(el.noMore, 'click', () => {
-    if (!state.players.length && !typed().every(Boolean)) return;
     // A part-filled form at this point is somebody who changed their mind,
     // not an answer; only a full one is taken. See _README.md.
     if (typed().some(Boolean)) takeSlips(true);
-    if (!state.slips.length) return;
+    if (!state.slips.length) {
+      return say('Nothing in the bowl yet — the first player still has to write.');
+    }
     // Scoring by name needs somebody to name: one player has nobody to give
     // clues to, and the buttons would have nothing on them.
     if (state.mode === 'solo' && state.players.length < 2) {
@@ -757,15 +759,26 @@
     render();
     paintBowlCount();
   });
-  on(el.setupBtn, 'click', () => {
+  function startOver() {
     clock.stop();
     state = fresh(state);
+    buildSlipInputs();
+    clearSlips();
     setScreen('setup');
     save();
     render();
+    paintBowlCount();
+  }
+
+  on(el.setupBtn, 'click', startOver);
+  // The same thing from inside Settings, for anyone who reads the top bar's
+  // New as "next round" rather than "new game".
+  on(el.startOver, 'click', () => {
+    settings.close();
+    startOver();
   });
 
-  Modal.create(el.settings, { trigger: el.settingsBtn });
+  const settings = Modal.create(el.settings, { trigger: el.settingsBtn });
   Modal.create(el.rules, { trigger: el.rulesBtn });
 
   buildQuestions();

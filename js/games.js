@@ -85,7 +85,7 @@ const GAMES = [
   {
     name: 'Star Words',
     section: 'group',
-    description: 'Draw it — no letters, no talking',
+    description: 'Draw it, act it or build it — no letters, no talking',
     emoji: '\u{270F}\uFE0F',
     path: 'games/star-words/'
   },

@@ -219,12 +219,29 @@ test.describe('filling the bowl', () => {
   test('No more players needs a bowl, and one player is enough',
     async ({ page }) => {
       await page.locator('#begin').click();
-      await expect(page.locator('#no-more')).toBeDisabled();
-      await player(page, ['Otter', 'Puffin', 'Badger'], { button: '#no-more' });
+      // Never dimmed: a dim button on a dark panel reads as a missing one,
+      // and this is the button that ends the phase. See _README.md.
+      await expect(page.locator('#no-more')).toBeEnabled();
+      await page.locator('#no-more').click();
+      expect(await screen(page)).toBe('write');
+      await expect(page.locator('#bowl-count')).toContainText('Nothing in the bowl yet');
 
+      await player(page, ['Otter', 'Puffin', 'Badger'], { button: '#no-more' });
       expect(await screen(page)).toBe('ready');
       expect((await saved(page)).slips).toHaveLength(3);
     });
+
+  test('both buttons stay on screen under a long form', async ({ page }) => {
+    await page.setViewportSize({ width: 320, height: 568 });
+    await page.locator('.count[data-answers="5"]').click();
+    await page.locator('#begin').click();
+
+    for (const id of ['#next-player', '#no-more']) {
+      const box = await page.locator(id).boundingBox();
+      const height = await page.evaluate(() => window.innerHeight);
+      expect(box.y + box.height, id + ' is below the fold').toBeLessThanOrEqual(height + 1);
+    }
+  });
 
   test('a part-filled form is dropped rather than taken', async ({ page }) => {
     await page.locator('#begin').click();
@@ -366,6 +383,44 @@ test.describe('teams', () => {
     await page.clock.runFor(61000);
     await page.locator('#carry-on').click();
     await expect(page.locator('#ready-who')).toHaveText('Team 3');
+  });
+});
+
+test.describe('getting back out', () => {
+  test('the Start button is on screen without scrolling for it',
+    async ({ page }) => {
+      // Six fields make the setup screen taller than a phone, so the one
+      // control that leaves it is pinned. See _README.md.
+      await page.setViewportSize({ width: 320, height: 568 });
+      const box = await page.locator('#begin').boundingBox();
+      const height = await page.evaluate(() => window.innerHeight);
+      expect(box.y + box.height).toBeLessThanOrEqual(height + 1);
+    });
+
+  test('Start over in settings empties the bowl and goes back to setup',
+    async ({ page }) => {
+      await toPlay(page);
+      await page.locator('#settings-btn').click();
+      await page.locator('#start-over').click();
+
+      expect(await screen(page)).toBe('setup');
+      await expect(page.locator('#settings')).not.toHaveAttribute('data-open', '');
+      expect((await saved(page)).slips).toEqual([]);
+    });
+
+  test('Start over keeps the settings it was played with', async ({ page }) => {
+    await page.locator('.count[data-teams="4"]').click();
+    await page.locator('.count[data-answers="2"]').click();
+    await page.locator('.count[data-secs="90"]').click();
+    await toPlay(page, ['Otter', 'Puffin']);
+
+    await page.locator('#settings-btn').click();
+    await page.locator('#start-over').click();
+    await expect(page.locator('.count[data-teams="4"]'))
+      .toHaveAttribute('aria-pressed', 'true');
+    await expect(page.locator('.count[data-answers="2"]'))
+      .toHaveAttribute('aria-pressed', 'true');
+    await expect(page.locator('#clock')).toHaveText('1:30');
   });
 });
 

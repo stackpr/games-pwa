@@ -107,7 +107,8 @@ test.describe('rounds and scoring', () => {
     ]);
   });
 
-  test('solo mode scores the named guesser and the drawer', async ({ page }) => {
+  test('solo mode scores the named guesser and the player who was up',
+    async ({ page }) => {
     await page.locator('#mode-solo').click();
     await page.locator('.count[data-count="4"]').click();
     await page.locator('#name-mode-type').click();
@@ -117,7 +118,7 @@ test.describe('rounds and scoring', () => {
     await oneCategory(page);
     await page.locator('#begin').click();
     await expect(page.locator('#ready-sub'))
-      .toHaveText('draws. Whoever gets it scores, and so do they.');
+      .toHaveText('is up. Whoever gets it scores, and so do they.');
 
     await page.locator('#start').click();
     await page.locator('#reveal').click();

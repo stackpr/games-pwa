@@ -22,10 +22,37 @@
     body[data-screen="between"] .between { display: flex; }
     body[data-screen="write"] .topbar-actions #setup-btn { display: none; }
 
+    /*
+     * Both scrolling screens pin their buttons to the bottom of the window.
+     * The setup screen is taller than a phone — six fields — and a Start
+     * button at the end of that scroll is a button a lot of people never
+     * find; the same goes for No more players under a long form. Sticky
+     * keeps them on screen without taking them out of the flow, so the
+     * on-screen keyboard still pushes them up rather than sitting over them.
+     */
+    .setup .go, .write-actions {
+      position: sticky;
+      bottom: 0;
+      z-index: 1;
+      background: var(--bg);
+      padding-bottom: calc(0.5rem + env(safe-area-inset-bottom));
+    }
+    /* A fade, so a button sitting over the scroll reads as being on top of
+       it rather than as the end of it. */
+    .setup .go::before, .write-actions::before {
+      content: "";
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: 100%;
+      height: 0.9rem;
+      background: linear-gradient(to top, var(--bg), transparent);
+      pointer-events: none;
+    }
+
     /* Filling the bowl is the one screen that takes typing, so it scrolls
        and it is the only place the keyboard is expected to cover half the
-       page. The buttons sit at the bottom of the flow rather than pinned,
-       so the keyboard pushes them up instead of over them. */
+       page. */
     .write {
       flex: 1;
       flex-direction: column;
@@ -294,6 +321,8 @@
       <p class="rules-list" style="margin-top:0.8rem">Everything else — the
         question, the scoring, how many answers each and the turn length — is
         set when a game starts.</p>
+      <button class="write-secondary" id="start-over" type="button">Start over</button>
+      <p class="rules-list">Empties the bowl and goes back to the question.</p>
       <button class="modal-close" type="button" data-close>Done</button>
     </div>
   </div>

@@ -1,7 +1,7 @@
 # Star Words
 
-Draw the word. No letters, no numbers, no talking. The app deals the cards,
-runs the clock and keeps score; the drawing happens on paper.
+Get the word across without saying it. The app deals the cards, runs the
+clock and keeps score; how the word gets across happens off the phone.
 
 ## The name
 
@@ -14,27 +14,51 @@ context. Recording that here so nobody re-litigates it later.
 The rules modal notes that the game is sold under brand names and that this
 is the game rather than the brand.
 
+## Drawing is one way of three
+
+The game is *a word, a clock, and no talking*. **Drawing it is the default,
+not the definition** — the same deal works for acting it out, and for
+building it out of bricks or whatever is on the table. Nothing in the code
+knows the difference: the app deals a word and runs a clock, and what
+happens in the room is the room's business.
+
+So the wording is deliberately mode-neutral wherever it can be — "the
+player", not "the drawer" — and the rules say **pick one and stick to it for
+the game**. That is the one thing the app cannot arbitrate: a table where
+one person is drawing and the next is miming is a table arguing about
+whether that was fair.
+
+Two consequences worth keeping:
+
+- **The round lengths stay long** (60–180s). They were set for drawing,
+  which is the slowest of the three, and a table doing charades can simply
+  pick 60.
+- **The brick version's name is a trademark** (it belongs to a toy company),
+  as is the best-known name for the drawing version. Neither appears here,
+  which is why the rules say "build it out of bricks" rather than naming
+  anything. See *Naming a game* in `CLAUDE.md`.
+
 ## How a round runs
 
 **Only the first card of a round is covered.** The phone has just been
 handed over and the room is still looking at it, so that one word waits
-behind a tap. After that every card arrives face up: by then the drawer has
+behind a tap. After that every card arrives face up: by then the player has
 the screen to themselves, and a tap-to-reveal between every word buys
 nothing and costs seconds off a running clock.
 
 That is also why naming the guesser deals the next card in the same tap.
 A turn should be one tap per word, not three.
 
-The card carries its **category**, which the drawer may say out loud. That
-is deliberate: it narrows fifteen hundred words to fifty, which is the
-difference between a drawing and a guessing game.
+The card carries its **category**, which may be said out loud. That is
+deliberate: it narrows fifteen hundred words to fifty, which is the
+difference between a game and a shot in the dark.
 
 **Got it** is +1 and deals the next card. **Skip** passes for nothing. There
-is no foul button — the banned things here (letters, words, talking) stop the
-drawing rather than costing a point, and the table can just say no.
+is no foul button — the banned things here (letters, words, talking) stop
+the attempt rather than costing a point, and the table can just say no.
 
-Rounds run longer than the other two word games — 60 to 180 seconds — because
-drawing is slower than talking.
+Rounds run longer than the other two word games — 60 to 180 seconds —
+because drawing and building are slower than talking.
 
 ## Scoring, and the two modes
 

@@ -113,7 +113,7 @@
   /**
    * The **first** card of a round is covered: the phone has just been handed
    * over and the room is still looking at it. After that every card arrives
-   * face up, because by then the drawer has the screen to themselves and a
+   * face up, because by then the player has the screen to themselves and a
    * tap-to-reveal between every word is a tap that buys nothing and costs
    * seconds off a running clock. See _README.md.
    */
@@ -143,8 +143,8 @@
     el.readyWho.textContent = seatName(r.present);
     el.readyWho.dataset.seat = panel.seatToken(r.present);
     el.readySub.textContent = party.mode === 'teams'
-      ? 'draws. Everyone else guesses.'
-      : 'draws. Whoever gets it scores, and so do they.';
+      ? 'is up. Everyone else guesses.'
+      : 'is up. Whoever gets it scores, and so do they.';
     el.playWho.textContent = seatName(r.present);
   }
 
