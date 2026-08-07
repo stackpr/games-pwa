@@ -324,9 +324,11 @@
     state.caps[state.turn - 1][state.cells[move.over]]++;
     state.cells[move.to] = state.cells[move.from];
     state.cells[move.from] = '';
-    delete state.cells[move.over];
+    // The bee is taken; the cell it sat on stays. Only a placement takes a
+    // cell off the comb, so a jump cannot cut the comb and there is nothing
+    // to claim here — see _README.md.
+    state.cells[move.over] = '';
 
-    claimIsolated();
     // The same bee keeps going while it can, which is what makes a chain
     // worth setting up.
     if (jumpsFrom(move.to).length && !hasWon(state.caps[state.turn - 1])) {

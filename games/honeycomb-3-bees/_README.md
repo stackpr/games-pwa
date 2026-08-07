@@ -51,7 +51,8 @@ become them: these are pieces, not identities.
 
 1. **Jumping is compulsory.** If any bee can jump an adjacent bee into the
    empty cell beyond it, it must, and the same bee keeps jumping while it
-   can (`state.chain` pins it). The jumped bee is taken.
+   can (`state.chain` pins it). The jumped bee is taken and **its cell stays
+   on the comb**, now empty.
 2. Otherwise **place a bee and take a cell away** — one move, not two.
    `state.phase` goes to `'remove'` after the placement and the turn does not
    end until a cell comes off.
@@ -63,6 +64,13 @@ become them: these are pieces, not identities.
    player's own stack once the pool dries up.
 5. A player with **no move at all loses** (`stuck()`).
 
+**Only a placement takes a cell off the comb.** A jump takes a bee and
+leaves the ring it sat on — the two ways of shrinking the board are the
+placement's removal and the isolation rule below, and nothing else. An
+earlier version deleted the jumped bee's cell as well, which shrank the comb
+roughly twice as fast as it should and made isolations happen almost by
+accident.
+
 **A cell only comes off the edge.** `removable()` asks for two *consecutive*
 open sides, walking `DIRS` as a cycle — anything else would have to slide
 out past its neighbours. That is the whole rule, and it is why `DIRS` is in
@@ -70,7 +78,9 @@ cycle order rather than any convenient order.
 
 ### Cutting the comb
 
-Removing a cell (or a jump landing where it does) can split the comb.
+Taking a cell off can split the comb — and only taking a cell off can, now
+that a jump leaves its ring behind, which is why `claimIsolated()` is called
+from `place()` and `removeCell()` and not from `jump()`.
 **Every group that is not the largest leaves the board, and the player who
 cut it off takes any bees that were on it** — full group or not.
 
@@ -88,9 +98,9 @@ had done exactly the thing the rule is meant to reward.
   iterate first;
 - deletes the rest and adds their bees to the mover's stack.
 
-It runs after a placement that ends the turn, after a removal, and after
-each jump — before `endTurn()`, so bees claimed this way can win the game on
-the move that took them.
+It runs after a placement that ends the turn and after a removal, in both
+cases before `endTurn()`, so bees claimed this way can win the game on the
+move that took them.
 
 ## Undo
 

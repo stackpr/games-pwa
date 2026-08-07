@@ -223,8 +223,9 @@ test.describe('the owed cell', () => {
     const before = await onBoard(page);
     await cell(page, '0,0').click();
     await cell(page, '2,0').click();
-    // One cell goes, and it is the jumped bee's — not a removal.
-    expect(await onBoard(page)).toBe(before - 1);
+    // The comb is the same size afterwards: a jump takes a bee, and only a
+    // placement takes a cell. See _README.md.
+    expect(await onBoard(page)).toBe(before);
     await expect(label(page)).toHaveText(/^Player 2 to move/);
     await expect(hint(page)).not.toHaveText('Now take a cell off the edge.');
   });
@@ -253,8 +254,10 @@ test.describe('jumping', () => {
 
     await expect(cell(page, '2,0')).toHaveAttribute('data-c', 'w');
     await expect(cell(page, '0,0')).not.toHaveAttribute('data-c', /.*/);
-    // The jumped bee takes its cell off the board with it.
-    await expect(cell(page, '1,0')).toHaveAttribute('data-gone', '');
+    // The bee is taken; the cell it sat on stays, now empty. Only a
+    // placement takes a cell off the comb — see _README.md.
+    await expect(cell(page, '1,0')).not.toHaveAttribute('data-gone', /.*/);
+    await expect(cell(page, '1,0')).not.toHaveAttribute('data-c', /.*/);
     expect(await capsOf(page, 1)).toEqual([0, 1, 0]);
     await expect(label(page)).toHaveText(/^Player 2 to move/);
   });
