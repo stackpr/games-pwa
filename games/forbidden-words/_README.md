@@ -135,3 +135,12 @@ Changing the mode or the player count **starts the scores over**: those are
 different seats, and carrying a score onto a seat that moved is worse than
 losing it. No saved categories means all of them, which is what a first run
 wants — a full deck and nothing to read before playing.
+
+## The scoring panel is shared
+
+The name buttons, the board and the swap between the two scoring modes are
+`js/lib/guess.js` — this game hands it the party and it draws them. Three
+word games plus Fishbowl were carrying identical copies of that code, which
+is what earned it a place in `js/lib/`; the wording around it (who presents,
+what the ready line says) is still each game's own. See *Shared code* in
+`CLAUDE.md`.

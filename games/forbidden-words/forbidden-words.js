@@ -65,6 +65,14 @@
     Store.save(STORAGE_KEY, { settings, party });
   }
 
+  const panel = GuessPanel.create({
+    el: {
+      whoGrid: el.whoGrid, whoSkip: el.whoSkip, board: el.board,
+      got: el.got, skip: el.skip
+    },
+    onScore: (points, seat) => score(points, seat === null ? undefined : seat)
+  });
+
   function screen(name) {
     el.body.dataset.screen = name;
   }
@@ -139,58 +147,33 @@
   }
 
   /** Teams get the shared player colours; a table of players does not. */
-  function seatToken(i) {
-    return party.mode === 'teams' ? String(i + 1) : '';
-  }
-
   function renderReady() {
     const r = Party.roles(party);
+    // The board goes first: the panel works out the seat token, so it has
+    // to have been handed the party before the ready line asks for one.
+    renderBoard();
     el.readyWho.textContent = seatName(r.present);
-    el.readyWho.dataset.seat = seatToken(r.present);
+    el.readyWho.dataset.seat = panel.seatToken(r.present);
     el.readySub.textContent = party.mode === 'teams'
       ? 'describes. Everyone else guesses.'
       : 'describes. Whoever gets it scores, and so do they.';
     el.playWho.textContent = seatName(r.present);
-    buildWho();
   }
 
 
   /**
-   * Solo mode scores by naming who got it, so the action row becomes one
-   * button per player — everybody but whoever is presenting. Rebuilt when
-   * the round turns over, since the presenter changes and so do the names.
+   * The panel owns what the two scoring modes look like — the name buttons,
+   * the board and the colours — and this hands it the state to draw. See
+   * js/lib/guess.js.
    */
-  function buildWho() {
-    el.whoGrid.textContent = '';
-    if (party.mode === 'teams') return;
-    for (const seat of Party.guessers(party)) {
-      const b = document.createElement('button');
-      b.className = 'who-btn';
-      b.type = 'button';
-      b.dataset.seat = String(seat);
-      b.textContent = seatName(seat);
-      b.setAttribute('aria-label', seatName(seat) + ' got it');
-      b.addEventListener('click', () => score(1, seat));
-      el.whoGrid.append(b);
-    }
-  }
-
   function renderBoard() {
-    const scoring = Party.scoring(party);
-    el.board.textContent = '';
-    for (let i = 0; i < party.scores.length; i++) {
-      const li = document.createElement('li');
-      li.dataset.seat = seatToken(i);
-      if (scoring.indexOf(i) !== -1) li.dataset.up = '';
-      const name = document.createElement('span');
-      name.className = 'board-name';
-      name.textContent = seatName(i);
-      const score = document.createElement('span');
-      score.className = 'board-score';
-      score.textContent = String(party.scores[i]);
-      li.append(name, score);
-      el.board.append(li);
-    }
+    panel.render({
+      mode: party.mode,
+      names: party.scores.map((_, i) => seatName(i)),
+      scores: party.scores,
+      present: Party.roles(party).present,
+      up: Party.scoring(party)
+    });
   }
 
   function beginRound() {
@@ -255,11 +238,8 @@
     renderReady();
     screen('ready');
   });
-  el.got.addEventListener('click', () => score(1));
-  el.whoSkip.addEventListener('click', () => score(0));
   // A foul is the presenter's alone, so it names no guesser.
   el.whoFoul.addEventListener('click', () => score(-1, null));
-  el.skip.addEventListener('click', () => score(0));
   el.foul.addEventListener('click', () => score(-1));
 
   Modal.create(el.rules, { trigger: el.rulesBtn });

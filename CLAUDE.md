@@ -122,6 +122,7 @@ second copy would be a second set of bugs:
 | `js/lib/store.js` | `Store.load(key)` / `Store.save(key, value)`. Swallows and warns, because storage throws in Safari private mode, on a full quota, and when a user blocks site data. Validation stays in the game — `load()` only promises "parsed JSON, or null". |
 | `js/lib/dice.js` | `DiceTray.create(el, { onPick })`, plus `randomFace()`. Builds the dice, sizes them from how many are in play, and runs the bounce-and-settle roll. Pairs with `css/dice.css`. Omit `onPick` and the dice are inert `<span>`s rather than buttons. |
 | `js/lib/modal.js` | `Modal.create(el, { trigger })`. An overlay dialog with the parts that are easy to forget: closing on the scrim but not the panel, closing on Escape, and moving focus in and back out. Pairs with `css/modal.css`; a `[data-close]` button inside closes it. |
+| `js/lib/guess.js` | `GuessPanel.create({ el, onScore })`, then `render({ mode, names, scores, present, tally })`. What the two scoring modes look like: the name buttons in solo, the board in both, and `body[data-mode]` for `css/party.css` to swap on. Four games carried identical copies before it existed. |
 | `js/lib/viewport.js` | Sets `--measured-height` from `window.innerHeight` and re-measures on resize, orientation change, `pageshow` and 1s after load. Pages cap it — `--app-height: min(var(--measured-height, 100dvh), 100dvh)` — and size themselves with `var(--app-height, 100dvh)`. See The Android bottom-bar bug. |
 
 Load them with plain `<script>` tags before the game's own script; they
@@ -303,6 +304,32 @@ All client-side; no server APIs:
   Share → Add to Home Screen instructions.
 - Dismissal stored in `localStorage`, respected for 14 days;
   `appinstalled` hides the banner permanently.
+
+## Agents and skills
+
+`.claude/agents/` holds the subagents this repo uses; `.claude/skills/`
+holds the procedures. **Agents wrap skills, they do not replace them.** An
+agent exists to keep long, noisy work — a test run, a browser pass — out of
+the main context and to fix the model and effort it deserves. What to
+actually *do* stays in the skill and in this file, and an agent that covers
+the same ground as a skill must invoke the skill and follow it rather than
+carry its own copy of the steps. A rule that lives in two places is a rule
+that will disagree with itself.
+
+| Agent | Model / effort | For |
+| --- | --- | --- |
+| `test-runner` | sonnet / medium | Every Playwright run. Give it the segment and what changed; it reports the command, the counts and each failure. |
+| `layout-check` | sonnet / medium | Driving a page in Chromium at 320 and 390 wide and reporting anything cut off or unreadable. |
+
+**Run the tests through `test-runner`, not inline.** The suite prints
+thousands of lines and one request per file served; that belongs in its own
+context. Quote the agent's numbers as it reported them, and say which
+segment they came from. The rule against claiming a run that did not happen
+applies to relaying an agent's report as much as to running it yourself —
+if the agent says it ran a segment, that is what you say.
+
+Everything else stays in the main session. Editing the site, deciding what
+to change and writing the specs are not delegated: they are the work.
 
 ## Local dev & testing
 

@@ -90,6 +90,13 @@ const GAMES = [
     path: 'games/star-words/'
   },
   {
+    name: 'Fishbowl',
+    section: 'group',
+    description: 'Write three answers each, then talk your team into them',
+    emoji: '\u{1F41F}',
+    path: 'games/fishbowl/'
+  },
+  {
     name: 'What Am I?',
     section: 'group',
     description: 'The room can see it, you cannot',

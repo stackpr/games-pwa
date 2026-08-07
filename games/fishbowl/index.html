@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Fishbowl</title>
+  <meta name="theme-color" content="#10141f">
+  <link rel="manifest" href="../../manifest.webmanifest">
+  <link rel="icon" href="../../icons/favicon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="../../icons/apple-touch-icon.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="stylesheet" href="../../css/players.css">
+  <link rel="stylesheet" href="../../css/modal.css">
+  <link rel="stylesheet" href="../../css/party.css">
+  <style>
+    /* Two screens the shared party stylesheet does not have: filling the
+       bowl, and the pause between turns. Everything else — setup, ready,
+       play, over, the clock and the action row — is css/party.css. */
+    .write, .between { display: none; }
+    body[data-screen="write"] .write,
+    body[data-screen="between"] .between { display: flex; }
+    body[data-screen="write"] .topbar-actions #setup-btn { display: none; }
+
+    /* Filling the bowl is the one screen that takes typing, so it scrolls
+       and it is the only place the keyboard is expected to cover half the
+       page. The buttons sit at the bottom of the flow rather than pinned,
+       so the keyboard pushes them up instead of over them. */
+    .write {
+      flex: 1;
+      flex-direction: column;
+      min-height: 0;
+      overflow-y: auto;
+      gap: 0.7rem;
+      padding: 0 0.75rem calc(1rem + env(safe-area-inset-bottom));
+    }
+    .write-head { display: flex; flex-direction: column; gap: 0.2rem; }
+    .write-who { margin: 0; font-size: 1.5rem; font-weight: 800; }
+    .write-q {
+      margin: 0;
+      font-size: 1.05rem;
+      font-weight: 700;
+      color: var(--player-1);
+      line-height: 1.3;
+      overflow-wrap: anywhere;
+    }
+    .write-note { margin: 0; font-size: 0.85rem; color: var(--text-dim); line-height: 1.4; }
+    .slips { display: flex; flex-direction: column; gap: 0.45rem; }
+    .slip-input, .name-box {
+      width: 100%;
+      border: 1px solid var(--panel-hi);
+      border-radius: 12px;
+      background: var(--panel);
+      color: var(--text);
+      font: inherit;
+      font-size: 1.05rem;
+      padding: 0.7rem 0.75rem;
+    }
+    /* The name box looks like an answer box but is not one — the specs and
+       the code both select answers by .slip-input. */
+    .slip-input:focus, .name-box:focus { outline: none; box-shadow: inset 0 0 0 2px var(--player-1); }
+    .write-actions { display: flex; flex-direction: column; gap: 0.45rem; margin-top: auto; }
+    .write-secondary {
+      width: 100%;
+      border: 1px solid var(--panel-hi);
+      border-radius: 14px;
+      background: var(--panel);
+      color: var(--text);
+      font-size: 1rem;
+      font-weight: 800;
+      padding: 0.7rem 0;
+      cursor: pointer;
+      touch-action: manipulation;
+    }
+    .write-secondary:disabled { opacity: 0.4; }
+    .bowl-count { margin: 0; font-size: 0.85rem; color: var(--text-dim); text-align: center; }
+
+    /* The slip in hand. Sized to be read at a glance by somebody already
+       talking — this is the one thing on screen that matters. */
+    .card {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 0;
+      margin: 0 0.6rem;
+      padding: 1rem 0.8rem;
+      background: var(--panel);
+      border-radius: 18px;
+      text-align: center;
+    }
+    .card-cat {
+      font-size: clamp(0.9rem, 4.5vw, 1.3rem);
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--text-dim);
+    }
+    .card {
+      flex-direction: column;
+      gap: 0.6rem;
+    }
+    .card-word {
+      font-size: clamp(1.8rem, 9vw, 3.2rem);
+      font-weight: 800;
+      line-height: 1.15;
+      overflow-wrap: anywhere;
+    }
+    .round-strip {
+      flex: none;
+      margin: 0;
+      padding: 0 0.9rem;
+      font-size: 0.8rem;
+      color: var(--text-dim);
+      text-align: center;
+    }
+
+    .between {
+      flex: 1;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 0.4rem;
+      min-height: 0;
+      padding: 0 0.9rem calc(1rem + env(safe-area-inset-bottom));
+      text-align: center;
+    }
+    .between-title { margin: 0; font-size: clamp(1.8rem, 9vw, 2.8rem); font-weight: 800; }
+    .between-sub { margin: 0; font-size: 1rem; color: var(--text-dim); line-height: 1.35; }
+
+    /* The name box only exists in the mode that scores by name. */
+    .write-name { display: none; }
+    body[data-mode="solo"] .write-name { display: block; }
+    #teams-field { display: none; }
+    body[data-mode="teams"] #teams-field { display: flex; }
+
+    /* Scoring by name turns the action row into one button per player, and
+       those buttons take every pixel the card can spare — so the card keeps
+       a floor rather than a share, the same as Star Words. */
+    body[data-mode="solo"] .card { flex: none; min-height: 30dvh; }
+
+    /* Team names, edited in place. There are 2 to 6 of them and they are the
+       only setting worth changing mid-game. */
+    .team-names { display: grid; gap: 0.35rem; margin: 0.5rem 0 0; }
+    .team-row { display: flex; align-items: center; gap: 0.5rem; }
+    .team-row span { font-size: 0.8rem; color: var(--text-dim); width: 3.6rem; flex: none; }
+    .question-own {
+      width: 100%;
+      border: 1px solid var(--panel-hi);
+      border-radius: 10px;
+      background: var(--panel);
+      color: var(--text);
+      font: inherit;
+      font-size: 0.95rem;
+      padding: 0.55rem 0.65rem;
+      margin-top: 0.3rem;
+    }
+    .question-own:focus { outline: none; box-shadow: inset 0 0 0 2px var(--player-1); }
+  </style>
+</head>
+<body data-screen="setup" data-mode="teams">
+  <div class="topbar">
+    <a href="../../">&larr; Games</a>
+    <div class="topbar-actions">
+      <button id="rules-btn" class="chip" type="button" aria-expanded="false">Rules</button>
+      <button id="settings-btn" class="chip" type="button" aria-expanded="false">Settings</button>
+      <button id="setup-btn" class="chip" type="button">New</button>
+    </div>
+  </div>
+
+  <!-- Setup: what everyone is writing, how many teams, how long a turn. -->
+  <section class="setup" aria-labelledby="setup-title">
+    <h1 class="setup-title" id="setup-title">Fishbowl</h1>
+    <p class="setup-blurb">Everyone answers one question, a few times each.
+      The answers all go in the bowl, and you take turns getting each other
+      to say them — three rounds, same slips, less to say each time.</p>
+
+    <div class="field">
+      <p class="field-label" id="question-label">The question</p>
+      <div class="cat-grid" id="questions" role="group" aria-labelledby="question-label"></div>
+      <input class="question-own" id="question-own" type="text" maxlength="60"
+        autocomplete="off" placeholder="Or write your own question"
+        aria-label="Write your own question">
+    </div>
+
+    <div class="field">
+      <p class="field-label">Scoring</p>
+      <div class="pick-row" id="mode-row" role="group" aria-label="Scoring mode">
+        <button class="pick" id="mode-teams" type="button" data-mode="teams">Teams</button>
+        <button class="pick" id="mode-solo" type="button" data-mode="solo">Each player scores</button>
+      </div>
+    </div>
+
+    <div class="field" id="teams-field">
+      <p class="field-label" id="teams-label">Teams</p>
+      <div class="count-row" id="teams-row" role="group" aria-labelledby="teams-label"></div>
+    </div>
+
+    <div class="field">
+      <p class="field-label" id="answers-label">Answers each</p>
+      <div class="count-row" id="answers-row" role="group" aria-labelledby="answers-label"></div>
+    </div>
+
+    <div class="field">
+      <p class="field-label">Repeats</p>
+      <div class="pick-row" id="unique-row" role="group" aria-label="Whether the same answer can go in twice">
+        <button class="pick" id="unique-on" type="button" data-unique="1">Every slip different</button>
+        <button class="pick" id="unique-off" type="button" data-unique="0">Repeats allowed</button>
+      </div>
+    </div>
+
+    <div class="field">
+      <p class="field-label" id="secs-label">Turn length</p>
+      <div class="count-row" id="secs-row" role="group" aria-labelledby="secs-label"></div>
+    </div>
+
+    <button class="go" id="begin" type="button">Fill the bowl</button>
+  </section>
+
+  <!-- Filling the bowl: one player at a time, three answers each. -->
+  <section class="write" aria-labelledby="write-who">
+    <div class="write-head">
+      <h1 class="write-who" id="write-who">Player 1</h1>
+      <p class="write-q" id="write-q"></p>
+    </div>
+    <p class="write-note" id="write-note"></p>
+    <div class="write-name" id="write-name">
+      <input class="name-box" id="who-name" type="text" maxlength="16" autocomplete="off"
+        list="recent-names" aria-label="Your name" placeholder="Your name">
+      <datalist id="recent-names"></datalist>
+    </div>
+    <div class="slips" id="slips"></div>
+    <p class="bowl-count" id="bowl-count" role="status" aria-live="polite"></p>
+    <div class="write-actions">
+      <button class="go" id="next-player" type="button">Next player</button>
+      <button class="write-secondary" id="no-more" type="button">No more players</button>
+    </div>
+  </section>
+
+  <!-- Pass the phone: who is up, what this round asks of them. -->
+  <section class="ready" aria-labelledby="ready-who">
+    <p class="ready-label" id="ready-label">Up next</p>
+    <p class="ready-who" id="ready-who"></p>
+    <p class="ready-sub" id="ready-sub"></p>
+    <button class="go" id="start" type="button">Start the clock</button>
+  </section>
+
+  <!-- The turn itself. -->
+  <section class="play">
+    <div class="play-head">
+      <span class="who" id="play-who"></span>
+      <span class="clock" id="clock" aria-label="Time left">1:00</span>
+      <span class="tally" id="tally">0</span>
+    </div>
+    <div class="card">
+      <span class="card-cat" id="card-cat"></span>
+      <span class="card-word" id="word"></span>
+    </div>
+
+    <div class="who-row" id="who-row">
+      <button class="who-skip" id="who-skip" type="button">Pass this slip</button>
+      <div class="who-grid" id="who-grid"></div>
+    </div>
+
+    <div class="actions two">
+      <button class="act" id="pass" type="button">Pass<small>0</small></button>
+      <button class="act good" id="got" type="button">Got it<small>+1</small></button>
+    </div>
+  </section>
+
+  <!-- Between turns and between rounds. -->
+  <section class="between" aria-labelledby="between-title">
+    <p class="over-label" id="between-label"></p>
+    <h1 class="between-title" id="between-title"></h1>
+    <p class="between-sub" id="between-sub"></p>
+    <ol class="board" id="between-board"></ol>
+    <button class="go" id="carry-on" type="button">Next</button>
+  </section>
+
+  <!-- Game over. -->
+  <section class="over" aria-labelledby="over-who">
+    <p class="over-label">Winner</p>
+    <p class="ready-who" id="over-who"></p>
+    <p class="over-score" id="over-score"></p>
+    <ol class="board" id="over-board"></ol>
+    <button class="go" id="again" type="button">Play again</button>
+  </section>
+
+  <div class="modal" id="settings">
+    <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="settings-title">
+      <h2 class="modal-title" id="settings-title">Settings</h2>
+      <p class="field-label" id="names-label">Team names</p>
+      <div class="team-names" id="team-names"></div>
+      <p class="rules-list" style="margin-top:0.8rem">Everything else — the
+        question, the scoring, how many answers each and the turn length — is
+        set when a game starts.</p>
+      <button class="modal-close" type="button" data-close>Done</button>
+    </div>
+  </div>
+
+  <div class="modal" id="rules">
+    <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="rules-title">
+      <h2 class="modal-title" id="rules-title">How to play</h2>
+      <ul class="rules-list">
+        <li>Everyone answers the same question a few times over, one player
+          at a time on this phone. All the answers go in the bowl.</li>
+        <li>You take turns. On your turn you draw slips and get the others to
+          say what is on them before the clock runs out.
+          <strong>Got it</strong> is a point; <strong>Pass</strong> puts the
+          slip aside until your turn ends.</li>
+        <li>When the bowl is empty the round ends. The same slips go back in
+          for the next round.</li>
+      </ul>
+      <h3 class="rules-sub">The three rounds</h3>
+      <ul class="rules-list">
+        <li><strong>Describe it</strong> — say anything except the words on
+          the slip.</li>
+        <li><strong>One word</strong> — a single word, said once.</li>
+        <li><strong>Act it out</strong> — no words at all.</li>
+      </ul>
+      <h3 class="rules-sub">Scoring</h3>
+      <ul class="rules-list">
+        <li><strong>Teams</strong> — two to six of them, taking turns. The
+          whole team keeps what its clue-giver earns.</li>
+        <li><strong>Each player scores</strong> — the buttons are everyone
+          else's names. Tap whoever got it: they take the point and so does
+          the player giving the clues, so getting through to anybody counts.
+          The seats are whoever filled the bowl.</li>
+      </ul>
+      <p class="rules-list" style="margin-top:0.8rem">Everyone has heard every
+        slip by round two, which is the joke: the same answers get harder to
+        give and easier to guess.</p>
+      <button class="modal-close" type="button" data-close>Close</button>
+    </div>
+  </div>
+
+  <script src="../../js/lib/store.js"></script>
+  <script src="../../js/lib/modal.js"></script>
+  <script src="../../js/lib/timer.js"></script>
+  <script src="../../js/lib/names.js"></script>
+  <script src="../../js/lib/guess.js"></script>
+  <script src="fishbowl.js"></script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('../../sw.js').catch(() => {});
+    }
+  </script>
+</body>
+</html>

@@ -82,11 +82,15 @@ in CLAUDE.md.
    origin. Copy the shape of `specs/counter.spec.js`. The shell and
    publishing specs pick the game up automatically.
 
-7. **Verify**: `cd _tests && npm ci && npm test` (it starts its own server).
+7. **Verify**: hand the run to the **`test-runner`** agent —
+   `npm run game <slug>` while iterating, then `npm run affected` before
+   pushing. It reports the command, the counts and each failure; quote what
+   it reports. The suite starts its own server.
    Use `npm ci`, never `npm install`, and never run `npx playwright install`
    — the runner is pinned to an already-provisioned browser; see
-   `_tests/README.md`. For a manual look, `python3 -m http.server 8080` from
-   the repo root, confirm the new tile appears and the game works offline.
+   `_tests/README.md`. For the look of it, hand the page to the
+   **`layout-check`** agent: it drives the game at 320 and 390 wide and
+   reports anything cut off. Confirm the new tile appears on the home page.
 
 ## Before it can deploy
 

@@ -24,6 +24,7 @@ installable PWA at **https://games.payne.run**.
 | [Mancala](games/mancala/) | Sow seeds round the board — three house rules to set |
 | [Forbidden Words](games/forbidden-words/) | Describe the word without saying any of its clues |
 | [Star Words](games/star-words/) | Draw the word — no letters, no numbers, no talking |
+| [Fishbowl](games/fishbowl/) | Everyone writes three answers; teams talk each other into them |
 | [What Am I?](games/what-am-i/) | Hold the phone up; you get the category, they give the clues |
 | [Pitch](games/pitch/) | Scoresheet for four- or five-handed Pitch, 10 or 13 point |
 | [Somewhere Between](games/somewhere-between/) | Drag the marker to the hidden spot on a scale |
