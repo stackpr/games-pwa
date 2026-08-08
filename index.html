@@ -40,6 +40,19 @@
     </ol>
   </div>
 
+  <!-- Sits between the intro and the list, and is hidden until there is a
+       joke to show — the shell must never wait on it or reserve space for
+       it. See js/joke.js. -->
+  <section id="joke" class="joke" hidden>
+    <p id="joke-text" class="joke-text" aria-live="polite"></p>
+    <button id="joke-refresh" class="joke-refresh" type="button"
+            aria-label="Another joke" title="Another joke">
+      <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+        <path d="M12 5V2L7.5 6.5 12 11V8a5 5 0 1 1-4.9 6h-2A7 7 0 1 0 12 5Z"/>
+      </svg>
+    </button>
+  </section>
+
   <main>
     <div id="game-list" class="game-list"></div>
   </main>
@@ -52,6 +65,8 @@
   <script src="js/games.js"></script>
   <script src="js/install.js"></script>
   <script src="js/version.js"></script>
+  <script src="js/lib/store.js"></script>
+  <script src="js/joke.js"></script>
   <script>
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {

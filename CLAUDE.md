@@ -21,13 +21,39 @@ to leave out a caveat.
 - **No external network dependencies.** No CDNs, no analytics, no fonts or
   scripts fetched from other origins. Everything must work fully offline
   once the service worker has cached the shell.
-  **One deliberate exception:** Honeycomb: Spelling draws random letters and
-  checks guesses against `api.dictionaryapi.dev`, which no shipped word list
-  could replace — its `_README.md` argues the trade. It is an exception, not
-  a precedent: the shell still precaches and still loads offline, the game
-  says so on its start sheet, and its spec asserts that host is the only one
-  the site ever reaches. A new game needing the network has to earn it the
-  same way, in writing.
+
+  **Two deliberate exceptions, and they are the whole list:**
+
+  1. **`api.dictionaryapi.dev`** — Honeycomb: Spelling draws random letters
+     and checks guesses against it, which no shipped word list could
+     replace; its `_README.md` argues the trade. The game says so on its
+     start sheet.
+  2. **`icanhazdadjoke.com`** — the dad joke above the game list
+     (`js/joke.js`). Asked for directly by the owner, and there is no
+     offline substitute worth having: a shipped joke list is a joke list
+     everyone has already read.
+
+  Neither is a precedent. A new one has to earn it the same way, **in
+  writing**, and keep the same terms: the shell still precaches, still
+  installs and still loads offline, and `shell.spec.js` asserts these two
+  hosts are the only ones the site ever reaches.
+
+  **The joke is held to a stricter rule than the dictionary, because it is
+  on the app shell rather than inside a game.** A game can say "this bit
+  needs the internet"; the home page cannot. So `js/joke.js` never blocks
+  rendering, keeps the last joke in `localStorage` so an offline visit still
+  has one, and leaves its whole block hidden when it has nothing — a missing
+  joke has to look like a design choice, not a hole. Every one of those has
+  a spec.
+
+  It also checks `navigator.onLine` **before** fetching rather than catching
+  the failure afterwards, and that ordering is load-bearing rather than
+  tidiness: **a request the browser cannot complete is logged to the console
+  by the browser, and `catch` does not suppress it.** Not fetching at all is
+  the only way an offline home page stays free of console errors, which
+  several shell specs assert. The cost is that a host which is unreachable
+  while online still logs one line — unavoidable for any `fetch`, and pinned
+  by a spec to exactly that one line so it cannot quietly grow.
 - **Persistence is browser-only.** Use `localStorage` for small state
   (scores, settings) and IndexedDB if a game ever needs structured or large
   data. Never assume a backend exists.

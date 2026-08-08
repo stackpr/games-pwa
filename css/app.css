@@ -102,6 +102,58 @@ body {
 .btn-ghost { background: transparent; color: var(--text-dim); }
 .btn:active { filter: brightness(1.2); }
 
+/* Dad joke — see js/joke.js. Quiet enough that a day it cannot load looks
+   like a design choice rather than a hole. */
+.joke {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  max-width: 640px;
+  margin: 0 auto 1.4rem;
+  padding: 0 1.25rem;
+}
+
+.joke-text {
+  margin: 0;
+  flex: 1;
+  min-width: 0;
+  color: var(--text-dim);
+  font-size: 0.95rem;
+  line-height: 1.45;
+  font-style: italic;
+}
+
+.joke-refresh {
+  flex: none;
+  width: 2.1rem;
+  height: 2.1rem;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--surface-2);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text-dim);
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.joke-refresh svg { width: 1.1rem; height: 1.1rem; fill: currentColor; }
+.joke-refresh:active { filter: brightness(1.3); }
+.joke-refresh:disabled { opacity: 0.5; cursor: default; }
+.joke[data-loading] .joke-text { opacity: 0.5; }
+.joke[data-loading] .joke-refresh svg { animation: joke-spin 700ms linear infinite; }
+
+@keyframes joke-spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .joke[data-loading] .joke-refresh svg { animation: none; }
+}
+
 /* Game list */
 main { max-width: 640px; margin: 0 auto; padding: 0 1.25rem; }
 

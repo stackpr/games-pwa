@@ -1,6 +1,31 @@
 const { test, expect } = require('@playwright/test');
 const { freshPage, serviceWorkerReady, trackExternalRequests, trackErrors } = require('../helpers');
 
+const JOKE_API = 'https://icanhazdadjoke.com/**';
+
+/*
+ * Stands in for icanhazdadjoke.com. The suite must never depend on a third
+ * party being up, and a test that reached the real API would be slow, flaky
+ * and rude. Returns a different joke each call so "another joke" is testable.
+ */
+let served = 0;
+async function mockJokes(page, options) {
+  const opts = options || {};
+  await page.route(JOKE_API, route => {
+    if (opts.fail) return route.abort('failed');
+    served++;
+    return route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ id: 'x' + served, joke: 'Mock joke ' + served, status: 200 }),
+    });
+  });
+}
+
+test.beforeEach(async ({ page }) => {
+  await mockJokes(page);
+});
+
 test.describe('app shell', () => {
   test('home page lists every registered game', async ({ page }) => {
     await page.goto('/');
@@ -156,7 +181,10 @@ test.describe('app shell', () => {
       await page.goto(href);
     }
 
-    expect(external, 'no CDNs, fonts or analytics').toEqual([]);
+    // The two documented exceptions, and nothing else. See CLAUDE.md.
+    const stray = external.filter(url =>
+      !url.startsWith('https://icanhazdadjoke.com/'));
+    expect(stray, 'no CDNs, fonts or analytics').toEqual([]);
     expect(errors).toEqual([]);
   });
 
@@ -346,5 +374,123 @@ test.describe('install prompt', () => {
     await page.reload();
     await expect(page.locator('#install-banner')).toBeHidden();
     await context.close();
+  });
+});
+
+/*
+ * The dad joke is the site's second network exception and the first one on
+ * the shell itself, so most of these tests are about what happens when the
+ * host is unreachable rather than when it works. See CLAUDE.md.
+ */
+test.describe('the dad joke', () => {
+  const joke = page => page.locator('#joke-text');
+
+  test('sits between the intro and the game list', async ({ page }) => {
+    await page.goto('/');
+    await expect(joke(page)).toHaveText(/Mock joke/);
+    await expect(page.locator('#joke')).toBeVisible();
+
+    const order = await page.evaluate(() => {
+      const top = id => document.getElementById(id).getBoundingClientRect().top;
+      // Adjacent boxes touch, so this is >= rather than >.
+      return {
+        header: top('joke') >= document.querySelector('.site-header')
+          .getBoundingClientRect().bottom,
+        list: top('joke') < top('game-list'),
+      };
+    });
+    expect(order.header, 'below the intro').toBe(true);
+    expect(order.list, 'above the list').toBe(true);
+  });
+
+  test('the recycle button fetches another one', async ({ page }) => {
+    await page.goto('/');
+    await expect(joke(page)).toHaveText(/Mock joke/);
+    const first = await joke(page).textContent();
+
+    await page.locator('#joke-refresh').click();
+    await expect(joke(page)).not.toHaveText(first);
+    await expect(joke(page)).toHaveText(/Mock joke/);
+  });
+
+  test('a fresh joke arrives on every visit', async ({ page }) => {
+    await page.goto('/');
+    await expect(joke(page)).toHaveText(/Mock joke/);
+    const first = await joke(page).textContent();
+    await page.goto('/');
+    await expect(joke(page)).not.toHaveText(first);
+  });
+
+  test('offline it shows the last one and asks for nothing', async ({ page, context }) => {
+    const errors = trackErrors(page);
+    await freshPage(page, '/');
+    await serviceWorkerReady(page);
+    await expect(joke(page)).toHaveText(/Mock joke/);
+    const seen = await joke(page).textContent();
+
+    let asked = 0;
+    page.on('request', req => { if (req.url().includes('icanhazdadjoke')) asked++; });
+
+    await context.setOffline(true);
+    try {
+      await page.goto('/');
+      // The saved joke is still there to read…
+      await expect(joke(page)).toHaveText(seen);
+      await expect(page.locator('#game-list li a')).not.toHaveCount(0);
+      // …and nothing was asked of a host that cannot answer, which is what
+      // keeps the console clean offline.
+      expect(asked, 'no request while offline').toBe(0);
+      expect(errors).toEqual([]);
+    } finally {
+      await context.setOffline(false);
+    }
+  });
+
+  test('with nothing saved and no answer, the block stays hidden', async ({ page }) => {
+    const errors = trackErrors(page);
+    await page.route('https://icanhazdadjoke.com/**', route => route.abort('failed'));
+    await page.goto('/');
+
+    await expect(page.locator('#game-list li a')).not.toHaveCount(0);
+    await expect(page.locator('#joke')).toBeHidden();
+    /*
+     * The browser logs a failed request itself, and no amount of catching in
+     * JS suppresses that — so an unreachable host while *online* costs one
+     * console line. What must hold is that it is the only one, and that the
+     * offline case (where onLine is checked before fetching, so no request is
+     * made at all) stays completely clean. The offline test above asserts
+     * that half.
+     */
+    expect(errors.every(e => /Failed to load resource/.test(e)),
+      'nothing beyond the request failure itself: ' + JSON.stringify(errors)).toBe(true);
+    expect(errors.length).toBeLessThanOrEqual(1);
+  });
+
+  test('a failed refresh keeps the joke that is already up', async ({ page }) => {
+    await page.goto('/');
+    await expect(joke(page)).toHaveText(/Mock joke/);
+    const first = await joke(page).textContent();
+
+    await page.route('https://icanhazdadjoke.com/**', route => route.abort('failed'));
+    await page.locator('#joke-refresh').click();
+    await expect(joke(page)).toHaveText(first);
+    await expect(page.locator('#joke-refresh')).toBeEnabled();
+  });
+
+  test('the list does not wait for the joke', async ({ page }) => {
+    // A hung request must cost the games nothing.
+    await page.route('https://icanhazdadjoke.com/**', () => {});
+    await page.goto('/');
+    await expect(page.locator('#game-list li a')).not.toHaveCount(0);
+    await expect(page.locator('#joke')).toBeHidden();
+  });
+
+  test('the joke is kept under its own namespaced key', async ({ page }) => {
+    await page.goto('/');
+    await expect(joke(page)).toHaveText(/Mock joke/);
+    const saved = await page.evaluate(() =>
+      JSON.parse(localStorage.getItem('games.joke.v1')));
+    expect(typeof saved.joke).toBe('string');
+    expect(saved.joke).toMatch(/Mock joke/);
   });
 });
