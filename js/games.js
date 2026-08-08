@@ -139,6 +139,13 @@ const GAMES = [
     path: 'games/quik-dice/'
   },
   {
+    name: 'Maze',
+    section: 'group',
+    description: 'Same code, same maze — first one out wins',
+    emoji: '\u{1F9ED}',
+    path: 'games/maze/'
+  },
+  {
     name: 'Blackjack',
     section: 'solitaire',
     description: 'Vegas rules, your own bankroll',

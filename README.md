@@ -33,6 +33,7 @@ installable PWA at **https://games.payne.run**.
 | [Quik Dice](games/quik-dice/) | Six dice, four colour rows — everyone on their own phone |
 | [Spin Words](games/spin-words/) | Spin the reel, call a letter, solve the puzzle — pass the phone |
 | [Honeycomb: Spelling](games/honeycomb-spelling/) | Seven random letters, checked online |
+| [Maze](games/maze/) | Everyone types the same code and races the same maze |
 
 ## Development
 
