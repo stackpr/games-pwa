@@ -23,9 +23,17 @@ ambiguity. Two things come out of it:
   the old code and a phone on the new one would silently be running
   different mazes under the same name.
 - **The maze size.** The *last* letter selects it:
-  `MAZE_SIZES[letterIndex(last) % 4]` over `[11, 15, 21, 25]`. The size has
+  `MAZE_SIZES[letterIndex(last) % 4]` over `[15, 21, 31, 41]`. The size has
   to travel with the code — two people on different grid sizes are not
   racing the same thing — and there is nowhere else to put it.
+
+**A bigger maze does not need a longer code**, which is the thing that looks
+wrong at first glance. The code is a *seed*, not a description: five letters
+pick one maze out of the 50,000 the generator can draw at a given size, and
+the generator does the rest. Doubling the grid multiplies the work the seed
+does, not the seed. Codes would only need to grow if a room could plausibly
+want more than 50,000 distinct mazes, and the point of a code is that it can
+be shouted across that room.
 
 A useful side effect: **any five letters is a valid code.** Type `HELLO` or
 someone's name and you get a real, solvable maze. Generated codes just
@@ -113,15 +121,20 @@ Measured over ten codes at each size, shortest path from start to exit:
 
 | Maze | Squares | Shortest way out |
 | --- | --- | --- |
-| 11×11 | 121 | 60–90 steps |
 | 15×15 | 225 | 113–169 steps |
 | 21×21 | 441 | 207–261 steps |
-| 25×25 | 625 | 285–401 steps |
+| **31×31** (default) | 961 | 383–585 steps |
+| 41×41 | 1681 | 629–913 steps |
 
 That is the *shortest* path; a first run through an unseen maze is longer.
-The size list moved down from `[15, 21, 25, 31]` when walls moved to the
-edges, because those numbers now mean four times as much maze — a 31 would
-have been a six-hundred-step walk before a wrong turn.
+
+The numbers have moved twice. They came **down** when walls moved to the
+edges, because a square stopped being half scenery and each number started
+meaning four times as much maze. They went back **up** once the maze could be
+dragged, because a drag covers a corridor in one gesture and step counts of
+this size stopped being a tapping exercise. The two changes are linked: do
+not raise the sizes again without checking that the input can keep up with
+them.
 
 ### Changing the generator is a breaking change
 
@@ -134,7 +147,8 @@ the change to mean something else after it.
 
 ## What you can see
 
-A `view × view` window (3, 5, 7 or 9 — 5 by default) centred on you, always.
+A `view × view` window (5, 7, 9 or 11 — **7** by default) centred on you,
+always.
 You move, the world moves; your marker never leaves the middle square. What
 falls outside the maze is drawn as void, with the border wall between it and
 the maze — so you can see you are against the edge, and see the opening when
@@ -174,10 +188,38 @@ either cannot push the board off the bottom of the screen. `--app-height`
 comes from `js/lib/viewport.js`; see The Android bottom-bar bug in
 CLAUDE.md.
 
-Movement is the D-pad, arrow keys, WASD, or a swipe on the board itself
-(24px threshold). Directions that face a wall are dimmed rather than
-disabled — a disabled control reads as broken, and the wall is already
-visible in the view.
+Directions that face a wall are dimmed rather than disabled — a disabled
+control reads as broken, and the wall is already visible in the view.
+
+## Moving: the D-pad, the keyboard, and dragging the maze
+
+The D-pad, arrow keys and WASD each move one square. The interesting one is
+the drag.
+
+**You drag the maze, not yourself.** Put a finger on the board and pull, and
+the maze slides behind the marker the way a map slides under a fixed pin —
+so dragging the maze *right* carries you *left* through it. That is the
+gesture the marker's fixed position implies: you are pulling the corridor you
+want toward the square you are standing on. It replaced a flick-to-step
+swipe, which could not be both a swipe and a drag.
+
+Three things make it behave:
+
+- **A cell-width of finger travel is one square.** The threshold is measured
+  off a rendered cell rather than being a constant, so it stays right at
+  every view size and on every screen.
+- **Every square of a drag is a real move.** The drag loop calls the same
+  `move()` the D-pad does, one square at a time, so walls stop a drag dead
+  and the trail, the step count and the clock all see each square. A drag
+  that computed a destination and jumped there would walk through walls.
+- **A blocked axis drops its pending distance** rather than banking it. Push
+  against a wall for half a screen and nothing is stored up; the moment the
+  corridor opens you take one square, not eight.
+
+`touch-action: none` on the board is load-bearing: without it the browser
+claims the gesture as a pan and `pointermove` stops arriving mid-drag. The
+board also takes pointer capture, so a drag that wanders off the board keeps
+working until the finger lifts.
 
 The player marker is amber and the exit is green: **local, semantic colours,
 not `css/players.css`.** Maze has no sides, so `--player-1` / `--player-2`

@@ -10,11 +10,12 @@
 
   // Squares, not tiles: with walls on the edges every square is somewhere you
   // can stand, so a 25 here is four times the maze a 25 used to be.
-  const MAZE_SIZES = [11, 15, 21, 25];
-  const DEFAULT_SIZE = 25;
-  const VIEWS = [3, 5, 7, 9];
+  const MAZE_SIZES = [15, 21, 31, 41];
+  const DEFAULT_SIZE = 31;
+  const VIEWS = [5, 7, 9, 11];
+  const DEFAULT_VIEW = 7;
   const TRAILS = [0, 5, 10, 20];
-  const WALL_PX = { 3: 4, 5: 3, 7: 3, 9: 2 };
+  const WALL_PX = { 5: 3, 7: 3, 9: 2, 11: 2 };
   const PATH_CAP = 32;
 
   const VOWELS = 'AEIOU';
@@ -223,7 +224,7 @@
     const saved = Store.load(KEY);
     if (!saved || typeof saved !== 'object' || !validCode(saved.code)) return null;
 
-    const s = fresh(saved.code, oneOf(VIEWS, saved.view, 5), oneOf(TRAILS, saved.trail, 10));
+    const s = fresh(saved.code, oneOf(VIEWS, saved.view, DEFAULT_VIEW), oneOf(TRAILS, saved.trail, 10));
     const m = buildMaze(s.code);
     s.pending = saved.pending !== false;
     const onExit = saved.x === m.exitTile.x && saved.y === m.exitTile.y;
@@ -505,7 +506,7 @@
   /* ---- wiring ----------------------------------------------------------- */
 
   state = load();
-  if (!state) state = fresh(makeCode(DEFAULT_SIZE), 5, 10);
+  if (!state) state = fresh(makeCode(DEFAULT_SIZE), DEFAULT_VIEW, 10);
   maze = buildMaze(state.code);
 
   startSheet = Modal.create($('start'), {
@@ -547,23 +548,66 @@
     event.preventDefault();
   });
 
-  // Swipe the view itself, for anyone who would rather not aim at the pad.
+  /*
+   * Drag the maze behind the marker, the way a map is dragged: pull the maze
+   * right and you travel left through it. Every cell-width of finger travel
+   * is one square, and each square is a real move — so walls stop the drag
+   * dead rather than being slid through. See _README.md.
+   */
   const board = $('board');
   if (board) {
-    let from = null;
+    let anchor = null;
+    let step = 0;
+
+    function cellWidth() {
+      const first = cells[0];
+      const box = first ? first.getBoundingClientRect() : null;
+      return box && box.width > 4 ? box.width : 0;
+    }
+
     board.addEventListener('pointerdown', event => {
-      from = { x: event.clientX, y: event.clientY };
+      if (won() || sheetOpen()) return;
+      step = cellWidth();
+      if (!step) return;
+      anchor = { x: event.clientX, y: event.clientY };
+      if (board.setPointerCapture) board.setPointerCapture(event.pointerId);
     });
-    board.addEventListener('pointerup', event => {
-      if (!from) return;
-      const dx = event.clientX - from.x;
-      const dy = event.clientY - from.y;
-      from = null;
-      if (Math.max(Math.abs(dx), Math.abs(dy)) < 24) return;
-      if (Math.abs(dx) > Math.abs(dy)) move(dx > 0 ? 'right' : 'left');
-      else move(dy > 0 ? 'down' : 'up');
+
+    board.addEventListener('pointermove', event => {
+      if (!anchor) return;
+      // Belt and braces for a pointerup that never arrived: without this, a
+      // drag released off the board would leave the maze chasing the cursor.
+      if (event.buttons === 0) { anchor = null; return; }
+      // Guarded: a drag that outruns the maze must not spin here.
+      for (let guard = 0; guard < 64; guard++) {
+        const dx = event.clientX - anchor.x;
+        const dy = event.clientY - anchor.y;
+        const ax = Math.abs(dx);
+        const ay = Math.abs(dy);
+        if (Math.max(ax, ay) < step) break;
+        const sideways = ax >= ay;
+        const dir = sideways ? (dx > 0 ? 'left' : 'right') : (dy > 0 ? 'up' : 'down');
+        const before = state.steps;
+        move(dir);
+        if (sideways) anchor.x += dx > 0 ? step : -step;
+        else anchor.y += dy > 0 ? step : -step;
+        // Blocked: drop what is pending on that axis, so pushing against a
+        // wall does not store up a lurch for the moment it opens.
+        if (state.steps === before) {
+          if (sideways) anchor.x = event.clientX;
+          else anchor.y = event.clientY;
+        }
+      }
     });
-    board.addEventListener('pointercancel', () => { from = null; });
+
+    const release = event => {
+      anchor = null;
+      if (board.releasePointerCapture && event && event.pointerId !== undefined) {
+        try { board.releasePointerCapture(event.pointerId); } catch (e) { /* already gone */ }
+      }
+    };
+    board.addEventListener('pointerup', release);
+    board.addEventListener('pointercancel', release);
   }
 
   render();

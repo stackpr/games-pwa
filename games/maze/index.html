@@ -117,6 +117,9 @@
       border: 2px solid var(--panel-hi);
       border-radius: 10px;
       overflow: hidden;
+      /* The board is dragged, so the browser must not claim the gesture for
+         a pan or a zoom — without this, pointermove stops arriving mid-drag. */
+      touch-action: none;
     }
     /* Walls are the edges between squares, not squares of their own. Four
        inset shadows rather than four borders: a border mitres its corners, so
@@ -465,8 +468,8 @@
           the identical maze.</li>
         <li><strong>Count down together</strong> and start on the same word —
           nothing here syncs you.</li>
-        <li>You see the squares around you, nothing more. Find the one way
-          out.</li>
+        <li><strong>Drag the maze</strong> to move through it, or use the
+          arrows. You see the squares around you, nothing more.</li>
       </ul>
       <button id="start-go" class="primary" type="button" data-close>Start</button>
       <div class="or">or use someone else's code</div>

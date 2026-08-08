@@ -3,16 +3,33 @@ const { clearState, trackExternalRequests } = require('../helpers');
 
 const URL = '/games/maze/';
 
+// The view the game opens with, and the index of the square you are on — you
+// are always in the middle of it.
+const VIEW = 7;
+const MID = (VIEW * VIEW - 1) / 2;
+
 const status = page => page.locator('#status');
 const steps = page => page.locator('#steps');
 const cells = page => page.locator('#board .cell');
 
 const ARROWS = { up: 'ArrowUp', down: 'ArrowDown', left: 'ArrowLeft', right: 'ArrowRight' };
 
+/*
+ * The sheet fades out over 160ms and its scrim covers the page for all of it
+ * — css/modal.css delays the visibility flip on purpose, so the fade is
+ * visible at all. A raw mouse drag started inside that window lands on the
+ * scrim, so every helper that closes a sheet waits for it to be gone.
+ * locator.click() waits by itself; page.mouse does not.
+ */
+async function settled(page, id) {
+  await expect(page.locator(id)).not.toHaveAttribute('data-open', /.*/);
+  await expect(page.locator(id)).toBeHidden();
+}
+
 /** Dismisses the start sheet, keeping the code the page offered. */
 async function start(page) {
   await page.locator('#start-go').click();
-  await expect(page.locator('#start')).not.toHaveAttribute('data-open', /.*/);
+  await settled(page, '#start');
 }
 
 /** Types a code into the start sheet and plays it. */
@@ -56,6 +73,25 @@ function solve(page, code) {
     return path;
   }, code);
 }
+
+/** One square's width on screen, which is one square's worth of drag. */
+async function cellWidth(page) {
+  return cells(page).first().evaluate(el => el.getBoundingClientRect().width);
+}
+
+/** Drags the maze itself, from the middle of the board. */
+async function dragBoard(page, dx, dy) {
+  const box = await page.locator('#board').boundingBox();
+  const cx = box.x + box.width / 2;
+  const cy = box.y + box.height / 2;
+  await page.mouse.move(cx, cy);
+  await page.mouse.down();
+  await page.mouse.move(cx + dx, cy + dy, { steps: 10 });
+  await page.mouse.up();
+}
+
+// Dragging the maze one way carries you the other, the way a map moves.
+const AWAY = { up: [0, 1], down: [0, -1], left: [1, 0], right: [-1, 0] };
 
 /** Walks a solution by pressing the pad, which is far quicker than keys. */
 function walk(page, path) {
@@ -261,13 +297,13 @@ test.describe('the maze', () => {
 test.describe('moving', () => {
   test('you stay in the middle and the maze moves', async ({ page }) => {
     await start(page);
-    await expect(cells(page)).toHaveCount(25);
+    await expect(cells(page)).toHaveCount(VIEW * VIEW);
     await expect(page.locator('.cell[data-you]')).toHaveCount(1);
-    await expect(cells(page).nth(12)).toHaveAttribute('data-you', '');
+    await expect(cells(page).nth(MID)).toHaveAttribute('data-you', '');
 
     await page.locator('.dir:not([data-blocked])').first().click();
     await expect(steps(page)).toHaveText('1');
-    await expect(cells(page).nth(12)).toHaveAttribute('data-you', '');
+    await expect(cells(page).nth(MID)).toHaveAttribute('data-you', '');
   });
 
   test('every square you can see is a square you could stand on', async ({ page }) => {
@@ -306,13 +342,62 @@ test.describe('moving', () => {
 
     // The wall is on the middle square's own edge, in the direction it blocks.
     const side = { up: 'n', down: 's', left: 'w', right: 'e' }[found.dir];
-    const seen = await cells(page).nth(12).getAttribute('data-walls');
-    const neighbour = { up: 7, down: 17, left: 11, right: 13 }[found.dir];
+    const seen = await cells(page).nth(MID).getAttribute('data-walls');
+    const neighbour = {
+      up: MID - VIEW, down: MID + VIEW, left: MID - 1, right: MID + 1,
+    }[found.dir];
     const other = await cells(page).nth(neighbour).getAttribute('data-walls');
     // Drawn once: either this square's edge or its neighbour's, never both.
     const mine = seen.split(' ').indexOf(side) >= 0;
     const theirs = other.split(' ').indexOf({ n: 's', s: 'n', w: 'e', e: 'w' }[side]) >= 0;
     expect(mine || theirs).toBe(true);
+  });
+
+  test('dragging the maze carries you the other way', async ({ page }) => {
+    await start(page);
+    const dir = await page.locator('.dir:not([data-blocked])').first().getAttribute('data-dir');
+    const size = await cellWidth(page);
+    const [ax, ay] = AWAY[dir];
+    await dragBoard(page, ax * size * 1.2, ay * size * 1.2);
+    await expect(steps(page)).toHaveText('1');
+  });
+
+  test('a longer drag covers more squares', async ({ page }) => {
+    await start(page);
+    const dir = await page.locator('.dir:not([data-blocked])').first().getAttribute('data-dir');
+    const size = await cellWidth(page);
+    const [ax, ay] = AWAY[dir];
+    await dragBoard(page, ax * size * 3.4, ay * size * 3.4);
+    const moved = Number(await steps(page).textContent());
+    // Between one and three: a wall along the way stops the drag dead rather
+    // than letting it slide through.
+    expect(moved).toBeGreaterThanOrEqual(1);
+    expect(moved).toBeLessThanOrEqual(3);
+  });
+
+  test('a drag into a wall moves nothing', async ({ page }) => {
+    const found = await page.evaluate(() => {
+      for (const ch of 'ABCDEFGHIJKLMNOPQRSTUVWXYZ') {
+        const code = ch + 'OKAM';
+        const m = window.MazeSeed.build(code);
+        for (const d of ['up', 'down', 'left', 'right']) {
+          if (m.wall(m.start.x, m.start.y, d)) return { code: code, dir: d };
+        }
+      }
+      return null;
+    });
+    await join(page, found.code);
+    await settled(page, '#start');
+    const size = await cellWidth(page);
+    const [ax, ay] = AWAY[found.dir];
+    await dragBoard(page, ax * size * 2.5, ay * size * 2.5);
+    await expect(steps(page)).toHaveText('0');
+  });
+
+  test('a tap on the maze is not a drag', async ({ page }) => {
+    await start(page);
+    await dragBoard(page, 4, 4);
+    await expect(steps(page)).toHaveText('0');
   });
 
   test('arrow keys move too', async ({ page }) => {
@@ -366,10 +451,10 @@ test.describe('settings', () => {
   test('the view size changes how much you can see', async ({ page }) => {
     await start(page);
     await page.locator('#settings-btn').click();
-    await page.locator('#opt-view button', { hasText: '9×9' }).click();
-    await expect(cells(page)).toHaveCount(81);
+    await page.locator('#opt-view button', { hasText: '11×11' }).click();
+    await expect(cells(page)).toHaveCount(121);
     await page.locator('#settings .modal-close').click();
-    await expect(cells(page).nth(40)).toHaveAttribute('data-you', '');
+    await expect(cells(page).nth(60)).toHaveAttribute('data-you', '');
   });
 
   test('the trail length is a setting, and none means none', async ({ page }) => {
@@ -445,7 +530,7 @@ test.describe('persistence', () => {
     await page.reload();
     // Back to the middle of the maze, and the run goes with it.
     await expect(page.locator('.cell[data-you]')).toHaveCount(1);
-    await expect(cells(page).nth(12)).toHaveAttribute('data-t', 'floor');
+    await expect(cells(page).nth(MID)).toHaveAttribute('data-t', 'floor');
     await expect(steps(page)).toHaveText('0');
   });
 });
