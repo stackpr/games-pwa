@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Mines</title>
+  <meta name="theme-color" content="#10141f">
+  <link rel="manifest" href="../../manifest.webmanifest">
+  <link rel="icon" href="../../icons/favicon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="../../icons/apple-touch-icon.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="stylesheet" href="../../css/modal.css">
+  <style>
+    :root {
+      /* js/lib/viewport.js measures the usable height and publishes it as
+         --measured-height. Capping at 100dvh means a late or stale
+         measurement can only make the page shorter. See CLAUDE.md. */
+      --app-height: min(var(--measured-height, 100dvh), 100dvh);
+      --bg: #10141f;
+      --text: #eef1f8;
+      --text-dim: #9aa4bd;
+      --panel: #1a2030;
+      --panel-hi: #2b3450;
+      /* Semantic, not player identities — this game has one player. */
+      --hidden: #33405f;
+      --hidden-hi: #46577d;
+      --open: #171d2c;
+      --grid: #10141f;
+      --flag: #e2685a;
+      --boom: #a8271b;
+      --lcd: #ff6b5a;
+      /* No --chrome token here: the board is measured from the stage it is
+         handed rather than sized against the viewport in CSS. */
+      /* The classic number palette, kept legible on a dark board. */
+      --n1: #5b9bf5;
+      --n2: #4cc08a;
+      --n3: #ef7364;
+      --n4: #a98cf7;
+      --n5: #e8ab52;
+      --n6: #4fc6cf;
+      --n7: #dfe5f2;
+      --n8: #98a2bd;
+      --cell: 40px;
+      color-scheme: dark;
+    }
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    html, body { margin: 0; padding: 0; height: 100%; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      display: flex;
+      flex-direction: column;
+      height: var(--app-height, 100dvh);
+      overflow: hidden;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.5rem;
+      padding: calc(0.4rem + env(safe-area-inset-top)) 0.75rem 0.35rem;
+      flex: none;
+    }
+    .topbar a {
+      color: var(--text-dim);
+      text-decoration: none;
+      font-size: 0.95rem;
+      white-space: nowrap;
+    }
+    .topbar-right { display: flex; gap: 0.4rem; }
+    .chip {
+      border: 1px solid var(--panel-hi);
+      background: var(--panel);
+      color: var(--text);
+      border-radius: 999px;
+      padding: 0.35rem 0.85rem;
+      font-size: 0.9rem;
+      font-family: inherit;
+      cursor: pointer;
+      touch-action: manipulation;
+    }
+    .chip.round { padding: 0.35rem 0.62rem; }
+
+    .hud {
+      flex: none;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.6rem;
+      padding: 0 0.75rem 0.4rem;
+    }
+    .counter {
+      display: flex;
+      align-items: center;
+      gap: 0.35rem;
+      background: #0a0d15;
+      border: 1px solid var(--panel-hi);
+      border-radius: 8px;
+      padding: 0.25rem 0.55rem;
+      min-width: 5.1rem;
+      justify-content: center;
+      color: var(--lcd);
+      font-variant-numeric: tabular-nums;
+      font-size: 1.05rem;
+      font-weight: 700;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    }
+    .counter svg { width: 1em; height: 1em; fill: currentColor; flex: none; }
+    .face {
+      width: 2.9rem;
+      height: 2.9rem;
+      border-radius: 12px;
+      border: 1px solid var(--panel-hi);
+      background: var(--panel);
+      font-size: 1.5rem;
+      line-height: 1;
+      cursor: pointer;
+      touch-action: manipulation;
+      padding: 0;
+    }
+    .face:active { background: var(--panel-hi); }
+
+    .stage {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 0;
+      min-width: 0;
+      /* No padding: the fit is computed from this box, and the flooring
+         that picks the column count already leaves slack at the edges. */
+      padding: 0;
+      overflow: hidden;
+    }
+    .board {
+      display: grid;
+      gap: 2px;
+      background: var(--grid);
+      padding: 2px;
+      border-radius: 6px;
+      touch-action: manipulation;
+    }
+
+    .cell {
+      width: var(--cell);
+      height: var(--cell);
+      padding: 0;
+      border: none;
+      border-radius: 3px;
+      background: var(--hidden);
+      color: var(--text);
+      font-family: inherit;
+      font-size: calc(var(--cell) * 0.56);
+      font-weight: 800;
+      line-height: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      touch-action: manipulation;
+      /* Lengths, not percentages — box-shadow drops the whole declaration
+         if any length is a percentage. */
+      box-shadow: inset 0 -2px 0 rgba(0, 0, 0, 0.28), inset 0 2px 0 rgba(255, 255, 255, 0.12);
+    }
+    .cell svg { width: 62%; height: 62%; fill: currentColor; }
+    .cell[data-state="open"] {
+      background: var(--open);
+      box-shadow: none;
+    }
+    .cell[data-state="flag"] { color: var(--flag); }
+    .cell[data-boom] { background: var(--boom); color: #fff; }
+    .cell[data-wrong] { color: var(--text-dim); opacity: 0.7; }
+    .cell[data-n="1"] { color: var(--n1); }
+    .cell[data-n="2"] { color: var(--n2); }
+    .cell[data-n="3"] { color: var(--n3); }
+    .cell[data-n="4"] { color: var(--n4); }
+    .cell[data-n="5"] { color: var(--n5); }
+    .cell[data-n="6"] { color: var(--n6); }
+    .cell[data-n="7"] { color: var(--n7); }
+    .cell[data-n="8"] { color: var(--n8); }
+    @media (hover: hover) {
+      .cell[data-state="hidden"]:hover { background: var(--hidden-hi); }
+    }
+    body[data-status="won"] .cell[data-state="flag"],
+    body[data-status="won"] .cell[data-mine] {
+      /* The ring has to read on its own, without the pulse — see CLAUDE.md. */
+      box-shadow: inset 0 0 0 2px #ffffff;
+      animation: pulse 900ms ease-in-out infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { filter: brightness(1); }
+      50%      { filter: brightness(1.45); }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      body[data-status="won"] .cell[data-state="flag"],
+      body[data-status="won"] .cell[data-mine] { animation: none; }
+    }
+
+    .footer {
+      flex: none;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.5rem 0.75rem calc(0.5rem + env(safe-area-inset-bottom));
+    }
+    .flag-toggle {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
+      border: 1px solid var(--panel-hi);
+      background: var(--panel);
+      color: var(--text-dim);
+      border-radius: 12px;
+      font-size: 1rem;
+      font-weight: 700;
+      font-family: inherit;
+      padding: 0.7rem 0.5rem;
+      cursor: pointer;
+      touch-action: manipulation;
+    }
+    .flag-toggle svg { width: 1.15em; height: 1.15em; fill: currentColor; }
+    .flag-toggle[aria-pressed="true"] {
+      background: var(--flag);
+      border-color: var(--flag);
+      color: #fff;
+    }
+    .board-size {
+      font-size: 0.8rem;
+      color: var(--text-dim);
+      font-variant-numeric: tabular-nums;
+      white-space: nowrap;
+    }
+
+    /* Sheets */
+    .setting { margin-bottom: 0.9rem; }
+    .setting-label {
+      display: block;
+      font-size: 0.85rem;
+      color: var(--text-dim);
+      margin-bottom: 0.35rem;
+    }
+    .options { display: flex; gap: 0.4rem; }
+    .options button {
+      flex: 1;
+      border: 1px solid var(--panel-hi);
+      background: var(--bg);
+      color: var(--text);
+      border-radius: 10px;
+      font-size: 0.95rem;
+      font-family: inherit;
+      padding: 0.55rem 0.2rem;
+      cursor: pointer;
+      touch-action: manipulation;
+    }
+    .options button[aria-pressed="true"] {
+      background: var(--panel-hi);
+      font-weight: 700;
+    }
+    .setting-note {
+      margin: 0.35rem 0 0;
+      font-size: 0.78rem;
+      color: var(--text-dim);
+      line-height: 1.4;
+    }
+    .scores { margin: 0; font-size: 0.9rem; }
+    .score-size {
+      margin: 0.9rem 0 0.3rem;
+      font-size: 0.8rem;
+      color: var(--text-dim);
+      font-weight: 600;
+    }
+    .score-size:first-child { margin-top: 0; }
+    .score-list {
+      margin: 0;
+      padding: 0;
+      list-style: none;
+      font-variant-numeric: tabular-nums;
+    }
+    .score-list li {
+      display: flex;
+      justify-content: space-between;
+      gap: 0.75rem;
+      padding: 0.3rem 0;
+      border-bottom: 1px solid var(--panel-hi);
+    }
+    .score-list li:last-child { border-bottom: none; }
+    .score-list .rank { color: var(--text-dim); }
+    .score-list li[data-fresh] { color: var(--n5); font-weight: 700; }
+    .score-empty { color: var(--text-dim); font-size: 0.88rem; margin: 0; }
+
+    .visually-hidden {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      margin: -1px;
+      padding: 0;
+      overflow: hidden;
+      clip-path: inset(50%);
+      white-space: nowrap;
+      border: 0;
+    }
+    @media (max-height: 460px) {
+      .modal-panel { padding: 0.7rem 0.8rem; }
+      .setting { margin-bottom: 0.6rem; }
+    }
+  </style>
+</head>
+<body data-status="ready">
+  <svg class="visually-hidden" aria-hidden="true" focusable="false">
+    <symbol id="glyph-mine" viewBox="0 0 24 24">
+      <path d="M11 2h2v3.1a6.9 6.9 0 0 1 2.6 1.1l2.2-2.2 1.4 1.4-2.2 2.2A6.9 6.9 0 0 1 18.9 11H22v2h-3.1a6.9 6.9 0 0 1-1.1 2.6l2.2 2.2-1.4 1.4-2.2-2.2a6.9 6.9 0 0 1-2.4 1V21h-2v-3.1a6.9 6.9 0 0 1-2.6-1l-2.2 2.2-1.4-1.4 2.2-2.2A6.9 6.9 0 0 1 5.1 13H2v-2h3.1a6.9 6.9 0 0 1 1.1-2.6L4 6.2l1.4-1.4 2.2 2.2A6.9 6.9 0 0 1 11 5.1V2Zm1 5a5 5 0 1 0 0 10 5 5 0 0 0 0-10Zm-1.6 2.1a3.4 3.4 0 0 0-1.3 1.3l1.4.8a1.8 1.8 0 0 1 .7-.7l-.8-1.4Z"/>
+    </symbol>
+    <symbol id="glyph-flag" viewBox="0 0 24 24">
+      <path d="M6 2h1.6v19H6V2Zm2.6 1h10.2l-2.6 4 2.6 4H8.6V3Z"/>
+    </symbol>
+    <symbol id="glyph-clock" viewBox="0 0 24 24">
+      <path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Zm0 2.2a7.8 7.8 0 1 1 0 15.6 7.8 7.8 0 0 1 0-15.6ZM11 6.5v6.2l4.6 2.7.9-1.5-3.9-2.3V6.5H11Z"/>
+    </symbol>
+  </svg>
+
+  <div class="topbar">
+    <a href="../../">&larr; Games</a>
+    <div class="topbar-right">
+      <button id="scores-btn" class="chip round" type="button"
+              aria-label="Best times" aria-expanded="false">&#127942;</button>
+      <button id="settings-btn" class="chip round" type="button"
+              aria-label="Settings" aria-expanded="false">&#9881;</button>
+    </div>
+  </div>
+
+  <div class="hud">
+    <div class="counter">
+      <svg aria-hidden="true"><use href="#glyph-mine"></use></svg>
+      <span id="mines-left">0</span>
+      <span class="visually-hidden">mines not yet flagged</span>
+    </div>
+    <button id="face" class="face" type="button" aria-label="New game">&#128578;</button>
+    <div class="counter">
+      <svg aria-hidden="true"><use href="#glyph-clock"></use></svg>
+      <span id="timer">0:00</span>
+    </div>
+  </div>
+
+  <main class="stage">
+    <div id="board" class="board" aria-label="Minefield"></div>
+  </main>
+
+  <div class="footer">
+    <button id="flag-btn" class="flag-toggle" type="button" aria-pressed="false">
+      <svg aria-hidden="true"><use href="#glyph-flag"></use></svg>
+      <span id="flag-label">Flag mode</span>
+    </button>
+    <span class="board-size" id="board-size">&nbsp;</span>
+  </div>
+
+  <p id="say" class="visually-hidden" aria-live="polite"></p>
+
+  <div class="modal" id="settings">
+    <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="settings-title">
+      <h2 class="modal-title" id="settings-title">Settings</h2>
+      <div class="setting">
+        <span class="setting-label" id="label-level">Difficulty</span>
+        <div class="options" id="opt-level" role="group" aria-labelledby="label-level"></div>
+        <p class="setting-note" id="level-note">&nbsp;</p>
+      </div>
+      <p class="setting-note">The board is cut to fit your screen, so it is
+        taller than it is wide on a phone and wider than tall in landscape.
+        Squares never drop below a size you can hit, and the whole board is
+        capped, so a big screen gets bigger squares rather than hundreds
+        more of them.</p>
+      <button class="modal-close" type="button" data-close>Close</button>
+    </div>
+  </div>
+
+  <div class="modal" id="scores">
+    <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="scores-title">
+      <h2 class="modal-title" id="scores-title">Best times</h2>
+      <div class="scores" id="score-body"></div>
+      <button class="modal-close" type="button" data-close>Close</button>
+    </div>
+  </div>
+
+  <script src="../../js/lib/viewport.js"></script>
+  <script src="../../js/lib/store.js"></script>
+  <script src="../../js/lib/modal.js"></script>
+  <script src="mines.js"></script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('../../sw.js').catch(() => {});
+    }
+  </script>
+</body>
+</html>

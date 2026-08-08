@@ -146,6 +146,13 @@ const GAMES = [
     path: 'games/maze/'
   },
   {
+    name: 'Mines',
+    section: 'solitaire',
+    description: 'Clear the field without hitting one',
+    emoji: '\u{1F4A3}',
+    path: 'games/mines/'
+  },
+  {
     name: 'Blackjack',
     section: 'solitaire',
     description: 'Vegas rules, your own bankroll',
