@@ -34,9 +34,10 @@ function solve(page, code) {
       const next = [];
       for (const [x, y] of queue) {
         for (const d in DIRS) {
+          if (!m.canMove(x, y, d)) continue;
           const nx = x + DIRS[d][0];
           const ny = y + DIRS[d][1];
-          if (!m.open(nx, ny) || seen.has(key(nx, ny))) continue;
+          if (seen.has(key(nx, ny))) continue;
           seen.add(key(nx, ny));
           from.set(key(nx, ny), [x, y, d]);
           next.push([nx, ny]);
@@ -44,9 +45,9 @@ function solve(page, code) {
       }
       queue = next;
     }
-    if (!seen.has(key(m.exit.x, m.exit.y))) return null;
+    if (!seen.has(key(m.exitTile.x, m.exitTile.y))) return null;
     const path = [];
-    let cur = [m.exit.x, m.exit.y];
+    let cur = [m.exitTile.x, m.exitTile.y];
     while (key(cur[0], cur[1]) !== key(m.start.x, m.start.y)) {
       const step = from.get(key(cur[0], cur[1]));
       path.unshift(step[2]);
@@ -54,6 +55,17 @@ function solve(page, code) {
     }
     return path;
   }, code);
+}
+
+/** Walks a solution by pressing the pad, which is far quicker than keys. */
+function walk(page, path) {
+  return page.evaluate(dirs => {
+    for (const dir of dirs) {
+      const btn = document.querySelector('.dir[data-dir="' + dir + '"]');
+      if (btn) btn.click();
+    }
+    return document.body.dataset.state;
+  }, path);
 }
 
 test.beforeEach(async ({ page }) => {
@@ -99,11 +111,12 @@ test.describe('the code', () => {
 });
 
 test.describe('the maze', () => {
-  test('every code has a way out, at every size', async ({ page }) => {
-    // A perfect maze is connected by construction, so this is a check on the
-    // construction rather than a retry loop the game needs at run time.
+  test('every square is reachable, and so is the way out', async ({ page }) => {
+    // Walls on the edges mean every square of the grid is somewhere you can
+    // stand — so a spanning-tree carve reaches all of them, and "there is a
+    // way out" is a property of the construction rather than a retry loop.
     const bad = await page.evaluate(() => {
-      const DIRS = [[0, -1], [0, 1], [-1, 0], [1, 0]];
+      const DIRS = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] };
       const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
       const failures = [];
       for (let i = 0; i < letters.length; i++) {
@@ -115,17 +128,20 @@ test.describe('the maze', () => {
           while (queue.length) {
             const next = [];
             for (const [x, y] of queue) {
-              for (const [dx, dy] of DIRS) {
-                const nx = x + dx;
-                const ny = y + dy;
-                if (!m.open(nx, ny) || seen.has(nx + ',' + ny)) continue;
+              for (const d in DIRS) {
+                if (!m.canMove(x, y, d)) continue;
+                const nx = x + DIRS[d][0];
+                const ny = y + DIRS[d][1];
+                if (seen.has(nx + ',' + ny)) continue;
                 seen.add(nx + ',' + ny);
                 next.push([nx, ny]);
               }
             }
             queue = next;
           }
-          if (!seen.has(m.exit.x + ',' + m.exit.y)) failures.push(code);
+          // Every square, plus the one outside the opening.
+          if (seen.size !== m.n * m.n + 1) failures.push(code + ': ' + seen.size);
+          if (!seen.has(m.exitTile.x + ',' + m.exitTile.y)) failures.push(code + ': no exit');
         }
       }
       return failures;
@@ -140,10 +156,10 @@ test.describe('the maze', () => {
         const m = window.MazeSeed.build(code);
         let n = 0;
         for (let i = 0; i < m.n; i++) {
-          if (m.open(i, 0)) n++;
-          if (m.open(i, m.n - 1)) n++;
-          if (m.open(0, i)) n++;
-          if (m.open(m.n - 1, i)) n++;
+          if (!m.wall(i, 0, 'up')) n++;
+          if (!m.wall(i, m.n - 1, 'down')) n++;
+          if (!m.wall(0, i, 'left')) n++;
+          if (!m.wall(m.n - 1, i, 'right')) n++;
         }
         counts.push(n);
       }
@@ -152,9 +168,45 @@ test.describe('the maze', () => {
     expect(openings).toEqual([1, 1, 1, 1]);
   });
 
+  test('every wall is one of two per square, plus the far edges', async ({ page }) => {
+    // The model the game stores: a square owns the wall above it and the wall
+    // to its left, and the grid carries one extra row and column of edges.
+    const m = await page.evaluate(() => {
+      const maze = window.MazeSeed.build('RUDEB');
+      const n = maze.n;
+      return {
+        n: n,
+        // Outside the grid there is nothing to own, so nothing is reported.
+        beyond: [
+          maze.edge(-1, 0, 'up'), maze.edge(0, -1, 'left'),
+          maze.edge(n, 0, 'up'), maze.edge(0, n, 'left'),
+        ],
+        // The far edges do exist: row n of horizontals, column n of
+        // verticals, solid all the way across bar the one way out.
+        farRow: (() => {
+          let walls = 0;
+          for (let x = 0; x < n; x++) walls += maze.edge(x, n, 'up');
+          return [walls, n - (maze.exit.dir === 'down' ? 1 : 0)];
+        })(),
+        farCol: (() => {
+          let walls = 0;
+          for (let y = 0; y < n; y++) walls += maze.edge(n, y, 'left');
+          return [walls, n - (maze.exit.dir === 'right' ? 1 : 0)];
+        })(),
+        // A wall read from either side is the same wall.
+        agrees: maze.wall(1, 1, 'right') === maze.wall(2, 1, 'left') &&
+                maze.wall(1, 1, 'down') === maze.wall(1, 2, 'up'),
+      };
+    });
+    expect(m.beyond).toEqual([0, 0, 0, 0]);
+    expect(m.farRow[0]).toBe(m.farRow[1]);
+    expect(m.farCol[0]).toBe(m.farCol[1]);
+    expect(m.agrees).toBe(true);
+  });
+
   test('the exit is the furthest way out, not the nearest', async ({ page }) => {
     const results = await page.evaluate(() => {
-      const DIRS = [[0, -1], [0, 1], [-1, 0], [1, 0]];
+      const DIRS = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] };
       return ['MOKAM', 'RUDEB', 'ZIPOC', 'HAVED'].map(code => {
         const m = window.MazeSeed.build(code);
         const dist = new Map([[m.start.x + ',' + m.start.y, 0]]);
@@ -162,51 +214,47 @@ test.describe('the maze', () => {
         while (queue.length) {
           const next = [];
           for (const [x, y] of queue) {
-            for (const [dx, dy] of DIRS) {
-              const nx = x + dx;
-              const ny = y + dy;
-              if (!m.open(nx, ny) || dist.has(nx + ',' + ny)) continue;
+            for (const d in DIRS) {
+              if (!m.canMove(x, y, d)) continue;
+              const nx = x + DIRS[d][0];
+              const ny = y + DIRS[d][1];
+              if (dist.has(nx + ',' + ny)) continue;
               dist.set(nx + ',' + ny, dist.get(x + ',' + y) + 1);
               next.push([nx, ny]);
             }
           }
           queue = next;
         }
-        // Every cell on the outer ring could have been the way out.
+        // Every square on the outer ring could have been the way out.
         let best = 0;
-        for (let i = 1; i <= m.n - 2; i += 2) {
-          for (const p of [[i, 1], [i, m.n - 2], [1, i], [m.n - 2, i]]) {
+        for (let i = 0; i < m.n; i++) {
+          for (const p of [[i, 0], [i, m.n - 1], [0, i], [m.n - 1, i]]) {
             best = Math.max(best, dist.get(p[0] + ',' + p[1]) || 0);
           }
         }
         return { exit: dist.get(m.exit.x + ',' + m.exit.y), best: best };
       });
     });
-    for (const r of results) expect(r.exit).toBe(r.best + 1);
+    for (const r of results) expect(r.exit).toBe(r.best);
   });
 
   test('the same code draws the same maze twice', async ({ page }) => {
-    const fingerprint = () => page.evaluate(() => {
-      const m = window.MazeSeed.build('RUDEB');
-      let out = m.n + ':' + m.start.x + ',' + m.start.y + ':' + m.exit.x + ',' + m.exit.y + ':';
-      for (let y = 0; y < m.n; y++) {
-        for (let x = 0; x < m.n; x++) out += m.open(x, y) ? '.' : '#';
+    const fingerprint = code => page.evaluate(code => {
+      const m = window.MazeSeed.build(code);
+      let out = m.n + ':' + m.start.x + ',' + m.start.y + ':' +
+        m.exit.x + ',' + m.exit.y + m.exit.dir + ':';
+      for (let y = 0; y <= m.n; y++) {
+        for (let x = 0; x <= m.n; x++) {
+          out += m.edge(x, y, 'up') + '' + m.edge(x, y, 'left');
+        }
       }
       return out;
-    });
-    const first = await fingerprint();
+    }, code);
+    const first = await fingerprint('RUDEB');
     await page.reload();
-    expect(await fingerprint()).toBe(first);
+    expect(await fingerprint('RUDEB')).toBe(first);
     // …and a different code is a different maze.
-    const other = await page.evaluate(() => {
-      const m = window.MazeSeed.build('ZIPOB');
-      let out = '';
-      for (let y = 0; y < m.n; y++) {
-        for (let x = 0; x < m.n; x++) out += m.open(x, y) ? '.' : '#';
-      }
-      return out;
-    });
-    expect(first).not.toContain(other);
+    expect(await fingerprint('ZIPOB')).not.toBe(first);
   });
 });
 
@@ -222,18 +270,28 @@ test.describe('moving', () => {
     await expect(cells(page).nth(12)).toHaveAttribute('data-you', '');
   });
 
+  test('every square you can see is a square you could stand on', async ({ page }) => {
+    // Walls are edges now, so nothing in the view is a solid block; the
+    // whole 5×5 is floor unless it is off the edge of the maze.
+    await start(page);
+    const kinds = await cells(page).evaluateAll(list =>
+      [...new Set(list.map(c => c.dataset.t))]);
+    expect(kinds).toEqual(['floor']);
+    // …and the squares carry the walls, drawn once each.
+    const walls = await cells(page).evaluateAll(list =>
+      list.map(c => c.dataset.walls).join('|'));
+    expect(walls).toMatch(/[nesw]/);
+  });
+
   test('a wall does not let you through', async ({ page }) => {
     // Pick a code whose starting square has a wall to walk into, rather than
     // hoping the offered one does.
     const found = await page.evaluate(() => {
-      const DIRS = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] };
       for (const ch of 'ABCDEFGHIJKLMNOPQRSTUVWXYZ') {
         const code = ch + 'OKAM';
         const m = window.MazeSeed.build(code);
-        for (const d in DIRS) {
-          if (!m.open(m.start.x + DIRS[d][0], m.start.y + DIRS[d][1])) {
-            return { code: code, dir: d };
-          }
+        for (const d of ['up', 'down', 'left', 'right']) {
+          if (m.wall(m.start.x, m.start.y, d)) return { code: code, dir: d };
         }
       }
       return null;
@@ -245,6 +303,16 @@ test.describe('moving', () => {
     await expect(wall).toHaveAttribute('data-blocked', '');
     await wall.click();
     await expect(steps(page)).toHaveText('0');
+
+    // The wall is on the middle square's own edge, in the direction it blocks.
+    const side = { up: 'n', down: 's', left: 'w', right: 'e' }[found.dir];
+    const seen = await cells(page).nth(12).getAttribute('data-walls');
+    const neighbour = { up: 7, down: 17, left: 11, right: 13 }[found.dir];
+    const other = await cells(page).nth(neighbour).getAttribute('data-walls');
+    // Drawn once: either this square's edge or its neighbour's, never both.
+    const mine = seen.split(' ').indexOf(side) >= 0;
+    const theirs = other.split(' ').indexOf({ n: 's', s: 'n', w: 'e', e: 'w' }[side]) >= 0;
+    expect(mine || theirs).toBe(true);
   });
 
   test('arrow keys move too', async ({ page }) => {
@@ -278,8 +346,9 @@ test.describe('moving', () => {
     const code = 'MOKAM';
     await join(page, code);
     const path = await solve(page, code);
-    expect(path.length).toBeGreaterThan(0);
-    for (const dir of path) await page.keyboard.press(ARROWS[dir]);
+    // The way out is a real walk now that every square is walkable.
+    expect(path.length).toBeGreaterThan(20);
+    expect(await walk(page, path)).toBe('won');
 
     await expect(page.locator('body')).toHaveAttribute('data-state', 'won');
     await expect(page.locator('#win')).toBeVisible();
@@ -338,14 +407,14 @@ test.describe('persistence', () => {
       await page.keyboard.press(ARROWS[dir]);
     }
     const view = await cells(page).evaluateAll(list =>
-      list.map(c => c.dataset.t).join(''));
+      list.map(c => c.dataset.walls).join('|'));
 
     await page.reload();
     await expect(page.locator('#start')).not.toHaveAttribute('data-open', /.*/);
     await expect(page.locator('#code-btn')).toHaveText('RUDEB');
     await expect(steps(page)).toHaveText('3');
     expect(await cells(page).evaluateAll(list =>
-      list.map(c => c.dataset.t).join(''))).toBe(view);
+      list.map(c => c.dataset.walls).join('|'))).toBe(view);
   });
 
   test('it saves under its own namespaced key', async ({ page }) => {
@@ -364,18 +433,20 @@ test.describe('persistence', () => {
     await expect(steps(page)).toHaveText('0');
   });
 
-  test('a saved position inside a wall is not restored', async ({ page }) => {
+  test('a saved position off the grid is not restored', async ({ page }) => {
     await join(page, 'RUDEB');
     await page.evaluate(() => {
       const saved = JSON.parse(localStorage.getItem('games.maze.v1'));
-      saved.x = 0;
-      saved.y = 0;
+      saved.x = -5;
+      saved.y = 99;
+      saved.steps = 40;
       localStorage.setItem('games.maze.v1', JSON.stringify(saved));
     });
     await page.reload();
-    // Back to the middle of the maze, which is always an open square.
+    // Back to the middle of the maze, and the run goes with it.
     await expect(page.locator('.cell[data-you]')).toHaveCount(1);
     await expect(cells(page).nth(12)).toHaveAttribute('data-t', 'floor');
+    await expect(steps(page)).toHaveText('0');
   });
 });
 

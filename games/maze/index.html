@@ -23,8 +23,10 @@
       --panel: #1a2030;
       --panel-hi: #2b3450;
       /* Semantic, not player identities — this game has no sides. */
-      --wall: #0a0d15;
+      --wall: #9fb0d8;
       --floor: #202942;
+      --outside: #0a0d15;
+      --wall-w: 3px;
       --trail: 190, 200, 226;
       --you: #f2b134;
       --exit: #3ec98a;
@@ -111,21 +113,45 @@
       aspect-ratio: 1;
       width: 100%;
       max-width: min(100%, calc(var(--app-height, 100dvh) - var(--chrome)));
-      background: var(--wall);
+      background: var(--floor);
       border: 2px solid var(--panel-hi);
       border-radius: 10px;
       overflow: hidden;
     }
-    .cell { min-width: 0; min-height: 0; position: relative; }
+    /* Walls are the edges between squares, not squares of their own. Four
+       inset shadows rather than four borders: a border mitres its corners, so
+       a wall meeting a gap loses a triangle and the junctions read as nicked.
+       Shadows are rectangular and overlap cleanly at the corner. Each side is
+       a custom property so one rule per side can switch it on — which is the
+       part box-shadow cannot do on its own. Lengths, never percentages. */
+    .cell {
+      min-width: 0;
+      min-height: 0;
+      position: relative;
+      --w-n: 0 0 0 0 transparent;
+      --w-e: 0 0 0 0 transparent;
+      --w-s: 0 0 0 0 transparent;
+      --w-w: 0 0 0 0 transparent;
+      --w-ring: 0 0 0 0 transparent;
+      box-shadow: inset var(--w-n), inset var(--w-e),
+                  inset var(--w-s), inset var(--w-w), inset var(--w-ring);
+    }
+    .cell[data-walls~="n"] { --w-n: 0 var(--wall-w) 0 0 var(--wall); }
+    .cell[data-walls~="e"] { --w-e: calc(-1 * var(--wall-w)) 0 0 0 var(--wall); }
+    .cell[data-walls~="s"] { --w-s: 0 calc(-1 * var(--wall-w)) 0 0 var(--wall); }
+    .cell[data-walls~="w"] { --w-w: var(--wall-w) 0 0 0 var(--wall); }
     .cell[data-t="floor"] { background: var(--floor); }
+    .cell[data-t="outside"] { background: var(--outside); }
     /* Trail: --fade is set per cell by the script, newest darkest. */
     .cell[data-t="floor"][data-trail] {
       background-image: linear-gradient(
         rgba(var(--trail), var(--fade, 0)), rgba(var(--trail), var(--fade, 0)));
     }
+    /* Rides in the same shadow list rather than its own declaration, which
+       would replace the walls instead of joining them. */
     .cell[data-t="exit"] {
       background: var(--exit);
-      box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.55);
+      --w-ring: 0 0 0 2px rgba(255, 255, 255, 0.55);
     }
     .cell[data-you]::after {
       content: '';

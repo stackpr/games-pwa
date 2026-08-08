@@ -23,7 +23,7 @@ ambiguity. Two things come out of it:
   the old code and a phone on the new one would silently be running
   different mazes under the same name.
 - **The maze size.** The *last* letter selects it:
-  `MAZE_SIZES[letterIndex(last) % 4]` over `[15, 21, 25, 31]`. The size has
+  `MAZE_SIZES[letterIndex(last) % 4]` over `[11, 15, 21, 25]`. The size has
   to travel with the code — two people on different grid sizes are not
   racing the same thing — and there is nowhere else to put it.
 
@@ -31,34 +31,114 @@ A useful side effect: **any five letters is a valid code.** Type `HELLO` or
 someone's name and you get a real, solvable maze. Generated codes just
 happen to pick a final consonant that lands on the size you asked for.
 
+## Walls live on the edges, not in squares of their own
+
+This is the thing to understand before changing anything here.
+
+The first version drew the maze as a grid of *tiles*, each one either wall or
+floor. That is easy to render and quietly wastes half the grid: a 25×25 tile
+grid only holds a 12×12 maze, because every second row and column is
+structure rather than somewhere you can stand. Three quarters of what you saw
+was scenery, and a 5×5 window mostly showed you a corridor you were already
+in.
+
+Now **a wall is an edge between two squares**, so every square of the grid is
+somewhere you can stand and every one of them is a junction you have to read.
+A 25×25 maze is 625 decisions rather than 144.
+
+The storage is two planes, which is exactly what "each square has four
+borders" reduces to once you stop storing each wall twice:
+
+```
+vert[(n+1) × n]    the wall on the WEST side of each square,
+                   plus one extra column for the east edge of the grid
+horiz[n × (n+1)]   the wall on the NORTH side of each square,
+                   plus one extra row for the south edge of the grid
+```
+
+Everything else is these two read from a neighbour, which is what `edge()`
+and `wall()` do — a square's east wall *is* the west wall of the square to
+its right, and reading it from either side has to give the same answer. A
+spec asserts that. Storing four booleans per square instead would let those
+two answers drift apart, and a maze where a wall exists from one side but not
+the other is a maze you can walk through.
+
+`edge(x, y, side)` deliberately answers for coordinates outside the grid too
+(returning "no wall"), because the view can and does show squares beyond the
+border — otherwise the outer wall would vanish whenever you stood next to it
+and could see past it.
+
+### Rendering each wall exactly once
+
+Every visible square draws **its north and west wall**, and the far row and
+far column of the *view* additionally draw their south and east. That covers
+every wall in the window and draws each one only once, so an internal wall
+and a border wall are the same weight. Drawing all four sides of every square
+would paint each internal wall twice — 6px where the shared edges meet and
+3px at the edge of the view — which reads as a maze with random thick bits.
+
+The walls themselves are `border-*-color` on a cell with a transparent border
+on all four sides. Independent properties, so four separate CSS rules can
+each turn one side on, which `box-shadow` cannot do; and a border that is
+always present but usually transparent means turning a wall on never moves
+the grid.
+
 ## Generating the maze
 
-An odd-sized grid of tiles, every tile a wall to start, carved by an
-iterative recursive-backtracker over the tiles at odd coordinates: from the
-centre tile, knock down the wall between the current cell and a random
-unvisited neighbour two away, and back up when there is nowhere to go.
+Every wall up, then an iterative recursive-backtracker carve over the
+squares: from the centre, knock down the wall between the current square and
+a random unvisited neighbour, and back up when there is nowhere to go.
 
-That yields a **perfect maze** — a spanning tree over the cells, exactly one
-route between any two of them, no loops. This is why *"ensure there is a
-path out"* needs no check and no retry loop: every carved cell is connected
-to every other by construction, and the exit is opened next to a carved
-cell, so it is reachable from the start by definition. A spec asserts it
-anyway, by breadth-first search over a handful of codes at every size.
+That yields a **perfect maze** — a spanning tree over the squares, exactly
+one route between any two of them, no loops. This is why *"ensure there is a
+path out"* needs no check and no retry loop: every square is connected to
+every other by construction. A spec asserts it anyway, by breadth-first
+search over a hundred-odd codes at every size, and checks the count of
+reachable squares is `n² + 1` — the whole grid, plus the square outside the
+opening.
 
-The exit is a single opening in the border. Candidates are every border tile
-next to a cell on the outer ring; the winner is the one whose neighbouring
-cell is **furthest from the start** by BFS distance, with the seeded PRNG
-breaking ties. Picking the furthest is what stops a maze occasionally
-handing out an exit four steps from the start.
+The exit is a single opening in the border: a square on the outer ring with
+its outward wall knocked out. The winner is the square **furthest from the
+start** by BFS distance, with the seeded PRNG breaking ties. Picking the
+furthest is what stops a maze occasionally handing out an exit four steps
+from the start. Stepping through the opening puts you on the square outside
+the grid, which is the win.
 
-The player starts on the centre-most odd tile, so the middle of the maze is
-the middle of the first view.
+The player starts at `n >> 1` in both axes — the middle square, since there
+are no longer alternate rows to avoid.
+
+### How long a run is
+
+Measured over ten codes at each size, shortest path from start to exit:
+
+| Maze | Squares | Shortest way out |
+| --- | --- | --- |
+| 11×11 | 121 | 60–90 steps |
+| 15×15 | 225 | 113–169 steps |
+| 21×21 | 441 | 207–261 steps |
+| 25×25 | 625 | 285–401 steps |
+
+That is the *shortest* path; a first run through an unseen maze is longer.
+The size list moved down from `[15, 21, 25, 31]` when walls moved to the
+edges, because those numbers now mean four times as much maze — a 31 would
+have been a six-hundred-step walk before a wrong turn.
+
+### Changing the generator is a breaking change
+
+Two phones on the same code have to draw the same maze, and the only thing
+they share is the code. A change to the carve, the hash, the size list or the
+exit rule gives an updated client and a stale one *different mazes under the
+same name*, with nothing on screen to say so. Bump `CACHE_VERSION` with any
+such change so clients update together, and expect codes written down before
+the change to mean something else after it.
 
 ## What you can see
 
 A `view × view` window (3, 5, 7 or 9 — 5 by default) centred on you, always.
 You move, the world moves; your marker never leaves the middle square. What
-falls outside the maze is drawn as wall, so the border reads as solid.
+falls outside the maze is drawn as void, with the border wall between it and
+the maze — so you can see you are against the edge, and see the opening when
+you reach it.
 
 **The trail** is the last *n* squares you stood on, shaded and fading with
 age — newest at 0.5 alpha down to 0.06 for the oldest. `n` is a setting
@@ -150,3 +230,6 @@ if `finishedAt` went missing.
 - **A code typed in lower case, or with spaces or punctuation**, is upper-cased
   and stripped before validation; anything that is not then exactly five
   letters is refused with a message rather than silently accepted.
+- **A saved position off the grid** takes the steps and the trail with it,
+  because a run that cannot be placed is not a run. The one exception is the
+  square outside the exit, which is a finished run and is restored as one.

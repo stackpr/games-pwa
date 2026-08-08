@@ -8,10 +8,13 @@
 (function () {
   const KEY = 'games.maze.v1';
 
-  const MAZE_SIZES = [15, 21, 25, 31];
+  // Squares, not tiles: with walls on the edges every square is somewhere you
+  // can stand, so a 25 here is four times the maze a 25 used to be.
+  const MAZE_SIZES = [11, 15, 21, 25];
   const DEFAULT_SIZE = 25;
   const VIEWS = [3, 5, 7, 9];
   const TRAILS = [0, 5, 10, 20];
+  const WALL_PX = { 3: 4, 5: 3, 7: 3, 9: 2 };
   const PATH_CAP = 32;
 
   const VOWELS = 'AEIOU';
@@ -71,86 +74,114 @@
   }
 
   /*
-   * A recursive-backtracker carve over the odd cells. Every carved cell joins
-   * a single spanning tree, so there is exactly one route between any two of
-   * them — which is what guarantees the exit is reachable, without a check.
+   * Walls live on the edges between squares, not in squares of their own, so
+   * every square of the grid is somewhere you can stand and every one of them
+   * is a decision. Two planes hold them: a square owns its north and west
+   * wall, and the grid carries the extra south and east edge. See _README.md.
+   *
+   * The carve is a recursive backtracker over the squares. Every square joins
+   * one spanning tree, so there is exactly one route between any two of them
+   * — which is what guarantees the exit is reachable, without a check.
    */
   function buildMaze(code) {
     const n = sizeFor(code);
     const rand = mulberry32(hash(code));
-    const wall = new Uint8Array(n * n).fill(1);
-    const at = (x, y) => y * n + x;
+    const vert = new Uint8Array((n + 1) * n).fill(1);
+    const horiz = new Uint8Array(n * (n + 1)).fill(1);
+    const vi = (x, y) => y * (n + 1) + x;
+    const hi = (x, y) => y * n + x;
+    const inside = (x, y) => x >= 0 && y >= 0 && x < n && y < n;
 
-    const mid = n >> 1;
-    const sx = mid % 2 === 1 ? mid : mid - 1;
-    const start = { x: sx, y: sx };
+    // The whole wall model, for any square in or out of the grid: the wall
+    // above it and the wall to its left. Everything else is these two read
+    // from a neighbour.
+    function edge(x, y, side) {
+      if (side === 'up') {
+        if (x < 0 || x >= n || y < 0 || y > n) return 0;
+        return horiz[hi(x, y)];
+      }
+      if (y < 0 || y >= n || x < 0 || x > n) return 0;
+      return vert[vi(x, y)];
+    }
 
-    wall[at(start.x, start.y)] = 0;
+    function wall(x, y, dir) {
+      if (dir === 'up') return edge(x, y, 'up');
+      if (dir === 'down') return edge(x, y + 1, 'up');
+      if (dir === 'left') return edge(x, y, 'left');
+      return edge(x + 1, y, 'left');
+    }
+
+    function knock(x, y, dir) {
+      if (dir === 'up') horiz[hi(x, y)] = 0;
+      else if (dir === 'down') horiz[hi(x, y + 1)] = 0;
+      else if (dir === 'left') vert[vi(x, y)] = 0;
+      else vert[vi(x + 1, y)] = 0;
+    }
+
+    const start = { x: n >> 1, y: n >> 1 };
+    const seen = new Uint8Array(n * n);
+    seen[hi(start.x, start.y)] = 1;
     const stack = [[start.x, start.y]];
     while (stack.length) {
       const [x, y] = stack[stack.length - 1];
       const options = [];
       for (const key in DIRS) {
-        const [dx, dy] = DIRS[key];
-        const nx = x + dx * 2;
-        const ny = y + dy * 2;
-        if (nx > 0 && ny > 0 && nx < n - 1 && ny < n - 1 && wall[at(nx, ny)]) {
-          options.push([nx, ny, x + dx, y + dy]);
-        }
+        const nx = x + DIRS[key][0];
+        const ny = y + DIRS[key][1];
+        if (inside(nx, ny) && !seen[hi(nx, ny)]) options.push([key, nx, ny]);
       }
       if (!options.length) { stack.pop(); continue; }
-      const [nx, ny, wx, wy] = options[Math.floor(rand() * options.length)];
-      wall[at(wx, wy)] = 0;
-      wall[at(nx, ny)] = 0;
+      const [dir, nx, ny] = options[Math.floor(rand() * options.length)];
+      knock(x, y, dir);
+      seen[hi(nx, ny)] = 1;
       stack.push([nx, ny]);
     }
 
     // Distances from the start, so the exit can be the furthest way out
     // rather than one that happens to sit next door.
     const dist = new Int32Array(n * n).fill(-1);
-    dist[at(start.x, start.y)] = 0;
+    dist[hi(start.x, start.y)] = 0;
     let queue = [[start.x, start.y]];
     while (queue.length) {
       const next = [];
       for (const [x, y] of queue) {
         for (const key in DIRS) {
-          const [dx, dy] = DIRS[key];
-          const nx = x + dx;
-          const ny = y + dy;
-          if (nx < 0 || ny < 0 || nx >= n || ny >= n) continue;
-          if (wall[at(nx, ny)] || dist[at(nx, ny)] >= 0) continue;
-          dist[at(nx, ny)] = dist[at(x, y)] + 1;
+          const nx = x + DIRS[key][0];
+          const ny = y + DIRS[key][1];
+          if (!inside(nx, ny) || wall(x, y, key) || dist[hi(nx, ny)] >= 0) continue;
+          dist[hi(nx, ny)] = dist[hi(x, y)] + 1;
           next.push([nx, ny]);
         }
       }
       queue = next;
     }
 
-    const candidates = [];
-    for (let i = 1; i <= n - 2; i += 2) {
-      candidates.push([i, 0, i, 1]);
-      candidates.push([i, n - 1, i, n - 2]);
-      candidates.push([0, i, 1, i]);
-      candidates.push([n - 1, i, n - 2, i]);
-    }
-    let best = candidates[0];
+    // Every square on the outer ring could be the way out; the furthest one
+    // wins, with rand() breaking ties so two mazes of a shape still differ.
+    let best = null;
     let bestScore = -1;
-    for (const c of candidates) {
-      // rand() breaks ties, so two mazes of the same shape still differ.
-      const score = dist[at(c[2], c[3])] * 4 + rand();
-      if (score > bestScore) { bestScore = score; best = c; }
+    for (let i = 0; i < n; i++) {
+      for (const c of [[i, 0, 'up'], [i, n - 1, 'down'], [0, i, 'left'], [n - 1, i, 'right']]) {
+        const score = dist[hi(c[0], c[1])] * 4 + rand();
+        if (score > bestScore) { bestScore = score; best = c; }
+      }
     }
-    const exit = { x: best[0], y: best[1] };
-    wall[at(exit.x, exit.y)] = 0;
+    knock(best[0], best[1], best[2]);
+    const exit = { x: best[0], y: best[1], dir: best[2] };
+    const step = DIRS[exit.dir];
 
     return {
       n: n,
       code: code,
       start: start,
       exit: exit,
-      open: function (x, y) {
-        if (x < 0 || y < 0 || x >= n || y >= n) return false;
-        return !wall[y * n + x];
+      // The square just outside the opening: stepping onto it is the win.
+      exitTile: { x: exit.x + step[0], y: exit.y + step[1] },
+      inside: inside,
+      edge: edge,
+      wall: wall,
+      canMove: function (x, y, dir) {
+        return inside(x, y) && !wall(x, y, dir);
       }
     };
   }
@@ -195,9 +226,12 @@
     const s = fresh(saved.code, oneOf(VIEWS, saved.view, 5), oneOf(TRAILS, saved.trail, 10));
     const m = buildMaze(s.code);
     s.pending = saved.pending !== false;
-    // A position that is off the grid or inside a wall makes the steps and
-    // the trail meaningless too, so the whole run goes rather than half of it.
-    if (!Number.isInteger(saved.x) || !Number.isInteger(saved.y) || !m.open(saved.x, saved.y)) {
+    const onExit = saved.x === m.exitTile.x && saved.y === m.exitTile.y;
+    // A position off the grid makes the steps and the trail meaningless too,
+    // so the whole run goes rather than half of it. The square outside the
+    // exit is the one exception: that is a finished run.
+    if (!Number.isInteger(saved.x) || !Number.isInteger(saved.y) ||
+        (!m.inside(saved.x, saved.y) && !onExit)) {
       return s;
     }
     s.x = saved.x;
@@ -211,8 +245,8 @@
     if (Number.isInteger(saved.steps) && saved.steps >= 0) s.steps = saved.steps;
     if (Number.isFinite(saved.startedAt)) s.startedAt = saved.startedAt;
     if (Number.isFinite(saved.finishedAt)) s.finishedAt = saved.finishedAt;
-    // A saved position on the exit is a finished run, however it was saved.
-    if (s.x === m.exit.x && s.y === m.exit.y && !s.finishedAt) s.finishedAt = Date.now();
+    // A saved position out of the exit is a finished run, however it was saved.
+    if (onExit && !s.finishedAt) s.finishedAt = Date.now();
     return s;
   }
 
@@ -230,6 +264,8 @@
     const board = $('board');
     if (!board) return;
     board.style.gridTemplateColumns = 'repeat(' + state.view + ', 1fr)';
+    // Thinner walls when there are more of them on screen.
+    board.style.setProperty('--wall-w', (WALL_PX[state.view] || 3) + 'px');
     board.textContent = '';
     cells = [];
     for (let i = 0; i < state.view * state.view; i++) {
@@ -271,15 +307,26 @@
 
     const half = (state.view - 1) / 2;
     const fade = fades();
+    const last = state.view - 1;
     for (let j = 0; j < state.view; j++) {
       for (let i = 0; i < state.view; i++) {
         const cell = cells[j * state.view + i];
         if (!cell) continue;
         const mx = state.x + i - half;
         const my = state.y + j - half;
-        const isExit = mx === maze.exit.x && my === maze.exit.y;
-        const kind = isExit ? 'exit' : (maze.open(mx, my) ? 'floor' : 'wall');
+        const isExit = mx === maze.exitTile.x && my === maze.exitTile.y;
+        const kind = isExit ? 'exit' : (maze.inside(mx, my) ? 'floor' : 'outside');
         cell.dataset.t = kind;
+
+        // Each square draws the wall above it and the wall to its left, and
+        // the far row and column of the view close it off. Drawn once each,
+        // so every wall in the view is the same weight.
+        const walls = [];
+        if (maze.edge(mx, my, 'up')) walls.push('n');
+        if (maze.edge(mx, my, 'left')) walls.push('w');
+        if (j === last && maze.edge(mx, my + 1, 'up')) walls.push('s');
+        if (i === last && maze.edge(mx + 1, my, 'left')) walls.push('e');
+        cell.dataset.walls = walls.join(' ');
 
         const key = fade.get(mx + ',' + my);
         if (key !== undefined && kind === 'floor') {
@@ -298,7 +345,7 @@
     const openDirs = [];
     for (const key in DIRS) {
       const btn = document.querySelector('.dir[data-dir="' + key + '"]');
-      const ok = maze.open(state.x + DIRS[key][0], state.y + DIRS[key][1]);
+      const ok = maze.canMove(state.x, state.y, key);
       if (ok) openDirs.push(key);
       if (btn) {
         if (ok && !won()) delete btn.dataset.blocked;
@@ -344,9 +391,9 @@
 
   function move(dir) {
     if (!DIRS[dir] || won() || sheetOpen()) return;
+    if (!maze.canMove(state.x, state.y, dir)) return;
     const nx = state.x + DIRS[dir][0];
     const ny = state.y + DIRS[dir][1];
-    if (!maze.open(nx, ny)) return;
 
     if (!state.startedAt) state.startedAt = Date.now();
     state.path.push([state.x, state.y]);
@@ -354,7 +401,7 @@
     state.x = nx;
     state.y = ny;
     state.steps++;
-    if (nx === maze.exit.x && ny === maze.exit.y) state.finishedAt = Date.now();
+    if (nx === maze.exitTile.x && ny === maze.exitTile.y) state.finishedAt = Date.now();
 
     save();
     announce(render());
