@@ -35,6 +35,7 @@ installable PWA at **https://games.payne.run**.
 | [Honeycomb: Spelling](games/honeycomb-spelling/) | Seven random letters, checked online |
 | [Maze](games/maze/) | Everyone types the same code and races the same maze |
 | [Mines](games/mines/) | Clear the minefield — the board is cut to fit your screen |
+| [Golf](games/golf/) | Scorecard for golf or mini golf — tap a square, pick the strokes |
 
 ## Development
 

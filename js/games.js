@@ -139,6 +139,13 @@ const GAMES = [
     path: 'games/quik-dice/'
   },
   {
+    name: 'Golf',
+    section: 'scoring',
+    description: 'Scorecard for golf or mini golf, 9 or 18 holes',
+    emoji: '⛳',
+    path: 'games/golf/'
+  },
+  {
     name: 'Maze',
     section: 'group',
     description: 'Same code, same maze — first one out wins',
