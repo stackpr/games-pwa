@@ -60,6 +60,13 @@
       font-weight: 600;
       line-height: 1.15;
       overflow: hidden;
+      /* A tile is about 70px wide on a 320px phone and the library holds
+         sixty-odd unbreakable words of eleven letters or more. hyphens is
+         the nice break where a dictionary exists and does nothing at all
+         where one does not, so it cannot be the only one: without
+         overflow-wrap, "Perpendicular" renders as "erpendicula", clipped at
+         both ends by the overflow above with nothing to say it was cut. */
+      overflow-wrap: anywhere;
       hyphens: auto;
     }
     /* The word is marked with a ring as well as a colour, so it does not

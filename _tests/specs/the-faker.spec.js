@@ -59,6 +59,35 @@ test.describe('the board', () => {
     expect(new Set(words).size).toBe(16);
   });
 
+  test('the longest word in the library fits its tile', async ({ page }) => {
+    /*
+     * hyphens: auto does nothing without a hyphenation dictionary, and a
+     * tile is ~70px wide on a 320px phone — so the library's longest
+     * unbreakable word used to render as its own middle, clipped at both
+     * ends by overflow: hidden with nothing to show it had been cut.
+     * The word is read out of Vocab so this cannot go stale.
+     */
+    await page.locator('#begin').click();
+    await page.locator('#show').click();
+
+    const fit = await page.evaluate(() => {
+      let longest = '';
+      for (const cat of Vocab.categories()) {
+        for (const term of Vocab.terms(cat)) {
+          if (!/\s/.test(term.word) && term.word.length > longest.length) {
+            longest = term.word;
+          }
+        }
+      }
+      const tile = document.querySelector('#grid .tile');
+      tile.textContent = longest;
+      return { word: longest, scroll: tile.scrollWidth, client: tile.clientWidth };
+    });
+
+    expect(fit.word.length).toBeGreaterThan(10);
+    expect(fit.scroll, `"${fit.word}" overflows its tile`).toBeLessThanOrEqual(fit.client);
+  });
+
   test('follows the categories that are picked', async ({ page }) => {
     await page.locator('#cat-none').click();
     await expect(page.locator('#begin')).toBeDisabled();
