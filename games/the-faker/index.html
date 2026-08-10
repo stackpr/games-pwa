@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>The Faker</title>
+  <meta name="theme-color" content="#10141f">
+  <link rel="manifest" href="../../manifest.webmanifest">
+  <link rel="icon" href="../../icons/favicon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="../../icons/apple-touch-icon.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="stylesheet" href="../../css/players.css">
+  <link rel="stylesheet" href="../../css/modal.css">
+  <link rel="stylesheet" href="../../css/party.css">
+  <style>
+    /* Semantic, not player identities — the seats are 3 to 10 and the
+       colours name a role, not a person. See CLAUDE.md. */
+    :root {
+      --secret: #4cc08a;
+      --faker: #e0705d;
+      --understudy: #e8ab52;
+    }
+
+    .topic {
+      font-size: 0.85rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--text-dim);
+      font-weight: 700;
+    }
+    .whose {
+      font-size: 0.85rem;
+      color: var(--text-dim);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    /* The board everyone can see. Four by four, sized to fill whatever the
+       card and the role line leave — it is read across a table. */
+    .grid {
+      flex: 1;
+      min-height: 0;
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      grid-auto-rows: 1fr;
+      gap: 0.35rem;
+      margin: 0 0.6rem;
+    }
+    .tile {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: 0.15rem;
+      background: var(--panel);
+      border-radius: 10px;
+      font-size: clamp(0.62rem, 2.7vw, 0.95rem);
+      font-weight: 600;
+      line-height: 1.15;
+      overflow: hidden;
+      hyphens: auto;
+    }
+    /* The word is marked with a ring as well as a colour, so it does not
+       depend on hue — and the ring is what shows in a photo or a screenshot.
+       Lengths, never percentages, or the whole declaration is dropped. */
+    .tile[data-secret] {
+      color: var(--secret);
+      font-weight: 800;
+      box-shadow: inset 0 0 0 3px var(--secret);
+    }
+
+    .role {
+      flex: none;
+      margin: 0 0.6rem;
+      padding: 0.6rem 0.7rem;
+      background: var(--panel);
+      border-radius: 12px;
+      font-size: 0.95rem;
+      line-height: 1.35;
+      text-align: center;
+    }
+    .role strong { font-size: 1.15rem; }
+    .role[data-role="faker"] { box-shadow: inset 0 0 0 2px var(--faker); }
+    .role[data-role="faker"] strong { color: var(--faker); }
+    .role[data-role="understudy"] { box-shadow: inset 0 0 0 2px var(--understudy); }
+    .role[data-role="understudy"] strong { color: var(--understudy); }
+    .clues {
+      display: block;
+      margin-top: 0.35rem;
+      font-size: 1.05rem;
+      font-weight: 700;
+      color: var(--understudy);
+      line-height: 1.4;
+    }
+
+    /* The talk and answer halves of the last screen. Only one is up, and
+       .over is already a centred column, so these inherit that. */
+    .talk, .answer {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
+      flex: 1;
+      min-height: 0;
+      width: 100%;
+      max-width: 30rem;
+    }
+    .talk[hidden], .answer[hidden] { display: none; }
+    .talk .grid { width: 100%; margin: 0; }
+    .hint {
+      margin: 0;
+      font-size: 0.85rem;
+      color: var(--text-dim);
+      line-height: 1.4;
+    }
+    .answer-who {
+      margin: 0;
+      font-size: 1.05rem;
+      line-height: 1.5;
+    }
+    .answer-who b { color: var(--faker); }
+    .answer-who i { color: var(--understudy); font-style: normal; }
+    .answer-note {
+      margin: 0;
+      font-size: 0.85rem;
+      color: var(--text-dim);
+      line-height: 1.4;
+    }
+
+    .rules-list {
+      margin: 0;
+      padding-left: 1.1rem;
+      font-size: 0.86rem;
+      color: var(--text-dim);
+      line-height: 1.45;
+    }
+    .rules-list li + li { margin-top: 0.4rem; }
+    .rules-list strong { color: var(--text); }
+  </style>
+</head>
+<body data-screen="setup" data-mode="solo">
+  <div class="topbar">
+    <a href="../../">&larr; Games</a>
+    <div class="topbar-actions">
+      <button id="rules-btn" class="chip" type="button" aria-expanded="false">How</button>
+      <button id="setup-btn" class="chip" type="button">Setup</button>
+    </div>
+  </div>
+
+  <main class="setup" id="setup">
+    <h1 class="setup-title">The Faker</h1>
+    <p class="setup-blurb">
+      Everyone sees the same sixteen words. Everyone but one of you is told
+      which one is the word. Say a single word about it — and work out who
+      is guessing.
+    </p>
+
+    <div class="field" id="players-field">
+      <span class="field-label">Players</span>
+      <div class="count-row" id="count-row"></div>
+    </div>
+
+    <div class="field" id="names-field">
+      <span class="field-label">Names</span>
+      <div class="pick-row" id="name-mode-row" role="group" aria-label="How to set names">
+        <button class="pick" id="name-mode-pick" type="button" data-name-mode="pick">Pick who's here</button>
+        <button class="pick" id="name-mode-type" type="button" data-name-mode="type">Type them</button>
+      </div>
+      <div class="name-inputs" id="name-inputs"></div>
+      <div class="recent-wrap" id="recent-list"></div>
+    </div>
+
+    <div class="field">
+      <span class="field-label">Second hidden player</span>
+      <div class="pick-row" id="understudy-row" role="group" aria-label="Understudy">
+        <button class="pick" type="button" data-understudy="off">Just the Faker</button>
+        <button class="pick" type="button" data-understudy="on">Add an Understudy</button>
+      </div>
+      <p class="hint" id="understudy-note"></p>
+    </div>
+
+    <div class="field">
+      <span class="field-label">
+        Categories <span class="field-note" id="cat-count"></span>
+      </span>
+      <div class="cat-grid" id="cat-grid"></div>
+      <div class="cat-actions">
+        <button class="chip small" id="cat-all" type="button">All</button>
+        <button class="chip small" id="cat-none" type="button">None</button>
+      </div>
+    </div>
+
+    <button class="go" id="begin" type="button">Deal a round</button>
+  </main>
+
+  <section class="ready" id="ready">
+    <span class="ready-label">Pass the phone to</span>
+    <span class="ready-who" id="ready-who"></span>
+    <span class="ready-sub" id="ready-sub">Everyone else, look away.</span>
+    <button class="go" id="show" type="button">Show me my card</button>
+  </section>
+
+  <section class="play" id="play">
+    <div class="play-head">
+      <span class="topic" id="topic"></span>
+      <span></span>
+      <span class="whose" id="whose"></span>
+    </div>
+    <div class="grid" id="grid"></div>
+    <p class="role" id="role"></p>
+    <button class="go" id="hide" type="button">Hide and pass on</button>
+  </section>
+
+  <section class="over" id="over">
+    <div class="talk" id="talk">
+      <span class="over-label">One word each</span>
+      <span class="topic" id="talk-topic"></span>
+      <div class="grid" id="talk-grid"></div>
+      <p class="hint">
+        Go round the table and say one word about the word. Then argue, and
+        point at whoever you think is faking it.
+      </p>
+      <button class="go" id="reveal" type="button">Reveal</button>
+    </div>
+
+    <div class="answer" id="answer" hidden>
+      <span class="over-label">The word was</span>
+      <span class="over-score" id="answer-word"></span>
+      <p class="answer-who" id="answer-who"></p>
+      <p class="answer-note">
+        Caught the Faker? They get one guess at the word to steal it back.
+      </p>
+      <button class="go" id="again" type="button">Deal another</button>
+    </div>
+  </section>
+
+  <div class="modal" id="rules">
+    <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="rules-title">
+      <h2 class="modal-title" id="rules-title">How to play</h2>
+      <ul class="rules-list">
+        <li><strong>Pass the phone round first.</strong> Each player takes it,
+          taps to see their card, and hands it on. Everyone sees the same
+          sixteen words; all but one are told which word is the word.</li>
+        <li><strong>The Faker</strong> sees the sixteen and nothing else, and
+          has to work out what everyone is talking about while sounding like
+          they already know.</li>
+        <li><strong>Then one word each</strong>, out loud, round the table.
+          One word — not a sentence. Too obvious and the Faker gets it; too
+          vague and you look like the Faker.</li>
+        <li><strong>Argue, then point.</strong> Everyone points at once at
+          who they think is faking.</li>
+        <li><strong>If the Faker is caught</strong>, they get one guess at
+          the word. Guess it and they win anyway.</li>
+        <li><strong>With six or more</strong> an <strong>Understudy</strong>
+          joins: they are not told the word either, but they do get five
+          words about it. Harder to spot than the Faker, and they may not
+          know which of them they are up against.</li>
+        <li>Nothing is scored here. Who won an argument is not something a
+          phone can settle.</li>
+      </ul>
+      <button class="modal-close" type="button" data-close>Close</button>
+    </div>
+  </div>
+
+  <script src="../../js/lib/store.js"></script>
+  <script src="../../js/lib/modal.js"></script>
+  <script src="../../js/lib/vocab.js"></script>
+  <script src="../../js/lib/names.js"></script>
+  <script src="../../js/lib/party.js"></script>
+  <script src="../../js/lib/setup.js"></script>
+  <script src="the-faker.js"></script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('../../sw.js').catch(() => {});
+    }
+  </script>
+</body>
+</html>

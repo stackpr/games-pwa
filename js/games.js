@@ -111,6 +111,13 @@ const GAMES = [
     path: 'games/pitch/'
   },
   {
+    name: 'The Faker',
+    section: 'group',
+    description: 'One of you was never told the word',
+    emoji: '\u{1F98E}',
+    path: 'games/the-faker/'
+  },
+  {
     name: 'Somewhere Between',
     section: 'group',
     description: 'Find the hidden spot on the scale',
