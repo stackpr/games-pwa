@@ -579,10 +579,39 @@
     showIdleClock();
   }
 
-  // Words are checked over the network, so being offline is worth saying
-  // before the clock starts rather than once per rejected word.
+  /*
+   * Words are checked over the network, so trouble is worth saying before
+   * the clock starts rather than once per rejected word. Two different
+   * problems land here: no connection at all, and a connection with no
+   * dictionary answering at the other end — which is a thing that happens,
+   * and which the player can neither see nor fix. The consequence is the
+   * same either way, so the note is the same shape; only the reason differs.
+   *
+   * `dictOut` is set from the probe rather than read live, because an
+   * unprobed source is not a failed one and a note that appeared on every
+   * load until the probe came back would be a lie most of the time.
+   */
+  const OFFLINE_NOTE = el.netNote.textContent;
+  let dictOut = false;
+
   function paintNet() {
-    el.netNote.hidden = navigator.onLine !== false;
+    const offline = navigator.onLine === false;
+    el.netNote.hidden = !offline && !dictOut;
+    if (offline) el.netNote.textContent = OFFLINE_NOTE;
+    else if (dictOut) {
+      el.netNote.textContent = 'The dictionary is not answering just now. ' +
+        'Only words from the site’s own small vocabulary will score ' +
+        'until it is back.';
+    }
+  }
+
+  // Asked on load, so the sheet can say so before anyone starts a clock.
+  function checkDictionary() {
+    if (!window.Dictionary || !Dictionary.probe) return;
+    Dictionary.probe().then(ok => {
+      dictOut = !ok;
+      paintNet();
+    });
   }
 
   function buildLimits() {
@@ -795,8 +824,10 @@
     }
   });
 
-  window.addEventListener('online', paintNet);
+  // Coming back online is the moment to ask again rather than to assume.
+  window.addEventListener('online', () => { paintNet(); checkDictionary(); });
   window.addEventListener('offline', paintNet);
+  checkDictionary();
 
   buildLimits();
   openStart();

@@ -22,26 +22,55 @@ to leave out a caveat.
   scripts fetched from other origins. Everything must work fully offline
   once the service worker has cached the shell.
 
-  **Two deliberate exceptions, and they are the whole list:**
+  **Three deliberate exceptions, and they are the whole list:**
 
-  1. **`api.dictionaryapi.dev`** — reached only through
-     `js/lib/dictionary.js`, which owns the request and remembers every
-     verdict. Two games ask: Honeycomb: Spelling, which has no word list at
-     all and so asks about everything, and Word Sprint, which ships
-     seventeen thousand words and asks only about the rest. Both say so in
-     the game. A third caller needs no new argument — it is the same host
-     and the same library — but it must keep the same terms: the answer
-     `off` (nothing came back) is never a `no`, and must never count
-     against a player.
+  1. **`api.dictionaryapi.dev`** and **`freedictionaryapi.com`** — one
+     exception, not two, because they are one capability: "is that a word?"
+     Both are reached only through `js/lib/dictionary.js`, which owns the
+     requests and remembers every verdict. Two games ask: Honeycomb:
+     Spelling, which has no word list at all and so asks about everything,
+     and Word Sprint, which ships seventeen thousand words and asks only
+     about the rest. Both say so in the game. A third caller needs no new
+     argument — same hosts, same library — but it must keep the same terms:
+     the answer `off` (nothing came back) is never a `no`, and must never
+     count against a player.
+
+     **Why two.** `api.dictionaryapi.dev` went down — connections opening,
+     nothing coming back, every lookup timing out — and took word checking
+     in both games with it. One service is a single point of failure for a
+     whole class of game, and the second was asked for by the owner on
+     exactly those grounds. They are tried in order and the first verdict
+     wins.
+
+     **A source must prove itself before it may answer.** Each is probed
+     with a control word every English dictionary has, and one that cannot
+     answer that is not consulted. This is not belt-and-braces: a wrong
+     endpoint answers `404` to everything, and `404` is how these services
+     say "not a word", so an unverified source would quietly start calling
+     real words wrong — the exact failure this library exists to prevent. A
+     wrong URL must cost a disabled source, never a poisoned verdict.
+
+     **A dead service is asked again on a growing delay** (30s, doubling, to
+     30 minutes), and the record outlives the page. Retrying every word
+     costs the player a full deadline of waiting to be told what is already
+     known, twice over once there are two services.
+
+     `freedictionaryapi.com` draws on Wiktionary and asks for visible
+     attribution, which both games carry in their rules sheet. If a service
+     is ever swapped, check its terms — that is part of the price of the
+     exception, not an afterthought.
   2. **`icanhazdadjoke.com`** — the dad joke above the game list
      (`js/joke.js`). Asked for directly by the owner, and there is no
      offline substitute worth having: a shipped joke list is a joke list
      everyone has already read.
 
-  Neither is a precedent. A new one has to earn it the same way, **in
-  writing**, and keep the same terms: the shell still precaches, still
-  installs and still loads offline, and `shell.spec.js` asserts these two
-  hosts are the only ones the site ever reaches.
+  Neither is a precedent, and the second dictionary is not one either — it
+  is redundancy for a capability already argued for, which is why it sits
+  inside the first exception rather than beside it. A genuinely new one has
+  to earn it the same way, **in writing**, and keep the same terms: the
+  shell still precaches, still installs and still loads offline, and
+  `shell.spec.js` asserts these hosts are the only ones the site ever
+  reaches.
 
   **The joke is held to a stricter rule than the dictionary, because it is
   on the app shell rather than inside a game.** A game can say "this bit

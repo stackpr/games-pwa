@@ -3,7 +3,18 @@ const { clearState, trackExternalRequests, trackErrors } = require('../helpers')
 
 const URL = '/games/honeycomb-spelling/';
 const KEY = 'games.honeycomb-spelling.v1';
-const API = 'https://api.dictionaryapi.dev/api/v2/entries/en/*';
+/*
+ * Both dictionary services, because the library tries them in turn — a test
+ * that mocked only the first would let the second reach the real internet.
+ */
+const APIS = [
+  'https://api.dictionaryapi.dev/api/v2/entries/en/*',
+  'https://freedictionaryapi.com/api/v1/entries/en/*'
+];
+const API = APIS[0];
+// Asked for on load to prove a source works before it is trusted with a real
+// word, so the mock always answers it whatever else it is told to do.
+const PROBE = 'apple';
 const VOWELS = 'aeiou';
 
 /**
@@ -17,21 +28,33 @@ const VOWELS = 'aeiou';
  */
 async function dictionary(page, opts = {}) {
   const reject = new Set(opts.reject || []);
-  await page.route(API, async route => {
-    if (opts.abort) return route.abort('failed');
-    if (opts.status) {
-      return route.fulfill({ status: opts.status, contentType: 'application/json', body: '{}' });
-    }
-    const word = decodeURIComponent(route.request().url().split('/').pop());
-    const found = !reject.has(word);
-    await route.fulfill({
-      status: found ? 200 : 404,
-      contentType: 'application/json',
-      body: found
-        ? JSON.stringify([{ word, meanings: [] }])
-        : JSON.stringify({ title: 'No Definitions Found' }),
+  for (const api of APIS) {
+    await page.route(api, async route => {
+      const word = decodeURIComponent(route.request().url().split('/').pop());
+      // The control word always lands: a source that fails it is never asked
+      // about a real word, which would make most of these tests measure the
+      // wrong thing.
+      if (word === PROBE) {
+        return route.fulfill({ status: 200, contentType: 'application/json', body: '[{}]' });
+      }
+      if (opts.abort) return route.abort('failed');
+      if (opts.status) {
+        return route.fulfill({ status: opts.status, contentType: 'application/json', body: '{}' });
+      }
+      const found = !reject.has(word);
+      await route.fulfill({
+        status: found ? 200 : 404,
+        contentType: 'application/json',
+        body: found
+          ? JSON.stringify([{ word, meanings: [] }])
+          : JSON.stringify({ title: 'No Definitions Found' }),
+      });
     });
-  });
+  }
+}
+
+async function unserve(page) {
+  for (const api of APIS) await page.unroute(api);
 }
 
 /** Seeds saved state and reloads. */
@@ -82,6 +105,14 @@ async function guess(page, word) {
 const saved = page => page.evaluate(k => JSON.parse(localStorage.getItem(k) || 'null'), KEY);
 
 test.beforeEach(async ({ page }) => {
+  /*
+   * Routed before the page loads. The library probes the services on load to
+   * learn whether checking works at all, and an unrouted probe would reach
+   * the real internet — two deadlines of waiting, and both sources marked
+   * down before a single test ran. play() layers its own mock on top, which
+   * wins because Playwright matches the most recently added route first.
+   */
+  await dictionary(page);
   await page.goto(URL);
   await clearState(page);
 });
@@ -450,7 +481,7 @@ test.describe('the dictionary', () => {
     await play(page);
     const { centre } = await hive(page);
     const word = centre.repeat(4);
-    await page.unroute(API);
+    await unserve(page);
     await dictionary(page, { reject: [word] });
 
     await guess(page, word);
@@ -515,7 +546,7 @@ test.describe('the dictionary', () => {
     await play(page);
     const { centre } = await hive(page);
     const word = centre.repeat(4);
-    await page.unroute(API);
+    await unserve(page);
     await dictionary(page, { reject: [word] });
     let asked = 0;
     page.on('request', req => { if (req.url().includes('dictionaryapi.dev')) asked++; });
@@ -546,7 +577,7 @@ test.describe('the dictionary', () => {
       await play(page);
       const { centre } = await hive(page);
       const word = centre.repeat(4);
-      await page.unroute(API);
+      await unserve(page);
       await dictionary(page, dict);
 
       await guess(page, word);
@@ -557,7 +588,7 @@ test.describe('the dictionary', () => {
 
       // Nothing was learned, so the word is asked about again rather than
       // being remembered as a rejection.
-      await page.unroute(API);
+      await unserve(page);
       await dictionary(page);
       await expect(page.locator('#score')).toHaveText(String(await points(page, word)));
       await expect(page.locator('#found .word[data-waiting]')).toHaveCount(0);
@@ -597,7 +628,7 @@ test.describe('the retry queue', () => {
     await play(page);
     const { centre } = await hive(page);
     const word = centre.repeat(4);
-    await page.unroute(API);
+    await unserve(page);
     await dictionary(page, { status: 503 });
 
     let asked = 0;
@@ -632,7 +663,7 @@ test.describe('the retry queue', () => {
     const word = centre.repeat(4);
     let asked = 0;
     page.on('request', req => { if (req.url().includes('dictionaryapi.dev')) asked++; });
-    await page.unroute(API);
+    await unserve(page);
     await dictionary(page, { status: 503 });
 
     await guess(page, word);
@@ -658,7 +689,7 @@ test.describe('the retry queue', () => {
     await play(page);
     const { centre } = await hive(page);
     const word = centre.repeat(4);
-    await page.unroute(API);
+    await unserve(page);
     await dictionary(page, { status: 503 });
 
     await guess(page, word);
@@ -676,7 +707,7 @@ test.describe('the retry queue', () => {
   test('a new game starts with an empty queue', async ({ page }) => {
     await play(page);
     const { centre } = await hive(page);
-    await page.unroute(API);
+    await unserve(page);
     await dictionary(page, { status: 503 });
     await guess(page, centre.repeat(4));
     await expect(page.locator('#found .word[data-waiting]'))
@@ -725,7 +756,7 @@ test.describe('our own vocabulary', () => {
     expect(word, 'a hive that can spell a vocabulary word').not.toBeNull();
 
     // Every request is refused, so anything that scores did so locally.
-    await page.unroute(API);
+    await unserve(page);
     await dictionary(page, { abort: true });
     let asked = 0;
     page.on('request', req => { if (req.url().includes('dictionaryapi.dev')) asked++; });
@@ -910,7 +941,7 @@ test.describe('finishing', () => {
   test('Skip gives up on the queue and shows the result', async ({ page }) => {
     await play(page);
     const { centre } = await hive(page);
-    await page.unroute(API);
+    await unserve(page);
     await dictionary(page, { abort: true });
     await guess(page, centre.repeat(4));
     await expect(page.locator('#found .word[data-waiting]'))
@@ -932,7 +963,7 @@ test.describe('finishing', () => {
     await clearState(page);
     await play(page);
     const { centre } = await hive(page);
-    await page.unroute(API);
+    await unserve(page);
     // Never resolves at all — no status, no failure, just silence.
     await page.route(API, () => {});
 

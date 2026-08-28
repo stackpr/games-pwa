@@ -1,5 +1,5 @@
 /*
- * "Is that a word?", asked of api.dictionaryapi.dev, with the answers kept.
+ * "Is that a word?", asked of a dictionary service, with the answers kept.
  *
  * Two games need this and they need it the same way, which is why it is here
  * rather than in either of them. Honeycomb: Spelling has no word list at all
@@ -9,11 +9,14 @@
  *
  *   Dictionary.look(word)  -> Promise of 'yes' | 'no' | 'off'
  *   Dictionary.verdict(w)  -> 'yes' | 'no' | null, from the cache alone
+ *   Dictionary.ready()     -> is any source known to be answering?
+ *   Dictionary.probe()     -> check the sources now; resolves to ready()
+ *   Dictionary.health()    -> per-source state, for diagnosis
  *   Dictionary.last()      -> what happened to the last word asked about
  *   Dictionary.size()      -> how many verdicts are remembered
  *
- * look() always settles, and settles inside DEADLINE. A caller that gates
- * input on the answer is entitled to assume that; see the note on DEADLINE.
+ * look() always settles, and settles inside DEADLINE per source. A caller
+ * that gates input on the answer is entitled to assume that.
  *
  * 'off' is not a no. It means the question went unanswered — offline, a bad
  * gateway, a rate limit, no answer in time — and it is never remembered and
@@ -27,7 +30,6 @@
  */
 window.Dictionary = (function () {
   const KEY = 'games.dictionary.v1';
-  const API = 'https://api.dictionaryapi.dev/api/v2/entries/en/';
   // Enough to cover a lot of play, small enough that the write stays cheap.
   const MAX = 3000;
   /*
@@ -41,8 +43,56 @@ window.Dictionary = (function () {
    */
   const DEADLINE = 6000;
 
+  /*
+   * Two services, tried in order, because one of them being down should not
+   * be the same as the dictionary being down — which is exactly what
+   * happened: api.dictionaryapi.dev stopped answering entirely (connections
+   * opened, nothing came back, every lookup timing out) and took the word
+   * checking in both games with it. See CLAUDE.md for the standing terms
+   * every network dependency here is held to.
+   */
+  const SOURCES = [
+    {
+      id: 'dictionaryapi.dev',
+      url: w => 'https://api.dictionaryapi.dev/api/v2/entries/en/' + w
+    },
+    {
+      id: 'freedictionaryapi.com',
+      url: w => 'https://freedictionaryapi.com/api/v1/entries/en/' + w
+    }
+  ];
+
+  /*
+   * A source has to prove itself before it is allowed to answer, and this is
+   * the word it proves itself with. Every English dictionary has "apple", so
+   * a 404 for it does not mean the service is missing a word — it means the
+   * URL is not the endpoint we think it is.
+   *
+   * That distinction is the whole point. A wrong path answers 404 to
+   * everything, and a 404 is how these services say "not a word": an
+   * unverified source would quietly start calling real words wrong, which is
+   * the one failure this library exists to prevent. So an unproven source is
+   * never asked about a real word, and a wrong URL costs a disabled source
+   * rather than a poisoned verdict.
+   */
+  const PROBE_WORD = 'apple';
+
+  /*
+   * Health, and the growing wait after a failure. A service that is down
+   * stays down for minutes, not milliseconds, so asking it again on the next
+   * word buys nothing and costs the player a DEADLINE-long wait every time.
+   * Each consecutive failure doubles the wait, and a success clears it.
+   */
+  const BACKOFF_MS = 30 * 1000;
+  const BACKOFF_MAX_MS = 30 * 60 * 1000;
+  // How long a clean bill of health is taken on trust before a fresh probe.
+  const FRESH_MS = 10 * 60 * 1000;
+
   // Insertion-ordered, which is what makes dropping the oldest one line.
   const known = new Map();
+  // id -> { state: 'unknown' | 'up' | 'down', at, fails }
+  const well = {};
+  for (const src of SOURCES) well[src.id] = { state: 'unknown', at: 0, fails: 0 };
 
   function valid(word) {
     return typeof word === 'string' && /^[a-z]+$/.test(word);
@@ -58,6 +108,23 @@ window.Dictionary = (function () {
         if (valid(word) && known.size < MAX) known.set(word, verdict);
       }
     }
+    /*
+     * Health outlives the page on purpose: a reload during an outage would
+     * otherwise start the backoff again from nothing and hand the player a
+     * fresh wait on every load. Anything unrecognised is simply left as
+     * 'unknown', which costs one probe.
+     */
+    const saw = saved.health;
+    if (!saw || typeof saw !== 'object') return;
+    for (const src of SOURCES) {
+      const h = saw[src.id];
+      if (!h || (h.state !== 'up' && h.state !== 'down')) continue;
+      well[src.id] = {
+        state: h.state,
+        at: Number.isFinite(h.at) ? h.at : 0,
+        fails: Number.isFinite(h.fails) && h.fails >= 0 ? Math.min(h.fails, 20) : 0
+      };
+    }
   })();
 
   function keep() {
@@ -67,7 +134,7 @@ window.Dictionary = (function () {
     for (const [word, verdict] of known) {
       (verdict === 'yes' ? yes : no).push(word);
     }
-    Store.save(KEY, { yes: yes.join(' '), no: no.join(' ') });
+    Store.save(KEY, { yes: yes.join(' '), no: no.join(' '), health: well });
   }
 
   function remember(word, verdict) {
@@ -85,6 +152,76 @@ window.Dictionary = (function () {
     return known.has(w) ? known.get(w) : null;
   }
 
+  /* ---- health ----------------------------------------------------------- */
+
+  function waitFor(fails) {
+    return Math.min(BACKOFF_MAX_MS, BACKOFF_MS * Math.pow(2, Math.max(0, fails - 1)));
+  }
+
+  /** Is this source worth contacting at all right now? */
+  function due(src) {
+    const h = well[src.id];
+    if (h.state !== 'down') return true;
+    return Date.now() - h.at >= waitFor(h.fails);
+  }
+
+  function mark(src, good, why) {
+    const h = well[src.id];
+    h.state = good ? 'up' : 'down';
+    h.at = Date.now();
+    h.fails = good ? 0 : h.fails + 1;
+    h.why = why;
+    keep();
+    return h.state;
+  }
+
+  /** True once any source has answered something. */
+  function ready() {
+    return SOURCES.some(src => well[src.id].state === 'up');
+  }
+
+  function health() {
+    const out = {};
+    for (const src of SOURCES) out[src.id] = Object.assign({}, well[src.id]);
+    return out;
+  }
+
+  /*
+   * Ask one source for the control word and record what came back. Only a
+   * 2xx counts: a 404 here is a wrong endpoint, not a missing word.
+   */
+  function test(src) {
+    return ask(src.url(PROBE_WORD)).then(out => {
+      const good = Boolean(out.res && out.res.ok);
+      const why = out.res ? 'HTTP ' + out.res.status : out.why;
+      if (good && !known.has(PROBE_WORD)) remember(PROBE_WORD, 'yes');
+      mark(src, good, why);
+      if (!good) {
+        console.warn('Dictionary: ' + src.id + ' did not answer for "' +
+          PROBE_WORD + '" — ' + why + '; not using it for ' +
+          Math.round(waitFor(well[src.id].fails) / 1000) + 's');
+      }
+      return good;
+    });
+  }
+
+  /*
+   * Check the sources. Called on load by whichever game pulled this file in,
+   * so a game knows whether word checking works before anybody types — and
+   * costs nothing when the answer is already known: a source proved good
+   * recently is trusted, and one inside its backoff is left alone.
+   */
+  function probe() {
+    return Promise.all(SOURCES.map(src => {
+      const h = well[src.id];
+      if (h.state === 'up' && Date.now() - h.at < FRESH_MS) return true;
+      if (!due(src)) return false;
+      return test(src);
+    })).then(() => ready());
+  }
+
+  /* ---- asking ----------------------------------------------------------- */
+
   /*
    * What happened to the last word asked about. Every way of failing ends as
    * the same 'off' for the game — deliberately, since a player does not care
@@ -94,6 +231,7 @@ window.Dictionary = (function () {
    * down" from "we broke the library". This is what tells them apart:
    *
    *   Dictionary.look('quixotic').then(() => console.log(Dictionary.last()))
+   *   Dictionary.health()
    *
    * from the console of any page that loads this file.
    */
@@ -153,6 +291,38 @@ window.Dictionary = (function () {
     });
   }
 
+  /*
+   * Walk the sources in order until one gives a verdict. A source that fails
+   * here is marked down — so the next word skips it rather than paying its
+   * deadline again — and the next source gets the question.
+   */
+  function fromSources(list, i, w, started) {
+    if (i >= list.length) {
+      return Promise.resolve(note(w, 'off', 'no source answered', started));
+    }
+    const src = list[i];
+    const proven = well[src.id].state === 'up'
+      ? Promise.resolve(true)
+      : test(src);
+
+    return proven.then(good => {
+      if (!good) return fromSources(list, i + 1, w, started);
+      return ask(src.url(w)).then(out => {
+        if (out.res && out.res.ok) {
+          mark(src, true, 'answered');
+          return note(w, remember(w, 'yes'), 'answered by ' + src.id, started);
+        }
+        if (out.res && out.res.status === 404) {
+          // Trustworthy only because the source passed its control word.
+          mark(src, true, 'answered');
+          return note(w, remember(w, 'no'), 'answered by ' + src.id, started);
+        }
+        mark(src, false, out.res ? 'HTTP ' + out.res.status : out.why);
+        return fromSources(list, i + 1, w, started);
+      });
+    });
+  }
+
   function look(word) {
     const started = Date.now();
     const w = String(word || '').toLowerCase();
@@ -171,20 +341,34 @@ window.Dictionary = (function () {
       return Promise.resolve(note(w, 'off', 'browser reports offline', started));
     }
 
-    return ask(API + encodeURIComponent(w)).then(out => {
-      // No response at all: refused, or slower than we are prepared to wait.
-      // Either way the word went unjudged, which is 'off', not 'no'.
-      if (!out.res) return note(w, 'off', out.why, started);
-      if (out.res.ok) return note(w, remember(w, 'yes'), 'answered', started);
-      if (out.res.status === 404) return note(w, remember(w, 'no'), 'answered', started);
-      // Anything else is the service having a bad day, not a verdict.
-      return note(w, 'off', 'HTTP ' + out.res.status, started);
-    });
+    const worth = SOURCES.filter(due);
+    if (!worth.length) {
+      /*
+       * Every source is inside its backoff. Asking anyway would cost the
+       * player a wait whose answer is already known, which is the whole
+       * reason the backoff exists — so this returns at once rather than
+       * after two deadlines.
+       */
+      return Promise.resolve(note(w, 'off', 'every source is in backoff', started));
+    }
+    return fromSources(worth, 0, w, started);
   }
 
   function size() {
     return known.size;
   }
 
-  return { look, verdict, last, size, KEY, MAX, DEADLINE };
+  /*
+   * Probing on load is the point — a game should know whether checking works
+   * before anyone types, not on the first guess that needs it. Deferred past
+   * load so it never competes with rendering the game.
+   */
+  function probeSoon() {
+    if (document.readyState === 'complete') setTimeout(probe, 0);
+    else window.addEventListener('load', () => setTimeout(probe, 0));
+  }
+  probeSoon();
+
+  return { look, verdict, ready, probe, health, last, size,
+    KEY, MAX, DEADLINE, SOURCES, PROBE_WORD, BACKOFF_MS };
 })();

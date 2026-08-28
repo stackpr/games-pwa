@@ -3,7 +3,18 @@ const { clearState, trackExternalRequests } = require('../helpers');
 
 const URL = '/games/word-sprint/';
 const KEY = 'games.word-sprint.v1';
-const API = 'https://api.dictionaryapi.dev/api/v2/entries/en/**';
+/*
+ * Both dictionary services, because the library tries them in turn — a test
+ * that mocked only the first would let the second reach the real internet.
+ * The probe word is asked for on load, before any guess, and never counts as
+ * a word the game asked about.
+ */
+const APIS = [
+  'https://api.dictionaryapi.dev/api/v2/entries/en/**',
+  'https://freedictionaryapi.com/api/v1/entries/en/**'
+];
+const API = APIS[0];
+const PROBE = 'apple';
 
 const clock = page => page.locator('#clock');
 const flash = page => page.locator('#flash');
@@ -22,24 +33,41 @@ async function pickLength(page, n) {
   await page.locator(`#lengths button[data-length="${n}"]`).click();
 }
 
-/** Stands in for the dictionary so no test touches the real one. */
+/**
+ * Stands in for the dictionaries so no test touches the real ones. The probe
+ * word always answers, so the sources come up healthy on load however the
+ * rest of the mock is configured — a source that fails its control word is
+ * never asked about a real word, which would make most of these tests
+ * measure the wrong thing.
+ */
 async function dictionary(page, opts) {
   const options = opts || {};
-  await page.route(API, route => {
-    if (options.abort) return route.abort('failed');
-    const word = decodeURIComponent(route.request().url().split('/').pop());
-    const known = options.known || [];
-    if (known.indexOf(word) >= 0) {
-      return route.fulfill({ status: 200, contentType: 'application/json', body: '[{}]' });
-    }
-    return route.fulfill({ status: 404, contentType: 'application/json', body: '{}' });
-  });
+  for (const api of APIS) {
+    await page.route(api, route => {
+      const word = decodeURIComponent(route.request().url().split('/').pop());
+      if (word === PROBE) {
+        return route.fulfill({ status: 200, contentType: 'application/json', body: '[{}]' });
+      }
+      if (options.abort) return route.abort('failed');
+      const known = options.known || [];
+      if (known.indexOf(word) >= 0) {
+        return route.fulfill({ status: 200, contentType: 'application/json', body: '[{}]' });
+      }
+      return route.fulfill({ status: 404, contentType: 'application/json', body: '{}' });
+    });
+  }
+}
+
+async function unserve(page) {
+  for (const api of APIS) await page.unroute(api);
 }
 
 test.beforeEach(async ({ page }) => {
+  // Routed before the page loads: the library probes on load, and an
+  // unrouted probe would reach the real internet and mark both sources down.
+  await dictionary(page);
   await page.goto(URL);
   await clearState(page);
-  await dictionary(page);
 });
 
 test.describe('the board', () => {
@@ -194,7 +222,7 @@ test.describe('the clock', () => {
 
 test.describe('words the page does not carry', () => {
   test('an unknown word is refused and costs no try', async ({ page }) => {
-    await page.unroute(API);
+    await unserve(page);
     await dictionary(page, { known: [] });
     await guess(page, 'zjqxw');
     await expect(flash(page)).toHaveText('Not a word: zjqxw');
@@ -202,14 +230,14 @@ test.describe('words the page does not carry', () => {
   });
 
   test('one the dictionary vouches for is played', async ({ page }) => {
-    await page.unroute(API);
+    await unserve(page);
     await dictionary(page, { known: ['zjqxw'] });
     await guess(page, 'zjqxw');
     await expect(row(page, 0).nth(0)).toHaveAttribute('data-mark', /right|near|wrong/);
   });
 
   test('a question that went unanswered costs nothing and clears the word', async ({ page }) => {
-    await page.unroute(API);
+    await unserve(page);
     await dictionary(page, { abort: true });
     await guess(page, 'zjqxw');
     // 'off' is not a no — see the shared dictionary's notes.
@@ -231,8 +259,8 @@ test.describe('words the page does not carry', () => {
      * The deadline lives in js/lib/dictionary.js; this checks the game comes
      * back from it.
      */
-    await page.unroute(API);
-    await page.route(API, () => { /* never answered */ });
+    await unserve(page);
+    for (const api of APIS) await page.route(api, () => { /* never answered */ });
 
     await type(page, 'zjqxw');
     await expect(clock(page)).not.toHaveText('0:00', { timeout: 3000 });
@@ -243,7 +271,7 @@ test.describe('words the page does not carry', () => {
     await expect(row(page, 0).nth(0)).toHaveText('', { timeout: 3000 });
     await expect(row(page, 0).nth(0)).not.toHaveAttribute('data-mark', /.*/);
 
-    await page.unroute(API);
+    await unserve(page);
     await dictionary(page);
     await guess(page, 'stone');
     await expect(row(page, 0).nth(0)).toHaveAttribute('data-mark', /right|near|wrong/);
@@ -253,9 +281,9 @@ test.describe('words the page does not carry', () => {
     // This is a race, so a wait on someone else's server is not the
     // player's time. Held rather than paused-and-forgotten: every path out
     // of the lookup has to start it again.
-    await page.unroute(API);
+    await unserve(page);
     let answer = null;
-    await page.route(API, route => { answer = route; });
+    for (const api of APIS) await page.route(api, route => { answer = route; });
 
     await type(page, 'zjqxw');
     await expect(clock(page)).not.toHaveText('0:00', { timeout: 3000 });
@@ -273,9 +301,9 @@ test.describe('words the page does not carry', () => {
   });
 
   test('a new word during a lookup discards the answer', async ({ page }) => {
-    await page.unroute(API);
+    await unserve(page);
     let answer = null;
-    await page.route(API, route => { answer = route; });
+    for (const api of APIS) await page.route(api, route => { answer = route; });
 
     await guess(page, 'zjqxw');
     await expect(flash(page)).toContainText('Checking');
@@ -298,7 +326,9 @@ test.describe('words the page does not carry', () => {
     const external = trackExternalRequests(page);
     await guess(page, 'stone');
     await expect(row(page, 0).nth(0)).toHaveAttribute('data-mark', /right|near|wrong/);
-    expect(external).toEqual([]);
+    // The load probe asks about its control word and nothing else; a word
+    // the page carries must never leave the device.
+    expect(external.filter(url => !url.endsWith('/' + PROBE))).toEqual([]);
   });
 });
 

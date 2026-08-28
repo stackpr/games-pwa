@@ -28,6 +28,15 @@
       --near: #b8912f;
       --wrong: #2b3345;
       --empty: #161d2c;
+      /* The keyboard's own two greys, and they are deliberately far apart.
+         An untouched key used to be --panel-hi (#2b3450) and an eliminated
+         one --wrong (#2b3345): the same colour but for the blue channel, so
+         the one thing the keyboard exists to tell you — which letters are
+         still in play — was invisible. Untouched is now clearly the lighter
+         surface, spent is clearly the darker. */
+      --key: #4a5578;
+      --key-out: #171d2a;
+      --key-out-ink: #7d88a6;
       --ink: #ffffff;
       --bad: #e0705d;
       color-scheme: dark;
@@ -204,7 +213,7 @@
       height: 3rem;
       border: none;
       border-radius: 6px;
-      background: var(--panel-hi);
+      background: var(--key);
       color: var(--text);
       font-family: inherit;
       font-size: 0.95rem;
@@ -217,7 +226,9 @@
     .key.wide { flex: 1.6; font-size: 0.72rem; letter-spacing: 0.04em; }
     .key[data-mark="right"] { background: var(--right); color: var(--ink); }
     .key[data-mark="near"] { background: var(--near); color: var(--ink); }
-    .key[data-mark="wrong"] { background: var(--wrong); color: var(--text-dim); }
+    /* Spent: the darkest thing on the page, so "not in the word" reads at a
+       glance from across the keyboard rather than on inspection. */
+    .key[data-mark="wrong"] { background: var(--key-out); color: var(--key-out-ink); }
     .key:active { filter: brightness(1.3); }
 
     /* Sheets */
@@ -287,6 +298,9 @@
     .rules-list { margin: 0; padding-left: 1.1rem; font-size: 0.86rem; color: var(--text-dim); line-height: 1.45; }
     .rules-list li + li { margin-top: 0.4rem; }
     .rules-list strong { color: var(--text); }
+    /* Attribution the dictionary services ask for; quieter than a rule. */
+    .rules-list .credit { font-size: 0.78rem; opacity: 0.85; }
+    .rules-list .credit a { color: var(--text-dim); }
 
     .visually-hidden {
       position: absolute;
@@ -363,6 +377,10 @@
         <li><strong>The clock stops while a word is looked up</strong>, so a
           slow answer costs you nothing. If none comes back, the guess is
           cleared and no try is used — pick another word.</li>
+        <li class="credit">Word lookups use
+          <a href="https://dictionaryapi.dev/" rel="noopener">dictionaryapi.dev</a>
+          and <a href="https://freedictionaryapi.com/" rel="noopener">FreeDictionaryAPI.com</a>,
+          which draws on Wiktionary.</li>
       </ul>
       <button class="modal-close" type="button" data-close>Close</button>
     </div>

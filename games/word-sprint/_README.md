@@ -82,8 +82,15 @@ complete filter and does not pretend to be.
 Seventeen thousand words is wide but not complete, and being told a real word
 "is not a word" is the most annoying thing this game can do. So a guess the
 page does not carry is looked up through **`js/lib/dictionary.js`**, which
-owns the request and remembers the answer — so the second time anybody plays
+owns the requests and remembers the answer — so the second time anybody plays
 that word, anywhere on the site, it is instant.
+
+It asks **two** services in turn, because the first one went down entirely
+and took word checking in both word games with it. A source has to answer a
+control word before it is trusted with a real one, and a source that fails is
+left alone for a growing interval rather than retried on every guess. The
+details, and why a source must prove itself, are in the library and in
+CLAUDE.md.
 
 Three outcomes, and the third is the one to get right:
 

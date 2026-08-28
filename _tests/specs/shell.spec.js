@@ -22,8 +22,29 @@ async function mockJokes(page, options) {
   });
 }
 
+/*
+ * The same for the two dictionary services. The word games probe them on
+ * load to find out whether checking works before anyone types, so every
+ * navigation to one of those pages would otherwise reach the real internet —
+ * and, failing, would log the browser's own "Failed to load resource" line,
+ * which is counted as a console error a few tests down.
+ */
+const DICTIONARIES = [
+  'https://api.dictionaryapi.dev/**',
+  'https://freedictionaryapi.com/**'
+];
+
+async function mockDictionaries(page) {
+  for (const api of DICTIONARIES) {
+    await page.route(api, route => route.fulfill({
+      status: 200, contentType: 'application/json', body: '[{}]'
+    }));
+  }
+}
+
 test.beforeEach(async ({ page }) => {
   await mockJokes(page);
+  await mockDictionaries(page);
 });
 
 test.describe('app shell', () => {
@@ -181,9 +202,18 @@ test.describe('app shell', () => {
       await page.goto(href);
     }
 
-    // The two documented exceptions, and nothing else. See CLAUDE.md.
-    const stray = external.filter(url =>
-      !url.startsWith('https://icanhazdadjoke.com/'));
+    /*
+     * The documented exceptions, and nothing else. See CLAUDE.md — the joke
+     * on the home page, and the two dictionary services, which the two word
+     * games probe on load to find out whether checking works before anyone
+     * types. Everything else is a regression.
+     */
+    const ALLOWED = [
+      'https://icanhazdadjoke.com/',
+      'https://api.dictionaryapi.dev/',
+      'https://freedictionaryapi.com/'
+    ];
+    const stray = external.filter(url => !ALLOWED.some(host => url.startsWith(host)));
     expect(stray, 'no CDNs, fonts or analytics').toEqual([]);
     expect(errors).toEqual([]);
   });
