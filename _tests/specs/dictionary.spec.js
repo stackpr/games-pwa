@@ -154,30 +154,44 @@ test.describe('the shared dictionary', () => {
     expect((await reason()).why).toBe('already known');
   });
 
-  test('an unreachable dictionary warns once and never errors', async ({ page }) => {
-    // warn, not error: an unreachable dictionary is a degraded game, not a
-    // broken page, and the shell specs count console errors.
-    const lines = { warn: [], error: [] };
-    page.on('console', msg => {
-      if (lines[msg.type()]) lines[msg.type()].push(msg.text());
-    });
+  test('an unreachable dictionary warns once, and does not error', async ({ page }) => {
+    const lines = [];
+    page.on('console', msg => lines.push({ type: msg.type(), text: msg.text() }));
     await serve(page, { status: 503 });
     expect(await look(page, 'flummox')).toBe('off');
 
-    await expect.poll(() => lines.warn.length).toBe(1);
-    expect(lines.warn[0]).toContain('flummox');
-    expect(lines.warn[0]).toContain('HTTP 503');
-    expect(lines.error).toEqual([]);
+    // Playwright's name for console.warn is 'warning'.
+    await expect.poll(() => lines.filter(l => l.type === 'warning').length).toBe(1);
+    const warned = lines.find(l => l.type === 'warning');
+    expect(warned.text).toContain('flummox');
+    expect(warned.text).toContain('HTTP 503');
+
+    /*
+     * warn, not error: an unreachable dictionary is a degraded game, not a
+     * broken page, and the shell specs count console errors. The browser
+     * logs its own line for a non-2xx response and no catch suppresses it —
+     * the same fact js/joke.js is built around, see CLAUDE.md — so what has
+     * to hold is that the library adds nothing to it.
+     */
+    const ours = lines.filter(l =>
+      l.type === 'error' && !/Failed to load resource/.test(l.text));
+    expect(ours).toEqual([]);
   });
 
-  test('a verdict is not announced, however many are asked for', async ({ page }) => {
-    // A game that asks about every word it is given would otherwise flood
-    // the console with lines saying nothing went wrong.
-    const noisy = [];
-    page.on('console', msg => noisy.push(msg.text()));
+  test('a verdict is never announced, however many are asked for', async ({ page }) => {
+    /*
+     * A game that asks about every word it is given would otherwise flood
+     * the console with lines saying nothing went wrong. Only our own lines
+     * count here: the 404 that means 'no' is a real non-2xx response, and
+     * the browser logs that itself whatever we do.
+     */
+    const mine = [];
+    page.on('console', msg => {
+      if (msg.text().includes('Dictionary')) mine.push(msg.text());
+    });
     await serve(page, { known: ['quixotic', 'flummox'] });
     for (const w of ['quixotic', 'flummox', 'zzzzqqq', 'quixotic']) await look(page, w);
-    expect(noisy).toEqual([]);
+    expect(mine).toEqual([]);
   });
 
   test('nonsense input never reaches the network', async ({ page }) => {
