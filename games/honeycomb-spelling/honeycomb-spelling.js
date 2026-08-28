@@ -242,11 +242,9 @@
 
   // --- the dictionary ------------------------------------------------------
 
-  // A guess is looked up at dictionaryapi.dev; there is no word list on the
-  // page. Verdicts are kept for the session so a repeat costs no round trip,
-  // and only definite answers are kept — see _README.md.
-  const API = 'https://api.dictionaryapi.dev/api/v2/entries/en/';
-  const verdicts = new Map();
+  // A guess is looked up through js/lib/dictionary.js, which owns the call
+  // and the remembered verdicts; the queue and the retries below are this
+  // game's, because no other game needs them. See _README.md.
 
   // The site's own word list, which every page here already ships. It is a
   // yes-list only — a word missing from it proves nothing — but a hit costs
@@ -267,19 +265,7 @@
   function lookUp(word) {
     // Our own vocabulary first, before anything goes near the network.
     if (VOCAB.has(word)) return Promise.resolve('yes');
-    if (verdicts.has(word)) return Promise.resolve(verdicts.get(word));
-    return fetch(API + encodeURIComponent(word))
-      .then(res => {
-        if (res.ok) return remember(word, 'yes');
-        if (res.status === 404) return remember(word, 'no');
-        return 'off';
-      })
-      .catch(() => 'off');
-  }
-
-  function remember(word, verdict) {
-    verdicts.set(word, verdict);
-    return verdict;
+    return Dictionary.look(word);
   }
 
   function shuffled(letters) {

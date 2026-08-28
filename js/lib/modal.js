@@ -34,8 +34,16 @@ window.Modal = (function () {
       const panel = el.querySelector('.modal-panel');
       const first = el.querySelector(
         'button:not([disabled]), [href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
-      if (first) first.focus();
-      else if (panel) panel.focus();
+      /*
+       * preventScroll, and then the panel is pinned back to its top. A panel
+       * taller than the screen — a long rules sheet on a small phone — often
+       * has its first focusable control at the very bottom, and focusing it
+       * scrolls the dialog to the bottom before anyone has read the heading.
+       * The dialog must open at its own title.
+       */
+      if (first) first.focus({ preventScroll: true });
+      else if (panel) panel.focus({ preventScroll: true });
+      if (panel) panel.scrollTop = 0;
       if (options.onOpen) options.onOpen();
     }
 

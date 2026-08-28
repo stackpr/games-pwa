@@ -174,6 +174,13 @@ const GAMES = [
     path: 'games/blackjack/'
   },
   {
+    name: 'Word Sprint',
+    section: 'solitaire',
+    description: 'Six tries, against the clock',
+    emoji: '\u{23F1}\uFE0F',
+    path: 'games/word-sprint/'
+  },
+  {
     name: 'Honeycomb: Spelling',
     section: 'solitaire',
     description: 'Seven random letters, checked online',

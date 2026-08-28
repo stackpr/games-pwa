@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Word Sprint</title>
+  <meta name="theme-color" content="#10141f">
+  <link rel="manifest" href="../../manifest.webmanifest">
+  <link rel="icon" href="../../icons/favicon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="../../icons/apple-touch-icon.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="stylesheet" href="../../css/modal.css">
+  <style>
+    :root {
+      /* js/lib/viewport.js measures the usable height and publishes it as
+         --measured-height. Capping at 100dvh means a late or stale
+         measurement can only make the page shorter. See CLAUDE.md. */
+      --app-height: min(var(--measured-height, 100dvh), 100dvh);
+      --bg: #10141f;
+      --text: #eef1f8;
+      --text-dim: #9aa4bd;
+      --panel: #1a2030;
+      --panel-hi: #2b3450;
+      /* Semantic, not player identities: one player, and these name how a
+         letter did rather than who owns it. See CLAUDE.md. */
+      --right: #3a9d63;
+      --near: #b8912f;
+      --wrong: #2b3345;
+      --empty: #161d2c;
+      --ink: #ffffff;
+      --bad: #e0705d;
+      color-scheme: dark;
+    }
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    html, body { margin: 0; padding: 0; height: 100%; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      display: flex;
+      flex-direction: column;
+      height: var(--app-height, 100dvh);
+      overflow: hidden;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.5rem;
+      padding: calc(0.4rem + env(safe-area-inset-top)) 0.75rem 0.35rem;
+      flex: none;
+    }
+    .topbar a { color: var(--text-dim); text-decoration: none; font-size: 0.95rem; }
+    .topbar-right { display: flex; gap: 0.4rem; align-items: center; }
+    .chip {
+      border: 1px solid var(--panel-hi);
+      background: var(--panel);
+      color: var(--text);
+      border-radius: 999px;
+      padding: 0.3rem 0.8rem;
+      font-size: 0.88rem;
+      font-family: inherit;
+      cursor: pointer;
+      touch-action: manipulation;
+      white-space: nowrap;
+    }
+    .chip.round { padding: 0.3rem 0.55rem; }
+    .clock {
+      font-variant-numeric: tabular-nums;
+      font-weight: 800;
+      font-size: 1.1rem;
+      min-width: 3.6rem;
+      text-align: center;
+    }
+
+    .lengths { display: flex; gap: 0.35rem; justify-content: center; padding: 0 0.75rem 0.35rem; flex: none; }
+    .lengths button {
+      flex: 1;
+      max-width: 7rem;
+      border: 1px solid var(--panel-hi);
+      background: var(--bg);
+      color: var(--text-dim);
+      border-radius: 999px;
+      font-family: inherit;
+      font-size: 0.85rem;
+      font-weight: 700;
+      padding: 0.3rem 0;
+      cursor: pointer;
+      touch-action: manipulation;
+    }
+    .lengths button[aria-pressed="true"] {
+      background: var(--panel-hi);
+      color: var(--text);
+    }
+
+    .play {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+      min-width: 0;
+    }
+    .stage {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 0;
+      padding: 0 0.5rem;
+      gap: 0.3rem;
+      /* A cap, not a suggestion. sizeBoard() floors the cell size so the
+         squares stay readable, which means an extreme window can ask for a
+         board taller than this box — and an unclipped overflow does not just
+         look wrong, it paints over the length buttons and swallows their
+         taps. Clipping is the lesser failure; the landscape reflow below is
+         what stops it arising. */
+      overflow: hidden;
+    }
+
+    /* Six rows of board and three of keyboard do not both fit in the height
+       of a landscape phone, so they stop being stacked and sit side by side,
+       which is where the room is. */
+    @media (orientation: landscape) and (max-height: 560px) {
+      body { flex-flow: row wrap; align-content: stretch; }
+      .topbar { width: 100%; }
+      .play { flex: 1 1 52%; }
+      .keys {
+        flex: 1 1 40%;
+        min-width: 0;
+        max-width: 26rem;
+        align-self: center;
+      }
+      .key { height: 2.6rem; }
+    }
+    .board { display: grid; gap: 0.3rem; }
+    .row { display: grid; gap: 0.3rem; }
+    .box {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      aspect-ratio: 1;
+      border-radius: 8px;
+      background: var(--empty);
+      font-size: clamp(1.1rem, 6vw, 2rem);
+      font-weight: 800;
+      text-transform: uppercase;
+      /* Lengths, never percentages — one percentage voids the declaration
+         and every box quietly loses its outline. */
+      box-shadow: inset 0 0 0 2px var(--panel-hi);
+    }
+    .box[data-filled] { box-shadow: inset 0 0 0 2px var(--text-dim); }
+    .box[data-mark="right"] { background: var(--right); color: var(--ink); box-shadow: none; }
+    .box[data-mark="near"] { background: var(--near); color: var(--ink); box-shadow: none; }
+    .box[data-mark="wrong"] { background: var(--wrong); color: var(--text-dim); box-shadow: none; }
+    .row[data-bad] { animation: shake 320ms ease; }
+    @keyframes shake {
+      0%, 100% { transform: translateX(0); }
+      25% { transform: translateX(-6px); }
+      75% { transform: translateX(6px); }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .row[data-bad] { animation: none; }
+      .row[data-bad] .box { box-shadow: inset 0 0 0 2px var(--bad); }
+    }
+
+    .flash {
+      /* A <p>, so it arrives with a 1em margin top and bottom. Left alone
+         that is 32px the stage did not budget for, which pushed the whole
+         board up out of the stage and over the length buttons. */
+      margin: 0;
+      flex: none;
+      min-height: 1.3rem;
+      font-size: 0.9rem;
+      font-weight: 700;
+      text-align: center;
+      color: var(--text-dim);
+      opacity: 0;
+      transition: opacity 140ms ease;
+    }
+    .flash[data-show] { opacity: 1; }
+    .flash[data-tone="bad"] { color: var(--bad); }
+    .flash[data-tone="good"] { color: var(--right); }
+
+    .keys {
+      flex: none;
+      display: flex;
+      flex-direction: column;
+      gap: 0.35rem;
+      padding: 0.35rem 0.25rem calc(0.35rem + env(safe-area-inset-bottom));
+    }
+    .keys .row-keys { display: flex; gap: 0.25rem; justify-content: center; }
+    .key {
+      flex: 1;
+      min-width: 0;
+      height: 3rem;
+      border: none;
+      border-radius: 6px;
+      background: var(--panel-hi);
+      color: var(--text);
+      font-family: inherit;
+      font-size: 0.95rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      cursor: pointer;
+      touch-action: manipulation;
+      padding: 0;
+    }
+    .key.wide { flex: 1.6; font-size: 0.72rem; letter-spacing: 0.04em; }
+    .key[data-mark="right"] { background: var(--right); color: var(--ink); }
+    .key[data-mark="near"] { background: var(--near); color: var(--ink); }
+    .key[data-mark="wrong"] { background: var(--wrong); color: var(--text-dim); }
+    .key:active { filter: brightness(1.3); }
+
+    /* Sheets */
+    .over-word {
+      display: block;
+      text-align: center;
+      font-size: 2rem;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin: 0.2rem 0 0.1rem;
+    }
+    .over-line { margin: 0 0 0.3rem; text-align: center; font-size: 0.95rem; color: var(--text-dim); }
+    .sums {
+      margin: 0.6rem 0;
+      border-top: 1px solid var(--panel-hi);
+      border-bottom: 1px solid var(--panel-hi);
+      padding: 0.5rem 0;
+      font-variant-numeric: tabular-nums;
+    }
+    .sums div { display: flex; justify-content: space-between; padding: 0.15rem 0; font-size: 0.92rem; }
+    .sums .final { font-weight: 800; font-size: 1.05rem; color: var(--text); }
+    .sums .bonus { color: var(--right); }
+    .best-tag { text-align: center; font-weight: 800; color: var(--near); margin: 0 0 0.4rem; }
+    .primary {
+      width: 100%;
+      border: none;
+      background: #2f6f5a;
+      color: var(--text);
+      border-radius: 12px;
+      font-size: 1.05rem;
+      font-weight: 700;
+      font-family: inherit;
+      padding: 0.7rem 0;
+      cursor: pointer;
+      touch-action: manipulation;
+    }
+
+    .board-head { display: flex; gap: 0.35rem; margin-bottom: 0.4rem; }
+    .board-head button {
+      flex: 1;
+      border: 1px solid var(--panel-hi);
+      background: var(--bg);
+      color: var(--text);
+      border-radius: 10px;
+      font-family: inherit;
+      font-size: 0.9rem;
+      padding: 0.4rem 0;
+      cursor: pointer;
+      touch-action: manipulation;
+    }
+    .board-head button[aria-pressed="true"] { background: var(--panel-hi); font-weight: 700; }
+    .score-list { margin: 0; padding: 0; list-style: none; font-variant-numeric: tabular-nums; }
+    .score-list li {
+      display: flex;
+      justify-content: space-between;
+      gap: 0.6rem;
+      padding: 0.35rem 0;
+      border-bottom: 1px solid var(--panel-hi);
+      font-size: 0.95rem;
+    }
+    .score-list li:last-child { border-bottom: none; }
+    .score-list .rank { color: var(--text-dim); width: 1.4rem; }
+    .score-list .detail { color: var(--text-dim); font-size: 0.8rem; }
+    .score-list li[data-fresh] { color: var(--near); font-weight: 700; }
+    .score-empty { color: var(--text-dim); font-size: 0.9rem; margin: 0; line-height: 1.45; }
+    .rules-list { margin: 0; padding-left: 1.1rem; font-size: 0.86rem; color: var(--text-dim); line-height: 1.45; }
+    .rules-list li + li { margin-top: 0.4rem; }
+    .rules-list strong { color: var(--text); }
+
+    .visually-hidden {
+      position: absolute;
+      width: 1px; height: 1px;
+      margin: -1px; padding: 0;
+      overflow: hidden;
+      clip-path: inset(50%);
+      white-space: nowrap;
+      border: 0;
+    }
+  </style>
+</head>
+<body>
+  <div class="topbar">
+    <a href="../../">&larr; Games</a>
+    <div class="topbar-right">
+      <span class="clock" id="clock">0:00</span>
+      <button id="board-btn" class="chip round" type="button"
+              aria-label="Best times" aria-expanded="false">&#127942;</button>
+      <button id="rules-btn" class="chip round" type="button"
+              aria-label="How to play" aria-expanded="false">?</button>
+      <button id="new-btn" class="chip" type="button">New</button>
+    </div>
+  </div>
+
+  <div class="play">
+    <div class="lengths" id="lengths" role="group" aria-label="Word length"></div>
+    <main class="stage">
+      <div class="board" id="board"></div>
+      <p class="flash" id="flash" aria-live="polite"></p>
+    </main>
+  </div>
+
+  <div class="keys" id="keys"></div>
+
+  <div class="modal" id="over">
+    <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="over-title">
+      <h2 class="modal-title" id="over-title">Solved</h2>
+      <p class="best-tag" id="best-tag" hidden>A new best</p>
+      <span class="over-word" id="over-word"></span>
+      <p class="over-line" id="over-line"></p>
+      <div class="sums" id="sums"></div>
+      <button class="primary" id="play-again" type="button">Sprint again</button>
+      <button class="modal-close" type="button" data-close>Close</button>
+    </div>
+  </div>
+
+  <div class="modal" id="board-sheet">
+    <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="board-title">
+      <h2 class="modal-title" id="board-title">Best times</h2>
+      <div class="board-head" id="board-head" role="group" aria-label="Word length"></div>
+      <div id="board-body"></div>
+      <button class="modal-close" type="button" data-close>Close</button>
+    </div>
+  </div>
+
+  <div class="modal" id="rules">
+    <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="rules-title">
+      <h2 class="modal-title" id="rules-title">How to play</h2>
+      <ul class="rules-list">
+        <li><strong>Six tries</strong> at a hidden word of four, five or six
+          letters. Green is right, amber is in the word but somewhere else,
+          grey is not in it at all.</li>
+        <li><strong>The clock starts on your first letter</strong>, not when
+          the page loads — so reading this costs you nothing.</li>
+        <li><strong>Every try you did not need takes ten seconds off.</strong>
+          Solving in three leaves three spare, which is thirty seconds. Being
+          right early beats being quick and wrong.</li>
+        <li><strong>Each length keeps its own board.</strong> Four letters is
+          a different race from six.</li>
+        <li>Guesses are checked against seventeen thousand words on the page.
+          Anything rarer is looked up online, and the answer is remembered so
+          it is instant next time.</li>
+      </ul>
+      <button class="modal-close" type="button" data-close>Close</button>
+    </div>
+  </div>
+
+  <p id="say" class="visually-hidden" aria-live="polite"></p>
+
+  <script src="../../js/lib/viewport.js"></script>
+  <script src="../../js/lib/store.js"></script>
+  <script src="../../js/lib/modal.js"></script>
+  <script src="../../js/lib/dictionary.js"></script>
+  <script src="words.js"></script>
+  <script src="word-sprint.js"></script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('../../sw.js').catch(() => {});
+    }
+  </script>
+</body>
+</html>

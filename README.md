@@ -37,6 +37,7 @@ installable PWA at **https://games.payne.run**.
 | [Mines](games/mines/) | Clear the minefield — the board is cut to fit your screen |
 | [Golf](games/golf/) | Scorecard for golf or mini golf — tap a square, pick the strokes |
 | [The Faker](games/the-faker/) | Sixteen words, one player who was never told which |
+| [Word Sprint](games/word-sprint/) | Six tries at a hidden word, against the clock |
 
 ## Development
 

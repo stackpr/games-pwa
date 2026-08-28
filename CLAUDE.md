@@ -24,10 +24,15 @@ to leave out a caveat.
 
   **Two deliberate exceptions, and they are the whole list:**
 
-  1. **`api.dictionaryapi.dev`** — Honeycomb: Spelling draws random letters
-     and checks guesses against it, which no shipped word list could
-     replace; its `_README.md` argues the trade. The game says so on its
-     start sheet.
+  1. **`api.dictionaryapi.dev`** — reached only through
+     `js/lib/dictionary.js`, which owns the request and remembers every
+     verdict. Two games ask: Honeycomb: Spelling, which has no word list at
+     all and so asks about everything, and Word Sprint, which ships
+     seventeen thousand words and asks only about the rest. Both say so in
+     the game. A third caller needs no new argument — it is the same host
+     and the same library — but it must keep the same terms: the answer
+     `off` (nothing came back) is never a `no`, and must never count
+     against a player.
   2. **`icanhazdadjoke.com`** — the dad joke above the game list
      (`js/joke.js`). Asked for directly by the owner, and there is no
      offline substitute worth having: a shipped joke list is a joke list
@@ -134,7 +139,11 @@ Use the `add-game` skill, or by hand:
 5. **Bump `CACHE_VERSION` in `sw.js`** — required for any change to a
    precached file, or clients keep the stale copy.
 6. Namespace persisted state: `localStorage` keys look like
-   `games.<slug>.v1` and store a single JSON object.
+   `games.<slug>.v1` and store a single JSON object. Two keys are
+   deliberately **shared across games**, and both earn it by holding
+   something that is not about any one game: `games.party-names.v1` (who is
+   at the table) and `games.dictionary.v1` (whether a word is a word). Do
+   not add a third without the same argument.
 7. Add `_tests/specs/<slug>.spec.js` and run the suite.
 
 ## Shared code
@@ -149,6 +158,7 @@ second copy would be a second set of bugs:
 | `js/lib/dice.js` | `DiceTray.create(el, { onPick })`, plus `randomFace()`. Builds the dice, sizes them from how many are in play, and runs the bounce-and-settle roll. Pairs with `css/dice.css`. Omit `onPick` and the dice are inert `<span>`s rather than buttons. |
 | `js/lib/modal.js` | `Modal.create(el, { trigger })`. An overlay dialog with the parts that are easy to forget: closing on the scrim but not the panel, closing on Escape, and moving focus in and back out. Pairs with `css/modal.css`; a `[data-close]` button inside closes it. |
 | `js/lib/guess.js` | `GuessPanel.create({ el, onScore })`, then `render({ mode, names, scores, present, tally })`. What the two scoring modes look like: the name buttons in solo, the board in both, and `body[data-mode]` for `css/party.css` to swap on. Four games carried identical copies before it existed. |
+| `js/lib/dictionary.js` | `Dictionary.look(word)` → `'yes'`/`'no'`/`'off'` against api.dictionaryapi.dev, plus the cache of everything it has been told. Shared because whether a word is a word does not depend on which game is asking. `off` means unanswered, is never remembered, and must never count against a player. |
 | `js/lib/viewport.js` | Sets `--measured-height` from `window.innerHeight` and re-measures on resize, orientation change, `pageshow` and 1s after load. Pages cap it — `--app-height: min(var(--measured-height, 100dvh), 100dvh)` — and size themselves with `var(--app-height, 100dvh)`. See The Android bottom-bar bug. |
 
 Load them with plain `<script>` tags before the game's own script; they
