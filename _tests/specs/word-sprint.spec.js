@@ -260,7 +260,17 @@ test.describe('words the page does not carry', () => {
      * back from it.
      */
     await unserve(page);
-    for (const api of APIS) await page.route(api, () => { /* never answered */ });
+    // The control word still answers: a source that fails its probe is set
+    // aside, and this test is about a service that accepts the question and
+    // never answers it.
+    for (const api of APIS) {
+      await page.route(api, route => {
+        if (decodeURIComponent(route.request().url().split('/').pop()) === PROBE) {
+          return route.fulfill({ status: 200, contentType: 'application/json', body: '[{}]' });
+        }
+        /* never answered */
+      });
+    }
 
     await type(page, 'zjqxw');
     await expect(clock(page)).not.toHaveText('0:00', { timeout: 3000 });
@@ -283,7 +293,14 @@ test.describe('words the page does not carry', () => {
     // of the lookup has to start it again.
     await unserve(page);
     let answer = null;
-    for (const api of APIS) await page.route(api, route => { answer = route; });
+    for (const api of APIS) {
+      await page.route(api, route => {
+        if (decodeURIComponent(route.request().url().split('/').pop()) === PROBE) {
+          return route.fulfill({ status: 200, contentType: 'application/json', body: '[{}]' });
+        }
+        answer = route;
+      });
+    }
 
     await type(page, 'zjqxw');
     await expect(clock(page)).not.toHaveText('0:00', { timeout: 3000 });
@@ -303,7 +320,14 @@ test.describe('words the page does not carry', () => {
   test('a new word during a lookup discards the answer', async ({ page }) => {
     await unserve(page);
     let answer = null;
-    for (const api of APIS) await page.route(api, route => { answer = route; });
+    for (const api of APIS) {
+      await page.route(api, route => {
+        if (decodeURIComponent(route.request().url().split('/').pop()) === PROBE) {
+          return route.fulfill({ status: 200, contentType: 'application/json', body: '[{}]' });
+        }
+        answer = route;
+      });
+    }
 
     await guess(page, 'zjqxw');
     await expect(flash(page)).toContainText('Checking');

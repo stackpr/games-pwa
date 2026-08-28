@@ -53,7 +53,7 @@ window.Dictionary = (function () {
    */
   const SOURCES = [
     {
-      id: 'dictionaryapi.dev',
+      id: 'api.dictionaryapi.dev',
       url: w => 'https://api.dictionaryapi.dev/api/v2/entries/en/' + w
     },
     {
@@ -85,6 +85,14 @@ window.Dictionary = (function () {
    */
   const BACKOFF_MS = 30 * 1000;
   const BACKOFF_MAX_MS = 30 * 60 * 1000;
+  /*
+   * How many failures in a row before a source is set aside. Two, not one:
+   * a single 503 or one timeout on a patchy connection is a stumble, and
+   * parking a working service for half a minute over it would be worse than
+   * asking again. A failed control word skips this — that is not a stumble,
+   * it is a source that cannot do the job at all.
+   */
+  const STUMBLES = 2;
   // How long a clean bill of health is taken on trust before a fresh probe.
   const FRESH_MS = 10 * 60 * 1000;
 
@@ -155,7 +163,8 @@ window.Dictionary = (function () {
   /* ---- health ----------------------------------------------------------- */
 
   function waitFor(fails) {
-    return Math.min(BACKOFF_MAX_MS, BACKOFF_MS * Math.pow(2, Math.max(0, fails - 1)));
+    const parks = Math.max(0, fails - STUMBLES);
+    return Math.min(BACKOFF_MAX_MS, BACKOFF_MS * Math.pow(2, parks));
   }
 
   /** Is this source worth contacting at all right now? */
@@ -165,11 +174,18 @@ window.Dictionary = (function () {
     return Date.now() - h.at >= waitFor(h.fails);
   }
 
-  function mark(src, good, why) {
+  /*
+   * Record how a source did. `hard` is for a failure that settles the
+   * question on its own — a control word it could not answer — and sets it
+   * aside at once; anything else has to happen STUMBLES times in a row.
+   */
+  function mark(src, good, why, hard) {
     const h = well[src.id];
-    h.state = good ? 'up' : 'down';
+    h.fails = good ? 0 : (hard ? Math.max(h.fails + 1, STUMBLES) : h.fails + 1);
+    h.state = good ? 'up' : (h.fails >= STUMBLES ? 'down' : h.state);
+    // An unproven source that stumbles is still unproven, not 'up'.
+    if (!good && h.state === 'unknown' && h.fails < STUMBLES) h.state = 'unknown';
     h.at = Date.now();
-    h.fails = good ? 0 : h.fails + 1;
     h.why = why;
     keep();
     return h.state;
@@ -195,7 +211,7 @@ window.Dictionary = (function () {
       const good = Boolean(out.res && out.res.ok);
       const why = out.res ? 'HTTP ' + out.res.status : out.why;
       if (good && !known.has(PROBE_WORD)) remember(PROBE_WORD, 'yes');
-      mark(src, good, why);
+      mark(src, good, why, true);
       if (!good) {
         console.warn('Dictionary: ' + src.id + ' did not answer for "' +
           PROBE_WORD + '" — ' + why + '; not using it for ' +
@@ -296,9 +312,16 @@ window.Dictionary = (function () {
    * here is marked down — so the next word skips it rather than paying its
    * deadline again — and the next source gets the question.
    */
-  function fromSources(list, i, w, started) {
+  function fromSources(list, i, w, started, tried) {
     if (i >= list.length) {
-      return Promise.resolve(note(w, 'off', 'no source answered', started));
+      /*
+       * Each source's own reason, not just "it failed". The whole point of
+       * saying anything here is to tell a rate limit from a dead host from a
+       * wrong endpoint, and a summary that drops the detail answers none of
+       * those questions.
+       */
+      const said = tried.length ? tried.join('; ') : 'no source was available';
+      return Promise.resolve(note(w, 'off', said, started));
     }
     const src = list[i];
     const proven = well[src.id].state === 'up'
@@ -306,7 +329,10 @@ window.Dictionary = (function () {
       : test(src);
 
     return proven.then(good => {
-      if (!good) return fromSources(list, i + 1, w, started);
+      if (!good) {
+        tried.push(src.id + ': ' + (well[src.id].why || 'unusable'));
+        return fromSources(list, i + 1, w, started, tried);
+      }
       return ask(src.url(w)).then(out => {
         if (out.res && out.res.ok) {
           mark(src, true, 'answered');
@@ -317,8 +343,10 @@ window.Dictionary = (function () {
           mark(src, true, 'answered');
           return note(w, remember(w, 'no'), 'answered by ' + src.id, started);
         }
-        mark(src, false, out.res ? 'HTTP ' + out.res.status : out.why);
-        return fromSources(list, i + 1, w, started);
+        const why = out.res ? 'HTTP ' + out.res.status : out.why;
+        mark(src, false, why);
+        tried.push(src.id + ': ' + why);
+        return fromSources(list, i + 1, w, started, tried);
       });
     });
   }
@@ -351,7 +379,7 @@ window.Dictionary = (function () {
        */
       return Promise.resolve(note(w, 'off', 'every source is in backoff', started));
     }
-    return fromSources(worth, 0, w, started);
+    return fromSources(worth, 0, w, started, []);
   }
 
   function size() {

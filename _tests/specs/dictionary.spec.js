@@ -125,6 +125,18 @@ test.describe('the shared dictionary', () => {
     // Both services were tried before giving up on the word.
     expect(seen.first).toBe(1);
     expect(seen.second).toBe(1);
+
+    /*
+     * And both are asked again, because one failure is a stumble rather than
+     * a dead service — parking a working dictionary for half a minute over a
+     * single 503 would be worse than asking twice.
+     */
+    expect(await look(page, 'gubbins')).toBe('off');
+    expect(seen.first).toBe(2);
+    // The second failure in a row is what sets them aside.
+    expect(await look(page, 'wossname')).toBe('off');
+    expect(seen.first, 'kept asking a service that failed twice running').toBe(2);
+    expect((await reason(page)).why).toBe('every source is in backoff');
   });
 
   test('offline it asks nothing at all', async ({ page, context }) => {
@@ -253,7 +265,11 @@ test.describe('two services', () => {
       await expect.poll(() => page.evaluate(() => window.Dictionary.ready())).toBe(false);
 
       const first = await health(page);
-      expect(first['api.dictionaryapi.dev'].fails).toBe(1);
+      // A failed control word is not a stumble, so it counts straight to the
+      // threshold and the source is set aside immediately.
+      expect(first['api.dictionaryapi.dev'].state).toBe('down');
+      const parked = first['api.dictionaryapi.dev'].fails;
+      expect(parked).toBeGreaterThanOrEqual(2);
 
       // Health outlives the page: a reload during an outage must not start
       // the backoff again and hand the player a fresh wait every load.
@@ -261,7 +277,7 @@ test.describe('two services', () => {
       const seen = counter(page);
       const after = await health(page);
       expect(after['api.dictionaryapi.dev'].state).toBe('down');
-      expect(after['api.dictionaryapi.dev'].fails).toBe(1);
+      expect(after['api.dictionaryapi.dev'].fails).toBe(parked);
       await page.waitForTimeout(600);
       expect(seen.probes, 'probed again while inside the backoff').toBe(0);
     });
@@ -329,7 +345,10 @@ test.describe('saying what went wrong', () => {
      */
     await open(page, { status: 429 });
     expect(await look(page, 'flummox')).toBe('off');
-    expect((await reason(page)).why).toBe('no source answered');
+    const said = (await reason(page)).why;
+    expect(said, 'the summary drops the per-source reason').toContain('HTTP 429');
+    expect(said).toContain('api.dictionaryapi.dev');
+    expect(said).toContain('freedictionaryapi.com');
     expect((await health(page))['api.dictionaryapi.dev'].why).toBe('HTTP 429');
 
     await unserve(page);
