@@ -24,6 +24,10 @@
   let boardLength = 5;
   let ticker = null;
   let checking = false;
+  // Bumped on every new word. A lookup carries the number it started under,
+  // so an answer that arrives after the player has moved on is discarded
+  // instead of landing on a game it has nothing to do with.
+  let gen = 0;
   let flashTimer = null;
   let fresh = null;
   let overSheet = null;
@@ -97,6 +101,35 @@
     if (ticker) { clearInterval(ticker); ticker = null; }
     if (!playing() || !state.startedAt) return;
     ticker = setInterval(paintClock, 200);
+  }
+
+  /** Start or restart the clock from now, keeping whatever it already holds. */
+  function startClock() {
+    state.startedAt = Date.now();
+    held(false);
+    tick();
+  }
+
+  /*
+   * Stop it and bank what it has, returning whether it was running at all.
+   * Used for a wait the player did not ask for: this is a race, so time
+   * spent waiting on someone else's server must not be time on their clock.
+   */
+  function holdClock() {
+    if (!state.startedAt) return false;
+    state.elapsed = elapsed();
+    state.startedAt = null;
+    if (ticker) { clearInterval(ticker); ticker = null; }
+    held(true);
+    return true;
+  }
+
+  // A frozen clock with nothing to explain it reads as a broken clock.
+  function held(on) {
+    const clock = $('clock');
+    if (!clock) return;
+    if (on) clock.dataset.held = '';
+    else delete clock.dataset.held;
   }
 
   function paintClock() {
@@ -230,17 +263,29 @@
     board.style.height = (cell * TRIES + gap * (TRIES - 1)) + 'px';
   }
 
-  function flash(text, tone) {
+  // ms of 0 holds the line until something replaces it, which is what the
+  // "checking" notice needs: it has to outlast a wait of unknown length.
+  function flash(text, tone, ms) {
     const el = $('flash');
     if (!el) return;
     el.textContent = text;
     el.dataset.show = '';
     if (tone) el.dataset.tone = tone;
     else delete el.dataset.tone;
-    if (flashTimer) clearTimeout(flashTimer);
-    flashTimer = setTimeout(() => {
-      delete el.dataset.show;
-    }, 1800);
+    if (flashTimer) { clearTimeout(flashTimer); flashTimer = null; }
+    const hold = ms === undefined ? 1800 : ms;
+    if (hold > 0) {
+      flashTimer = setTimeout(() => {
+        delete el.dataset.show;
+      }, hold);
+    }
+  }
+
+  function clearFlash() {
+    const el = $('flash');
+    if (!el) return;
+    if (flashTimer) { clearTimeout(flashTimer); flashTimer = null; }
+    delete el.dataset.show;
   }
 
   function say(text) {
@@ -260,11 +305,8 @@
   function type(ch) {
     if (!playing() || checking) return;
     if (state.typed.length >= state.length) return;
-    if (!state.startedAt) {
-      // The clock starts on the first letter, so reading the rules is free.
-      state.startedAt = Date.now();
-      tick();
-    }
+    // The clock starts on the first letter, so reading the rules is free.
+    if (!state.startedAt) startClock();
     state.typed += ch;
     render();
   }
@@ -289,20 +331,65 @@
     if (cached === 'yes') return accept(word);
     if (cached === 'no') return reject(word);
 
-    // Not one of the words on the page. Ask, and say so, because the answer
-    // is not instant. See _README.md on why the clock keeps running.
+    // Not one of the words on the page, so it has to be asked about.
+    check(word);
+  }
+
+  /*
+   * Ask the dictionary, with the clock stopped. Two things matter here and
+   * both were once wrong:
+   *
+   * - Every path out clears `checking` and restarts the clock. The path that
+   *   does not is a dead game — no letters, no delete, no Enter — which is
+   *   what a hung request produced before js/lib/dictionary.js grew its
+   *   deadline. The rejection handler is belt and braces on top of that.
+   * - The clock is paused for the wait. This is a race against other people;
+   *   an unpredictable pause on someone else's server is not the player's
+   *   time and must not be charged to them. See _README.md.
+   */
+  function check(word) {
+    const mine = gen;
     checking = true;
-    flash('Checking…');
-    Dictionary.look(word).then(verdict => {
+    const running = holdClock();
+    flash('Checking ' + word.toUpperCase() + '…', null, 0);
+    say('Checking whether ' + word + ' is a word. The clock is paused.');
+
+    const answered = verdict => {
+      // A new word was dealt while we waited, so this answer belongs to a
+      // game that no longer exists. The cache still kept it.
+      if (mine !== gen) return;
+      if (verdict === 'off') return giveUp(word, mine, running);
       checking = false;
-      if (verdict === 'yes') accept(word);
-      else if (verdict === 'no') reject(word);
-      else {
-        // Unanswered is not a no. It costs nothing and nothing is recorded.
-        flash('Cannot check that one now', 'bad');
-        shake();
+      if (running) startClock();
+      if (verdict === 'yes') {
+        // The held "checking" line has nothing left to say once the word
+        // is on the board.
+        clearFlash();
+        accept(word);
+      } else {
+        reject(word);
       }
-    });
+    };
+    Dictionary.look(word).then(answered, () => answered('off'));
+  }
+
+  /*
+   * Nothing came back. That is not a no, so no try is used and nothing is
+   * recorded — but the letters go, after the shake and the notice. Leaving a
+   * word the page cannot check sitting in the row only invites pressing
+   * Enter into the same wait again; an empty row says "pick another one".
+   */
+  function giveUp(word, mine, running) {
+    flash('Could not check ' + word.toUpperCase() + ' — try another word', 'bad', 3600);
+    shake();
+    say('Could not check ' + word + '. No try was used. Try another word.');
+    setTimeout(() => {
+      if (mine !== gen) return;
+      checking = false;
+      state.typed = '';
+      if (running) startClock();
+      render();
+    }, 420);
   }
 
   function reject(word) {
@@ -440,6 +527,9 @@
     state = blankGame(length);
     fresh = null;
     checking = false;
+    // Anything still waiting on the dictionary now answers into the void.
+    gen++;
+    held(false);
     if (ticker) { clearInterval(ticker); ticker = null; }
     boardLength = length;
     save();

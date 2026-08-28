@@ -100,6 +100,27 @@ test.describe('the shared dictionary', () => {
     }
   });
 
+  test('a request that never answers still gets an answer', async ({ page }) => {
+    /*
+     * fetch has no timeout of its own, so without the deadline this promise
+     * never settles — and a caller that gates its input on it is dead. Word
+     * Sprint locked solid this way on a guess of "rater". 'off', because
+     * nothing came back is not a verdict.
+     */
+    await page.route(API, () => { /* never answered */ });
+    const deadline = await page.evaluate(() => window.Dictionary.DEADLINE);
+    expect(deadline).toBeGreaterThan(0);
+
+    const started = Date.now();
+    expect(await look(page, 'flummox')).toBe('off');
+    const took = Date.now() - started;
+    expect(took, 'answered before the deadline').toBeGreaterThan(deadline - 1500);
+    expect(took, 'waited well past the deadline').toBeLessThan(deadline + 6000);
+
+    // Nothing was learned, so nothing was kept.
+    expect(await page.evaluate(() => window.Dictionary.verdict('flummox'))).toBeNull();
+  });
+
   test('nonsense input never reaches the network', async ({ page }) => {
     await serve(page, { known: [] });
     const seen = counter(page);

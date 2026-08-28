@@ -76,6 +76,10 @@
       min-width: 3.6rem;
       text-align: center;
     }
+    /* Held while a word is looked up. A clock that has stopped for a reason
+       the player cannot see reads as a broken clock, so it dims and the line
+       under the board says what it is waiting for. */
+    .clock[data-held] { color: var(--text-dim); }
 
     .lengths { display: flex; gap: 0.35rem; justify-content: center; padding: 0 0.75rem 0.35rem; flex: none; }
     .lengths button {
@@ -356,6 +360,9 @@
         <li>Guesses are checked against seventeen thousand words on the page.
           Anything rarer is looked up online, and the answer is remembered so
           it is instant next time.</li>
+        <li><strong>The clock stops while a word is looked up</strong>, so a
+          slow answer costs you nothing. If none comes back, the guess is
+          cleared and no try is used — pick another word.</li>
       </ul>
       <button class="modal-close" type="button" data-close>Close</button>
     </div>

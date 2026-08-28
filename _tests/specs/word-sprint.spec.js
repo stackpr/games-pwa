@@ -208,13 +208,90 @@ test.describe('words the page does not carry', () => {
     await expect(row(page, 0).nth(0)).toHaveAttribute('data-mark', /right|near|wrong/);
   });
 
-  test('a question that went unanswered costs nothing and says so', async ({ page }) => {
+  test('a question that went unanswered costs nothing and clears the word', async ({ page }) => {
     await page.unroute(API);
     await dictionary(page, { abort: true });
     await guess(page, 'zjqxw');
     // 'off' is not a no — see the shared dictionary's notes.
-    await expect(flash(page)).toHaveText('Cannot check that one now');
+    await expect(flash(page)).toContainText('Could not check ZJQXW');
     await expect(row(page, 0).nth(0)).not.toHaveAttribute('data-mark', /.*/);
+    // The letters go, so the next guess starts from an empty row rather
+    // than one Enter away from the same wait.
+    await expect(row(page, 0).nth(0)).toHaveText('');
+    // And the game is still a game.
+    await guess(page, 'stone');
+    await expect(row(page, 0).nth(0)).toHaveAttribute('data-mark', /right|near|wrong/);
+  });
+
+  test('a request that never answers does not lock the game', async ({ page }) => {
+    /*
+     * The bug this exists for: fetch has no timeout, so a request that hung
+     * left `checking` true for ever — no letters, no delete, no Enter, and a
+     * clock that had stopped. A guess of "rater" did it on the live site.
+     * The deadline lives in js/lib/dictionary.js; this checks the game comes
+     * back from it.
+     */
+    await page.unroute(API);
+    await page.route(API, () => { /* never answered */ });
+
+    await type(page, 'zjqxw');
+    await expect(clock(page)).not.toHaveText('0:00', { timeout: 3000 });
+    await page.keyboard.press('Enter');
+    await expect(flash(page)).toContainText('Checking ZJQXW');
+
+    await expect(flash(page)).toContainText('Could not check', { timeout: 15000 });
+    await expect(row(page, 0).nth(0)).toHaveText('', { timeout: 3000 });
+    await expect(row(page, 0).nth(0)).not.toHaveAttribute('data-mark', /.*/);
+
+    await page.unroute(API);
+    await dictionary(page);
+    await guess(page, 'stone');
+    await expect(row(page, 0).nth(0)).toHaveAttribute('data-mark', /right|near|wrong/);
+  });
+
+  test('the clock is held while a word is checked, and runs again after', async ({ page }) => {
+    // This is a race, so a wait on someone else's server is not the
+    // player's time. Held rather than paused-and-forgotten: every path out
+    // of the lookup has to start it again.
+    await page.unroute(API);
+    let answer = null;
+    await page.route(API, route => { answer = route; });
+
+    await type(page, 'zjqxw');
+    await expect(clock(page)).not.toHaveText('0:00', { timeout: 3000 });
+    await page.keyboard.press('Enter');
+    await expect(clock(page)).toHaveAttribute('data-held', /.*/);
+
+    const stopped = await clock(page).textContent();
+    await page.waitForTimeout(2400);
+    expect(await clock(page).textContent(), 'the clock moved while held').toBe(stopped);
+
+    await expect.poll(() => Boolean(answer)).toBe(true);
+    await answer.fulfill({ status: 404, contentType: 'application/json', body: '{}' });
+    await expect(clock(page)).not.toHaveAttribute('data-held', /.*/);
+    await expect(clock(page)).not.toHaveText(stopped, { timeout: 4000 });
+  });
+
+  test('a new word during a lookup discards the answer', async ({ page }) => {
+    await page.unroute(API);
+    let answer = null;
+    await page.route(API, route => { answer = route; });
+
+    await guess(page, 'zjqxw');
+    await expect(flash(page)).toContainText('Checking');
+    await page.locator('#new-btn').click();
+    await expect(clock(page)).toHaveText('0:00');
+
+    // The late 'yes' belongs to a game that no longer exists; it must not
+    // land a row on this one.
+    await expect.poll(() => Boolean(answer)).toBe(true);
+    await answer.fulfill({ status: 200, contentType: 'application/json', body: '[{}]' });
+    await page.waitForTimeout(600);
+    await expect(row(page, 0).nth(0)).not.toHaveAttribute('data-mark', /.*/);
+    await expect(row(page, 0).nth(0)).toHaveText('');
+    // Still playable, and the clock is its own again.
+    await guess(page, 'stone');
+    await expect(row(page, 0).nth(0)).toHaveAttribute('data-mark', /right|near|wrong/);
   });
 
   test('a word on the page is never asked about', async ({ page }) => {

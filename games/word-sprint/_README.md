@@ -91,20 +91,50 @@ Three outcomes, and the third is the one to get right:
 | --- | --- |
 | `yes` | Counts as a try, like any other word. |
 | `no` | Refused, no try used. |
-| `off` — nothing came back | **Refused, no try used, and it says so.** |
+| `off` — nothing came back | **Refused, no try used, and the letters are cleared.** |
 
 `off` is not a no. Offline, or with the service having a bad day, the honest
-message is "cannot check that one now" — the guess costs nothing and the
-player picks another word. Treating `off` as `no` would call real words wrong
-on a bad connection; treating it as `yes` would let any typo through and hand
-out letter information for free.
+message is "could not check that one" — the guess costs nothing and the player
+picks another word. Treating `off` as `no` would call real words wrong on a
+bad connection; treating it as `yes` would let any typo through and hand out
+letter information for free.
 
-**The clock keeps running during a lookup**, and that is a deliberate choice
-rather than an oversight. Pausing it would be fairer in the abstract, but the
-local list covers essentially every guess a player actually makes, so the
-case is rare — and a clock that stops for reasons the player cannot see is
-worse than one that simply runs. If this ever bites, the fix is to pause, not
-to shrink the word list.
+The row is **wiped** on `off`, after the shake and the notice, and that is the
+one place this game clears letters the player typed. Leaving an uncheckable
+word sitting in the row invites pressing Enter into the same wait again; an
+empty row says "pick another one". Nothing else is lost — no try, no time.
+
+### The clock stops while it asks
+
+This is a race, so a wait on someone else's server is not the player's time.
+`holdClock()` banks the elapsed time and stops the ticker; every path out of
+the lookup restarts it. The clock dims (`[data-held]`) and the line under the
+board names the word being checked — **a clock that stops for a reason the
+player cannot see reads as a broken clock**, which is why the pause is never
+silent.
+
+### The lookup must always end
+
+`fetch` has no timeout. A request that hangs hangs for ever, and a game that
+gates its input on the answer hangs with it: this game locked solid on a guess
+of `rater` — no letters, no delete, no Enter, clock stopped — because the
+promise never settled and `checking` was never cleared.
+
+Two things fix it, at two levels, and both are worth keeping:
+
+- **`js/lib/dictionary.js` carries a deadline** (`DEADLINE`, six seconds) and
+  aborts the request when it passes, so `look()` always settles. That belongs
+  in the library rather than here, because every caller needs it and only the
+  library knows it is making a request at all.
+- **Every path out of `check()` clears `checking` and restarts the clock** —
+  including the rejection handler, which should be unreachable now that
+  `look()` cannot reject. A path that forgets is not a wrong answer, it is a
+  dead game, so the guard stays cheap and stays.
+
+A lookup also carries the generation it started under. Pressing New or
+switching length during a wait bumps it, and the late answer is discarded
+rather than landing a row on a game that no longer exists. The verdict is
+still cached, so it costs nothing.
 
 ## Marking a guess
 
