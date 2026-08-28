@@ -421,9 +421,14 @@
       } else if (tries < RETRY_TRIES) {
         queue(word, tries + 1);
       } else {
-        // Five unanswered asks is not a verdict, but it is enough waiting.
-        // The word simply stops being listed; why is the network's business.
-        showPending();
+        /*
+         * Five unanswered asks is not a verdict, but it is enough waiting.
+         * It has to be said, though: when the dictionary is unreachable
+         * every word ends here, and a word that silently stops being listed
+         * reads as the game rejecting it. Naming it says the opposite — the
+         * word was never judged and cost nothing. See _README.md.
+         */
+        flash('Could not check ' + word, 'bad');
       }
       paintFound();
       settle();

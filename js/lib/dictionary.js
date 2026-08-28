@@ -9,6 +9,7 @@
  *
  *   Dictionary.look(word)  -> Promise of 'yes' | 'no' | 'off'
  *   Dictionary.verdict(w)  -> 'yes' | 'no' | null, from the cache alone
+ *   Dictionary.last()      -> what happened to the last word asked about
  *   Dictionary.size()      -> how many verdicts are remembered
  *
  * look() always settles, and settles inside DEADLINE. A caller that gates
@@ -16,10 +17,9 @@
  *
  * 'off' is not a no. It means the question went unanswered — offline, a bad
  * gateway, a rate limit, no answer in time — and it is never remembered and
- * must never count
- * against a player. A game that treats 'off' as 'no' will call a real word
- * wrong on a bad connection, which is the worst thing either of these games
- * can do.
+ * must never count against a player. A game that treats 'off' as 'no' will
+ * call a real word wrong on a bad connection, which is the worst thing
+ * either of these games can do.
  *
  * The cache is shared across games under one key, on the same grounds as the
  * recent-names list: whether "quixotic" is a word does not depend on which
@@ -86,9 +86,44 @@ window.Dictionary = (function () {
   }
 
   /*
-   * The request, with the deadline attached. Resolves to a Response, or to
-   * null for every way of not getting one — refused, aborted, timed out.
-   * It never rejects, so look() cannot either.
+   * What happened to the last word asked about. Every way of failing ends as
+   * the same 'off' for the game — deliberately, since a player does not care
+   * why — but from the outside that makes a rate limit, a dead host, a
+   * browser refusing the request and a slow answer completely
+   * indistinguishable, and there is then no way to tell "the service is
+   * down" from "we broke the library". This is what tells them apart:
+   *
+   *   Dictionary.look('quixotic').then(() => console.log(Dictionary.last()))
+   *
+   * from the console of any page that loads this file.
+   */
+  let recent = null;
+
+  function note(word, answer, why, started) {
+    recent = { word: word, verdict: answer, why: why,
+      ms: Date.now() - started, at: Date.now() };
+    /*
+     * One line, and only when nothing was learned — 'yes' and 'no' are the
+     * service working, and a game that asks about every word would flood the
+     * console. warn rather than error: an unreachable dictionary is a
+     * degraded game, not a broken page, and the shell specs count errors.
+     */
+    if (answer === 'off') {
+      console.warn('Dictionary: "' + word + '" unanswered — ' + why +
+        ' after ' + recent.ms + 'ms');
+    }
+    return answer;
+  }
+
+  /** The last attempt, or null. For diagnosis; games do not read this. */
+  function last() {
+    return recent ? Object.assign({}, recent) : null;
+  }
+
+  /*
+   * The request, with the deadline attached. Resolves to `{ res }` with the
+   * Response, or `{ why }` naming how there wasn't one. It never rejects, so
+   * look() cannot either.
    */
   function ask(url) {
     const stop = typeof AbortController === 'function' ? new AbortController() : null;
@@ -98,21 +133,33 @@ window.Dictionary = (function () {
         // Abort as well as resolve: without it the socket stays open and the
         // browser keeps waiting on an answer nobody is listening for.
         if (stop) stop.abort();
-        resolve(null);
+        resolve({ why: 'timed out at ' + DEADLINE + 'ms' });
       }, DEADLINE);
     });
-    const asked = fetch(url, stop ? { signal: stop.signal } : undefined)
-      .catch(() => null);
-    return Promise.race([asked, expire]).then(res => {
+    const asked = fetch(url, stop ? { signal: stop.signal } : undefined).then(
+      res => ({ res: res }),
+      /*
+       * A rejected fetch is the browser refusing to hand the answer over,
+       * and the distinction it will not make in script is exactly the one
+       * worth knowing: a CORS block, a DNS failure and a refused connection
+       * all arrive here as the same opaque TypeError. The console line the
+       * browser itself logs alongside this one has the detail.
+       */
+      err => ({ why: err && err.name === 'AbortError' ? 'aborted' : 'request refused' })
+    );
+    return Promise.race([asked, expire]).then(out => {
       clearTimeout(timer);
-      return res;
+      return out;
     });
   }
 
   function look(word) {
+    const started = Date.now();
     const w = String(word || '').toLowerCase();
     if (!valid(w)) return Promise.resolve('no');
-    if (known.has(w)) return Promise.resolve(known.get(w));
+    if (known.has(w)) {
+      return Promise.resolve(note(w, known.get(w), 'already known', started));
+    }
 
     /*
      * Asked before the request, not caught after it: a request the browser
@@ -120,16 +167,18 @@ window.Dictionary = (function () {
      * catch suppresses that. Not asking is the only way an offline game
      * stays quiet. Same reasoning as js/joke.js — see CLAUDE.md.
      */
-    if (navigator.onLine === false) return Promise.resolve('off');
+    if (navigator.onLine === false) {
+      return Promise.resolve(note(w, 'off', 'browser reports offline', started));
+    }
 
-    return ask(API + encodeURIComponent(w)).then(res => {
-      // No response at all: failed, or took longer than we are prepared to
-      // wait. Either way the word went unjudged, which is 'off', not 'no'.
-      if (!res) return 'off';
-      if (res.ok) return remember(w, 'yes');
-      if (res.status === 404) return remember(w, 'no');
+    return ask(API + encodeURIComponent(w)).then(out => {
+      // No response at all: refused, or slower than we are prepared to wait.
+      // Either way the word went unjudged, which is 'off', not 'no'.
+      if (!out.res) return note(w, 'off', out.why, started);
+      if (out.res.ok) return note(w, remember(w, 'yes'), 'answered', started);
+      if (out.res.status === 404) return note(w, remember(w, 'no'), 'answered', started);
       // Anything else is the service having a bad day, not a verdict.
-      return 'off';
+      return note(w, 'off', 'HTTP ' + out.res.status, started);
     });
   }
 
@@ -137,5 +186,5 @@ window.Dictionary = (function () {
     return known.size;
   }
 
-  return { look, verdict, size, KEY, MAX, DEADLINE };
+  return { look, verdict, last, size, KEY, MAX, DEADLINE };
 })();

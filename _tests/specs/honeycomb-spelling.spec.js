@@ -639,8 +639,13 @@ test.describe('the retry queue', () => {
     // 1s + 2s + 4s + 8s covers every retry there is.
     await page.clock.runFor(16000);
 
-    // Nothing is said about it: the word simply stops being listed.
-    await expect(page.locator('#flash')).not.toHaveAttribute('data-show', '');
+    /*
+     * It is named rather than dropped in silence. With the dictionary
+     * unreachable every word ends here, and one that just stops being
+     * listed reads as the game rejecting it — which is the opposite of what
+     * happened: it was never judged, and it cost nothing.
+     */
+    await expect(page.locator('#flash')).toHaveText('Could not check ' + word);
     await expect(page.locator('#found .word[data-waiting]')).toHaveCount(0);
     await expect(page.locator('#score')).toHaveText('0');
     expect(asked).toBe(5);

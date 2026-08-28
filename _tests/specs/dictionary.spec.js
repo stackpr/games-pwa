@@ -121,6 +121,65 @@ test.describe('the shared dictionary', () => {
     expect(await page.evaluate(() => window.Dictionary.verdict('flummox'))).toBeNull();
   });
 
+  test('it says why a word went unanswered', async ({ page }) => {
+    /*
+     * Every failure is the same 'off' to a game, deliberately — but from
+     * outside that makes a rate limit, a dead host and a broken library
+     * indistinguishable, which is exactly the question asked when both
+     * games stop working at once.
+     */
+    const reason = () => page.evaluate(() => window.Dictionary.last());
+
+    await serve(page, { status: 429 });
+    expect(await look(page, 'flummox')).toBe('off');
+    expect((await reason()).why).toBe('HTTP 429');
+
+    await page.unroute(API);
+    await serve(page, { abort: true });
+    expect(await look(page, 'gubbins')).toBe('off');
+    expect((await reason()).why).toBe('request refused');
+
+    await page.unroute(API);
+    await serve(page, { known: ['quixotic'] });
+    expect(await look(page, 'quixotic')).toBe('yes');
+    const ok = await reason();
+    expect(ok.why).toBe('answered');
+    expect(ok.word).toBe('quixotic');
+    expect(ok.verdict).toBe('yes');
+    expect(ok.ms).toBeGreaterThanOrEqual(0);
+
+    // The cached answer is an answer, and says so rather than leaving the
+    // last failure standing as if it were this word's.
+    expect(await look(page, 'quixotic')).toBe('yes');
+    expect((await reason()).why).toBe('already known');
+  });
+
+  test('an unreachable dictionary warns once and never errors', async ({ page }) => {
+    // warn, not error: an unreachable dictionary is a degraded game, not a
+    // broken page, and the shell specs count console errors.
+    const lines = { warn: [], error: [] };
+    page.on('console', msg => {
+      if (lines[msg.type()]) lines[msg.type()].push(msg.text());
+    });
+    await serve(page, { status: 503 });
+    expect(await look(page, 'flummox')).toBe('off');
+
+    await expect.poll(() => lines.warn.length).toBe(1);
+    expect(lines.warn[0]).toContain('flummox');
+    expect(lines.warn[0]).toContain('HTTP 503');
+    expect(lines.error).toEqual([]);
+  });
+
+  test('a verdict is not announced, however many are asked for', async ({ page }) => {
+    // A game that asks about every word it is given would otherwise flood
+    // the console with lines saying nothing went wrong.
+    const noisy = [];
+    page.on('console', msg => noisy.push(msg.text()));
+    await serve(page, { known: ['quixotic', 'flummox'] });
+    for (const w of ['quixotic', 'flummox', 'zzzzqqq', 'quixotic']) await look(page, w);
+    expect(noisy).toEqual([]);
+  });
+
   test('nonsense input never reaches the network', async ({ page }) => {
     await serve(page, { known: [] });
     const seen = counter(page);

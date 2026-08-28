@@ -331,8 +331,18 @@ the whole queue rather than one per word: easier to cancel, and impossible
 to leak.
 
 - **Five tries in all**, the waits doubling — 1s, 2s, 4s, 8s. After that the
-  word is dropped. That is not a verdict, and it is still never cached: the
-  same word can be tried again by typing it.
+  word is dropped **and said out loud** — "Could not check <word>". That is
+  not a verdict, and it is still never cached: the same word can be tried
+  again by typing it.
+
+  It used to be dropped in silence, on the reasoning below that waiting is
+  the game's business and the reason is the network's. That reasoning holds
+  for one word on a flaky connection and breaks completely when the
+  dictionary is unreachable, which is a thing that happens: *every* word
+  ends here, each one vanishing without a word, and a game that silently
+  swallows everything you type reads as a game rejecting everything you
+  type. Naming it says the opposite — nothing was judged and nothing was
+  lost. The line is still about this word, not about the network.
 - **No duplicates.** `queue()` refuses a word already queued or already
   found, and `submit()` turns a re-typed one back into the waiting line
   rather than a second request. One guess is one place in the queue however
