@@ -228,9 +228,20 @@ test.describe('two services', () => {
     expect(seen.second).toBe(1);
     expect((await reason(page)).why).toContain('freedictionaryapi.com');
 
+    /*
+     * One failure is a stumble, not a dead service, so the first is still in
+     * contention — it has a strike against it, not a sentence. What matters
+     * here is that the question moved along rather than becoming an 'off'.
+     */
     const state = await health(page);
-    expect(state['api.dictionaryapi.dev'].state).toBe('down');
+    expect(state['api.dictionaryapi.dev'].fails).toBe(1);
+    expect(state['api.dictionaryapi.dev'].why).toBe('HTTP 503');
     expect(state['freedictionaryapi.com'].state).toBe('up');
+
+    // A second failure in a row is what sets it aside. The second service
+    // holds only RARE, so this word is a genuine 'no' from it.
+    expect(await look(page, 'gubbins')).toBe('no');
+    expect((await health(page))['api.dictionaryapi.dev'].state).toBe('down');
   });
 
   test('a service that fails its control word is never asked about a real one',

@@ -624,11 +624,17 @@ test.describe('the retry queue', () => {
       const { centre } = await hive(page);
       const word = centre.repeat(4);
 
+      /*
+       * The whole first lookup has to fail, both services, or there is no
+       * unanswered word to retry: a 503 from one service is now answered by
+       * the other inside the same lookup, and the word simply scores. That
+       * fallback is the point of having two, but it is not what this test is
+       * about.
+       */
       let asked = 0;
       await routeBoth(page, async route => {
         asked++;
-        // Unanswered the first time, fine the second.
-        if (asked === 1) return route.fulfill({ status: 503, body: '{}' });
+        if (asked <= 2) return route.fulfill({ status: 503, body: '{}' });
         await route.fulfill({
           status: 200, contentType: 'application/json', body: JSON.stringify([{ word }]),
         });
@@ -639,7 +645,8 @@ test.describe('the retry queue', () => {
       await expect(page.locator('#score')).toHaveText(String(await points(page, word)));
       await expect(page.locator('#found .word[data-waiting]')).toHaveCount(0);
       await expect(page.locator('#found .word:not([data-waiting])')).toHaveText(word);
-      expect(asked).toBe(2);
+      // Two services asked and failed, then the retry landed.
+      expect(asked).toBe(3);
     });
 
   test('the queue shows which try a word is on', async ({ page }) => {
@@ -954,10 +961,12 @@ test.describe('finishing', () => {
     const { centre } = await hive(page);
     const word = centre.repeat(5);
 
+    // Both services fail the first lookup, so the word is genuinely queued
+    // rather than answered by the fallback — see the note above.
     let asked = 0;
     await routeBoth(page, async route => {
       asked++;
-      if (asked === 1) return route.fulfill({ status: 503, body: '{}' });
+      if (asked <= 2) return route.fulfill({ status: 503, body: '{}' });
       await route.fulfill({
         status: 200, contentType: 'application/json', body: JSON.stringify([{ word }]),
       });
