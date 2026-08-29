@@ -289,7 +289,18 @@ window.Dictionary = (function () {
    * costs nothing when the answer is already known: a source proved good
    * recently is trusted, and one inside its backoff is left alone.
    */
+  let probing = null;
+
   function probe() {
+    // Never two at once: a second would double the requests and race the
+    // first to write the health record.
+    if (probing) return probing;
+    probing = runProbe().then(out => { probing = null; return out; },
+      err => { probing = null; throw err; });
+    return probing;
+  }
+
+  function runProbe() {
     return Promise.all(SOURCES.map(src => {
       const h = well[src.id];
       if (h.state === 'up' && Date.now() - h.at < FRESH_MS) return true;
@@ -386,31 +397,28 @@ window.Dictionary = (function () {
       return Promise.resolve(note(w, 'off', said, started));
     }
     const src = list[i];
-    const proven = well[src.id].state === 'up'
-      ? Promise.resolve(true)
-      : test(src);
-
-    return proven.then(good => {
-      if (!good) {
-        tried.push(src.id + ': ' + (well[src.id].why || 'unusable'));
-        return fromSources(list, i + 1, w, started, tried);
+    return ask(src.url(w)).then(out => {
+      if (out.res && out.res.ok) {
+        mark(src, true, 'answered');
+        return note(w, remember(w, 'yes'), 'answered by ' + src.id, started);
       }
-      return ask(src.url(w)).then(out => {
-        if (out.res && out.res.ok) {
-          mark(src, true, 'answered');
-          return note(w, remember(w, 'yes'), 'answered by ' + src.id, started);
-        }
-        if (out.res && out.res.status === 404) {
-          // Trustworthy only because the source passed its control word.
-          mark(src, true, 'answered');
-          return note(w, remember(w, 'no'), 'answered by ' + src.id, started);
-        }
-        const why = out.res ? 'HTTP ' + out.res.status : out.why;
-        mark(src, false, why);
-        tried.push(src.id + ': ' + why);
-        return fromSources(list, i + 1, w, started, tried);
-      });
+      if (out.res && out.res.status === 404) {
+        // Trustworthy only because the source passed both its controls.
+        mark(src, true, 'answered');
+        return note(w, remember(w, 'no'), 'answered by ' + src.id, started);
+      }
+      const why = out.res ? 'HTTP ' + out.res.status : out.why;
+      mark(src, false, why);
+      tried.push(src.id + ': ' + why);
+      return fromSources(list, i + 1, w, started, tried);
     });
+  }
+
+  /** What every source is doing, for the line a failed lookup logs. */
+  function census() {
+    return SOURCES
+      .map(src => src.id + ': ' + (well[src.id].why || well[src.id].state))
+      .join('; ');
   }
 
   function look(word) {
@@ -442,17 +450,33 @@ window.Dictionary = (function () {
       return Promise.resolve(note(w, 'off', 'browser reports offline', started));
     }
 
-    const worth = SOURCES.filter(due);
-    if (!worth.length) {
-      /*
-       * Every source is inside its backoff. Asking anyway would cost the
-       * player a wait whose answer is already known, which is the whole
-       * reason the backoff exists — so this returns at once rather than
-       * after two deadlines.
-       */
-      return Promise.resolve(note(w, 'off', 'every source is in backoff', started));
-    }
-    return fromSources(worth, 0, w, started, []);
+    /*
+     * Only sources already known good are asked, and a lookup NEVER probes.
+     *
+     * It used to. `SOURCES.filter(due)` put a source back in the running the
+     * moment its backoff lapsed, and a source that was not currently 'up'
+     * got probed inline — so with the first service dead and the second
+     * working, every guess after each backoff window paid a full deadline
+     * re-probing the dead one before reaching the live one. The player is
+     * waiting on that; probing is slow and belongs out of band.
+     *
+     * With nothing known good there is nothing to wait for either: say so at
+     * once, and start a probe in the background so the next word may fare
+     * better. That probe respects the backoff, so a dead pair is not
+     * hammered.
+     */
+    const answer = () => {
+      const usable = SOURCES.filter(src => well[src.id].state === 'up');
+      if (!usable.length) {
+        probe();
+        return Promise.resolve(note(w, 'off', census(), started));
+      }
+      return fromSources(usable, 0, w, started, []);
+    };
+
+    // A word asked while the load probe is still out waits for it rather
+    // than starting a second one, which is where the duplicate work was.
+    return probing ? probing.then(answer, answer) : answer();
   }
 
   function size() {

@@ -189,7 +189,10 @@ test.describe('the shared dictionary', () => {
     // The second failure in a row is what sets them aside.
     expect(await look(page, 'wossname')).toBe('off');
     expect(seen.first, 'kept asking a service that failed twice running').toBe(2);
-    expect((await reason(page)).why).toBe('every source is in backoff');
+    // Names every source and what it last did, rather than one flat line.
+    const why = (await reason(page)).why;
+    expect(why).toContain('api.dictionaryapi.dev');
+    expect(why).toContain('freedictionaryapi.com');
   });
 
   test('offline it asks nothing at all', async ({ page, context }) => {
@@ -335,18 +338,106 @@ test.describe('two services', () => {
     await serveBoth(page, { liar: true });
     await page.goto(URL);
     await clearState(page);
-    await expect.poll(() => page.evaluate(() => window.Dictionary.ready()), SETTLE)
-      .toBe(false);
+    /*
+     * Waiting for ready() to be false would wait for nothing — it is
+     * already false before either source has been judged. The verdicts
+     * themselves are what this has to wait for.
+     */
+    await settled(page, 'api.dictionaryapi.dev', 'down');
+    await settled(page, 'freedictionaryapi.com', 'down');
     expect(await look(page, 'bigie')).toBe('off');
   });
+
+  test('a dead service is never re-probed on the player\'s clock',
+    async ({ page }) => {
+      /*
+       * The bug this exists for, reported from the live site: with the first
+       * service dead and the second working, every lookup timed out.
+       *
+       * A lookup used to take every source whose backoff had lapsed — which
+       * puts the dead one back at the front of the queue — and PROBE any
+       * source not currently 'up', inline, before asking it anything. So the
+       * player paid a full deadline re-probing a service already known to be
+       * dead, on every guess, while a working service sat behind it.
+       *
+       * A lookup now asks only what is already known good, and never probes.
+       */
+      /*
+       * A mocked clock, because the state that triggers this only exists
+       * after the dead source's backoff has lapsed. Ageing the stored record
+       * does not do it — restore() only runs at page load, so the in-memory
+       * health is untouched and the source never comes back into
+       * contention. Winding the clock forward is what actually reproduces
+       * thirty seconds of play.
+       */
+      await page.clock.install();
+      await serve(page, FIRST, { probe: false });
+      await serve(page, SECOND, { known: [RARE] });
+      await page.goto(URL);
+      await clearState(page);
+      await settled(page, 'api.dictionaryapi.dev', 'down');
+      await settled(page, 'freedictionaryapi.com', 'up');
+
+      /*
+       * Flush the startup probe before measuring anything. It is deferred to
+       * a timer on the page's load event, and if that timer is still pending
+       * then fastForward runs it — putting the probe's own control requests
+       * inside the window this test is watching, and blaming the lookup for
+       * them. Wind a little, let it finish, and only then start counting.
+       */
+      await page.clock.runFor(1000);
+      await settled(page, 'api.dictionaryapi.dev', 'down');
+      await page.waitForTimeout(300);
+
+      await page.clock.fastForward(120000);
+      await page.waitForTimeout(300);
+      const seen = counter(page);
+      const started = Date.now();
+      expect(await look(page, RARE)).toBe('yes');
+
+      expect(seen.first, 'asked a service known to be dead').toBe(0);
+      expect(seen.probes, 'probed a service while the player waited').toBe(0);
+      expect(seen.second).toBe(1);
+      expect(Date.now() - started, 'a lookup waited on a dead service')
+        .toBeLessThan(1500);
+    });
+
+  test('with nothing working, a lookup gives up at once and says who failed',
+    async ({ page }) => {
+      await serveBoth(page, { probe: false });
+      await page.goto(URL);
+      await clearState(page);
+      /*
+       * Waiting for ready() to be false would wait for nothing — it is
+       * already false before either source has been judged. The verdicts
+       * themselves are what this has to wait for.
+       */
+      await settled(page, 'api.dictionaryapi.dev', 'down');
+      await settled(page, 'freedictionaryapi.com', 'down');
+
+      const seen = counter(page);
+      const started = Date.now();
+      expect(await look(page, RARE)).toBe('off');
+      // Nothing to wait for, so nothing is waited for.
+      expect(Date.now() - started).toBeLessThan(1500);
+      expect(seen.n).toBe(0);
+      const why = (await reason(page)).why;
+      expect(why).toContain('api.dictionaryapi.dev');
+      expect(why).toContain('freedictionaryapi.com');
+    });
 
   test('with both down, a lookup is refused rather than waited on',
     async ({ page }) => {
       await serveBoth(page, { probe: false });
       await page.goto(URL);
       await clearState(page);
-      await expect.poll(() => page.evaluate(() => window.Dictionary.ready()), SETTLE)
-        .toBe(false);
+      /*
+       * Waiting for ready() to be false would wait for nothing — it is
+       * already false before either source has been judged. The verdicts
+       * themselves are what this has to wait for.
+       */
+      await settled(page, 'api.dictionaryapi.dev', 'down');
+      await settled(page, 'freedictionaryapi.com', 'down');
 
       const seen = counter(page);
       const started = Date.now();
@@ -358,7 +449,10 @@ test.describe('two services', () => {
       expect(Date.now() - started, 'waited on a service known to be down')
         .toBeLessThan(1500);
       expect(seen.n).toBe(0);
-      expect((await reason(page)).why).toBe('every source is in backoff');
+      // Names every source and what it last did, rather than one flat line.
+    const why = (await reason(page)).why;
+    expect(why).toContain('api.dictionaryapi.dev');
+    expect(why).toContain('freedictionaryapi.com');
     });
 
   test('the wait after a failure grows, and is not reset by a reload',
@@ -366,8 +460,13 @@ test.describe('two services', () => {
       await serveBoth(page, { probe: false });
       await page.goto(URL);
       await clearState(page);
-      await expect.poll(() => page.evaluate(() => window.Dictionary.ready()), SETTLE)
-        .toBe(false);
+      /*
+       * Waiting for ready() to be false would wait for nothing — it is
+       * already false before either source has been judged. The verdicts
+       * themselves are what this has to wait for.
+       */
+      await settled(page, 'api.dictionaryapi.dev', 'down');
+      await settled(page, 'freedictionaryapi.com', 'down');
 
       const first = await health(page);
       // A failed control word is not a stumble, so it counts straight to the
@@ -391,8 +490,13 @@ test.describe('two services', () => {
     await serveBoth(page, { probe: false });
     await page.goto(URL);
     await clearState(page);
-    await expect.poll(() => page.evaluate(() => window.Dictionary.ready()), SETTLE)
-      .toBe(false);
+    /*
+     * Waiting for ready() to be false would wait for nothing — it is
+     * already false before either source has been judged. The verdicts
+     * themselves are what this has to wait for.
+     */
+    await settled(page, 'api.dictionaryapi.dev', 'down');
+    await settled(page, 'freedictionaryapi.com', 'down');
 
     // Wind the clock past the backoff by ageing the stored record, which is
     // what the library actually reads.
