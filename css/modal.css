@@ -2,11 +2,20 @@
  * Shared overlay dialog, paired with js/lib/modal.js.
  *
  * Fading needs both opacity and visibility, and the visibility transition
- * needs a delay. visibility is what stops a closed dialog swallowing taps
- * and holding focusable controls, but it cannot be interpolated — without
+ * needs a delay. visibility is what keeps a closed dialog from holding
+ * focusable controls, but it cannot be interpolated — without
  * `visibility 0s linear <duration>` on the closed state it flips at once and
  * the fade-out never appears. The `hidden` attribute cannot do this at all,
  * since display: none snaps. See games/ten-thousand/_README.md.
+ *
+ * That delay leaves a hole, and pointer-events is what fills it. For the
+ * whole fade the dialog is still hit-tested, so a tap in the 160ms after
+ * closing one lands on the dialog rather than on whatever it was covering.
+ * Usually that costs a button press; in Word Squiggles it silently swallowed
+ * an entire traced word, because the pointerdown that should have started
+ * the squiggle never reached the board. pointer-events flips at once, having
+ * no delay to transition, so the dialog stops intercepting the moment it
+ * starts fading. specs/modal.spec.js pins it.
  */
 .modal {
   position: fixed;
@@ -19,11 +28,13 @@
   background: rgba(6, 9, 16, 0.74);
   opacity: 0;
   visibility: hidden;
+  pointer-events: none;
   transition: opacity 160ms ease, visibility 0s linear 160ms;
 }
 .modal[data-open] {
   opacity: 1;
   visibility: visible;
+  pointer-events: auto;
   transition: opacity 160ms ease, visibility 0s;
 }
 

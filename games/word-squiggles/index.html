@@ -69,6 +69,13 @@
       white-space: nowrap;
     }
     .chip.round { padding: 0.3rem 0.55rem; }
+    .clock {
+      font-variant-numeric: tabular-nums;
+      font-weight: 800;
+      font-size: 1.05rem;
+      min-width: 3.2rem;
+      text-align: center;
+    }
 
     .head { flex: none; text-align: center; padding: 0 0.75rem 0.3rem; }
     .theme {
@@ -202,6 +209,40 @@
       cursor: pointer;
       touch-action: manipulation;
     }
+    .best-tag { text-align: center; font-weight: 800; color: var(--span); margin: 0 0 0.3rem; }
+    .sums {
+      margin: 0.6rem 0;
+      border-top: 1px solid var(--panel-hi);
+      border-bottom: 1px solid var(--panel-hi);
+      padding: 0.5rem 0;
+      font-variant-numeric: tabular-nums;
+    }
+    .sums div { display: flex; justify-content: space-between; padding: 0.15rem 0; font-size: 0.92rem; }
+    .sums .final { font-weight: 800; font-size: 1.05rem; color: var(--text); }
+    /* A cost, so it reads like one rather than like a bonus. */
+    .sums .penalty { color: var(--bad); }
+
+    .score-shape {
+      margin: 0.7rem 0 0.2rem;
+      font-size: 0.9rem;
+      color: var(--text-dim);
+      font-variant-numeric: tabular-nums;
+    }
+    .score-shape:first-child { margin-top: 0; }
+    .score-list { margin: 0; padding: 0; list-style: none; font-variant-numeric: tabular-nums; }
+    .score-list li {
+      display: flex;
+      justify-content: space-between;
+      gap: 0.6rem;
+      padding: 0.3rem 0;
+      border-bottom: 1px solid var(--panel-hi);
+      font-size: 0.95rem;
+    }
+    .score-list li:last-child { border-bottom: none; }
+    .score-list .detail { color: var(--text-dim); font-size: 0.8rem; }
+    .score-list li[data-fresh] { color: var(--span); font-weight: 700; }
+    .score-empty { color: var(--text-dim); font-size: 0.9rem; margin: 0; line-height: 1.45; }
+
     .rules-list { margin: 0; padding-left: 1.1rem; font-size: 0.86rem;
       color: var(--text-dim); line-height: 1.45; }
     .rules-list li + li { margin-top: 0.4rem; }
@@ -222,7 +263,10 @@
   <div class="topbar">
     <a href="../../">&larr; Games</a>
     <div class="topbar-right">
+      <span class="clock" id="clock">0:00</span>
       <button id="hint-btn" class="chip" type="button">Hint</button>
+      <button id="board-btn" class="chip round" type="button"
+              aria-label="Best times" aria-expanded="false">&#127942;</button>
       <button id="rules-btn" class="chip round" type="button"
               aria-label="How to play" aria-expanded="false">?</button>
       <button id="new-btn" class="chip" type="button">New</button>
@@ -243,10 +287,20 @@
   <div class="modal" id="over">
     <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="over-title">
       <h2 class="modal-title" id="over-title">Solved</h2>
+      <p class="best-tag" id="best-tag" hidden>A new best at this size</p>
       <span class="over-theme" id="over-sub"></span>
       <p class="over-line" id="over-count"></p>
+      <div class="sums" id="sums"></div>
       <p class="over-line" id="over-solved"></p>
       <button class="primary" id="again" type="button">Another puzzle</button>
+      <button class="modal-close" type="button" data-close>Close</button>
+    </div>
+  </div>
+
+  <div class="modal" id="board-sheet">
+    <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="board-title">
+      <h2 class="modal-title" id="board-title">Best times</h2>
+      <div id="board-body"></div>
       <button class="modal-close" type="button" data-close>Close</button>
     </div>
   </div>
@@ -266,7 +320,12 @@
         <li><strong>One word crosses the whole board</strong>, edge to
           opposite edge. It scores gold when you find it.</li>
         <li>A <strong>hint</strong> marks where a word begins — which is the
-          genuinely hard part — and never more than that.</li>
+          genuinely hard part — and never more than that. It costs time, and
+          <strong>each one costs more than the last</strong>: 15 seconds,
+          then 30, then 45.</li>
+        <li><strong>The clock starts on your first squiggle</strong>, and
+          best times are kept <strong>per board size</strong> — a 7×9 is not
+          the same job as a 5×7.</li>
         <li>The board is <strong>built when you open it</strong>, sized to
           whatever words it drew, so the same theme is a new puzzle.</li>
       </ul>

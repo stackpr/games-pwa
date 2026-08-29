@@ -54,14 +54,59 @@ Two smaller guards matter too:
   branch is later abandoned — otherwise a completed board could have no
   spanner and the whole thing would need rebuilding.
 
-## Why the path is checked, not just the word
+## Ambiguity, and why boards are auditioned
 
-A found word has to be traced along **the cells the builder actually laid**,
-not merely along some path spelling the same letters. On a dense board two
-different squiggles can spell the same word; accepting the wrong one would
-leave the real word's cells claimed by its neighbour, and the rest of the
-puzzle would become unsolvable through no fault of the player. Reversed is
-fine — a word read backwards is the same squiggle.
+A squiggle is matched by **the path the builder laid** (see below), which
+makes a word that can be spelled along a second path the worst moment the
+game has: the player traces it correctly and is told it is wrong.
+
+Two ways to attack that were built and measured over 200 boards:
+
+Only one kind of ambiguity counts: a word spellable over a **different set
+of squares**. A path over a word's own cells in another order is accepted
+(see above), so it is not ambiguity and is not scored as any.
+
+| Approach | Words spellable off their own squares | Build time |
+| --- | --- | --- |
+| Nothing | 53.1% | 36ms |
+| Steer the search away from a letter next to its own copy | ~49% | 60ms |
+| **Build six boards, keep the least murky** | **27.0%** | 229ms |
+
+The first idea is the intuitive one and it barely moves: by the time a
+letter is being placed, the search cannot see what the finished board will
+allow. Scoring whole boards can, because it asks the actual question — how
+many of these words can be traced two ways? — and answers it by counting.
+
+So `deal()` builds `BOARD_TRIES` boards and keeps the best, stopping early
+if one comes out clean. **Avoided, never prohibited:** a board with no
+ambiguity at all may not exist for a given set of words, so this takes the
+best of what it built rather than searching until it finds perfection.
+There is no loop that can fail to end.
+
+## What counts as tracing a word
+
+Two tests, and a squiggle takes both.
+
+**The same squares.** A word must be drawn over the cells the builder gave
+it. On a dense board two different squiggles can spell the same word, and
+accepting one that borrowed a neighbour's cell would leave the real word
+unsolvable through no fault of the player. This is the invariant the whole
+game rests on: a word owns its cells.
+
+**Spelling the word, from either end.** Reversed is fine — a word read
+backwards is the same squiggle.
+
+**The order within those cells is not checked**, and that matters more than
+it sounds. DRESS puts its two S's on two particular squares; a player who
+traces them in the other order has drawn something nobody could tell from
+the intended squiggle — same squares, same letters, same word. Refusing it
+refuses a correct answer. What the letters still rule out is a scramble of
+the right cells that spells nothing.
+
+Order was once the entire test, and it had two bugs in it. It rejected every
+backwards trace, because reading `discard` from the far end gives `dracsid`;
+and it rejected the duplicate-letter case above. Matching on the cell *set*
+plus the reading is what the rule was always trying to say.
 
 ## The themes
 
@@ -71,13 +116,32 @@ categories are broad and its terms carry the words you would *say* while
 describing them, which is a different job. Here the theme is the only clue,
 so it has to be tight enough that noticing it is a moment.
 
-Each set carries fifteen to eighteen words and a puzzle uses six to nine, and
-that surplus is the point — a set of eight would deal the same board twice a
-week. Twelve is the floor the loader enforces.
+Each set carries **thirty-odd** words and a puzzle uses six to nine, and that
+surplus is the whole point: the pool is what decides whether a theme is worth
+meeting again. 675 words across the twenty. Twenty is the floor the loader
+enforces.
 
 Two rules when adding one: four to eleven letters (shorter is noise, longer
 will not lie on a small board), and no word containing another in the same
 set, which would make a found word ambiguous.
+
+## The clock, and what a hint costs
+
+A solve is timed, and the times are kept **per board size**. A 7×9 is more
+than twice the work of a 5×7, so one list would only ever show the small
+boards; separate lists make a size's difficulty legible from the order.
+
+- **The clock starts on your first squiggle**, not on load. Reading the
+  theme costs nothing.
+- **Each hint adds more than the last** — 15s, then 30s, then 45s. The
+  first is a nudge and the fourth is being carried, so they should not cost
+  the same. Arithmetic rather than doubling, because a player who wants four
+  hints should not be looking at a nonsense number.
+- **The price is said when the hint is taken**, not discovered on the finish
+  screen. A cost you find out about afterwards is a trap.
+- A reload keeps the time banked so far but **never leaves the clock
+  running** — the page was not open, so that stretch cannot be timed
+  honestly. It starts again on the next squiggle.
 
 ## Hints
 
@@ -97,9 +161,16 @@ a different word, so there is a floor under how much they can give away.
               "words": [{ "word": "kettle", "cells": [0, 1, 7], "spanner": false }] },
   "found": ["kettle"],
   "hinted": [12],
-  "solved": 4
+  "elapsed": 41200,
+  "solved": 4,
+  "times": { "6×7": [{ "total": 56200, "raw": 41200, "hints": 1,
+                       "title": "In the kitchen", "at": 1754600000000 }] }
 }
 ```
+
+`total` is what ranks (the clock plus the hint penalties) and `raw` is what
+the clock actually said; both are shown, because "2:10, of which 45 seconds
+were hints" is a more interesting line than either number alone.
 
 **The board is saved, not the seed.** Regenerating from a seed would mean the
 layout search had to be perfectly reproducible for ever, which quietly makes

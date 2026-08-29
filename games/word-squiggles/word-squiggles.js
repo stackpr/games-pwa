@@ -19,6 +19,31 @@
   // per-attempt rather than a single long grind.
   const STEP_BUDGET = 60000;
   const ATTEMPTS = 25;
+  /*
+   * How many whole boards to build before picking one, and it is worth the
+   * time. A word that can be traced along more than one path is the game's
+   * worst moment — the player spells it correctly and is told it is wrong,
+   * because a squiggle is matched by the path the builder laid.
+   *
+   * Steering the SEARCH away from that (preferring cells whose neighbours do
+   * not already carry the same letter) was tried and measured: 59% of words
+   * ambiguous down to 55%, for double the build time. Building several whole
+   * boards and keeping the least ambiguous takes 59% to 31%. Same idea,
+   * applied where it can actually see the answer.
+   *
+   * Avoided, never prohibited: a board with no ambiguity at all may not
+   * exist for a given set of words, so this picks the best of what it built
+   * rather than searching until it finds perfection. There is no loop that
+   * can fail to end.
+   */
+  const BOARD_TRIES = 6;
+  const TOP_N = 5;
+  /*
+   * A hint costs time, and each one costs more than the last: the first is a
+   * nudge, the fourth is being carried. Arithmetic rather than doubling, so
+   * a player who wants four hints is not looking at a nonsense number.
+   */
+  const HINT_PENALTY_MS = 15000;
 
   const $ = id => document.getElementById(id);
   // A worker can serve this script with the previous release's HTML, so
@@ -37,6 +62,12 @@
   let trail = [];         // the path being drawn right now
   let drawing = false;
   let overSheet = null;
+  let boardSheet = null;
+  let times = {};         // best times, keyed by board shape
+  let startedAt = null;   // when the clock started, or null while stopped
+  let elapsed = 0;        // banked milliseconds
+  let ticker = null;
+  let fresh = null;       // the entry just recorded, to mark on the board
 
   /* ---- the random source ------------------------------------------------ */
 
@@ -193,6 +224,58 @@
     return { order: order, paths: paths, spanner: spanner };
   }
 
+  /*
+   * Can this word be spelled over a DIFFERENT set of squares from the one it
+   * was given? That, and only that, is what the game refuses — a path over
+   * the word's own cells in another order is accepted, so it is not
+   * ambiguity and must not be counted as any.
+   *
+   * Stops at the first one found: whether there are two such paths or twenty
+   * makes no difference to the board's score, and a full count on a dense
+   * grid is exponential for no extra information.
+   */
+  function elsewhere(letters, cols, rows, entry) {
+    const own = new Set(entry.cells);
+    const used = new Set();
+    let other = false;
+    function go(i, k, strayed) {
+      if (other) return;
+      if (k === entry.word.length) {
+        if (strayed) other = true;
+        return;
+      }
+      const x = i % cols;
+      const y = (i - x) / cols;
+      for (const [dy, dx] of DIRS) {
+        const nx = x + dx;
+        const ny = y + dy;
+        if (nx < 0 || nx >= cols || ny < 0 || ny >= rows) continue;
+        const j = ny * cols + nx;
+        if (used.has(j) || letters[j] !== entry.word[k]) continue;
+        used.add(j);
+        go(j, k + 1, strayed || !own.has(j));
+        used.delete(j);
+        if (other) return;
+      }
+    }
+    for (let i = 0; i < letters.length && !other; i++) {
+      if (letters[i] !== entry.word[0]) continue;
+      used.clear();
+      used.add(i);
+      go(i, 1, !own.has(i));
+    }
+    return other;
+  }
+
+  /** How many of a board's words can be spelled off their own squares. */
+  function murkiness(made) {
+    let n = 0;
+    for (const entry of made.words) {
+      if (elsewhere(made.letters, made.cols, made.rows, entry)) n++;
+    }
+    return n;
+  }
+
   /** A whole puzzle, or null if the search came up empty. */
   function build(set, seed) {
     const rnd = mulberry32(seed);
@@ -218,6 +301,64 @@
     return null;
   }
 
+  /* ---- the clock -------------------------------------------------------- */
+
+  function shape() {
+    return puzzle.cols + '\u00d7' + puzzle.rows;
+  }
+
+  function onClock() {
+    if (!startedAt) return elapsed;
+    return elapsed + (Date.now() - startedAt);
+  }
+
+  function asTime(ms) {
+    const total = Math.max(0, Math.round(ms / 1000));
+    return Math.floor(total / 60) + ':' + String(total % 60).padStart(2, '0');
+  }
+
+  function paintClock() {
+    const clock = $('clock');
+    if (clock) clock.textContent = asTime(onClock());
+  }
+
+  function tick() {
+    if (ticker) { clearInterval(ticker); ticker = null; }
+    if (!startedAt) return;
+    ticker = setInterval(paintClock, 200);
+  }
+
+  // Starts on the first squiggle, not on load: reading the theme, or picking
+  // the phone up again, costs nothing.
+  function startClock() {
+    if (startedAt || done()) return;
+    startedAt = Date.now();
+    tick();
+  }
+
+  function stopClock() {
+    elapsed = onClock();
+    startedAt = null;
+    if (ticker) { clearInterval(ticker); ticker = null; }
+    paintClock();
+  }
+
+  function done() {
+    return Boolean(puzzle) && found.length === puzzle.words.length;
+  }
+
+  /*
+   * What a solve was worth. The clock is the raw time; each hint adds more
+   * than the one before it, and the total is what ranks.
+   */
+  function reckon() {
+    const raw = onClock();
+    let penalty = 0;
+    for (let n = 1; n <= hinted.length; n++) penalty += n * HINT_PENALTY_MS;
+    return { raw: raw, hints: hinted.length, penalty: penalty,
+      total: raw + penalty };
+  }
+
   /* ---- persistence ------------------------------------------------------ */
 
   function valid(p) {
@@ -240,10 +381,33 @@
     return covered === size;
   }
 
+  /** Best times per board shape, thrown away rather than trusted if wrong. */
+  function loadTimes(raw) {
+    const out = {};
+    if (!raw || typeof raw !== 'object') return out;
+    for (const key of Object.keys(raw)) {
+      if (!/^\d{1,2}\u00d7\d{1,2}$/.test(key) || !Array.isArray(raw[key])) continue;
+      out[key] = raw[key]
+        .filter(e => e && Number.isFinite(e.total) && e.total >= 0 &&
+          Number.isInteger(e.hints) && e.hints >= 0)
+        .slice(0, TOP_N)
+        .map(e => ({
+          total: Math.round(e.total),
+          raw: Number.isFinite(e.raw) ? Math.round(e.raw) : Math.round(e.total),
+          hints: e.hints,
+          title: typeof e.title === 'string' ? e.title : '',
+          at: Number.isFinite(e.at) ? e.at : 0
+        }))
+        .sort((a, b) => a.total - b.total);
+    }
+    return out;
+  }
+
   function load() {
     const saved = Store.load(KEY) || {};
     solved = Number.isFinite(saved.solved) && saved.solved >= 0
       ? Math.floor(saved.solved) : 0;
+    times = loadTimes(saved.times);
     if (valid(saved.puzzle)) {
       puzzle = saved.puzzle;
       const words = puzzle.words.map(w => w.word);
@@ -252,6 +416,14 @@
       hinted = Array.isArray(saved.hinted)
         ? saved.hinted.filter(c => Number.isInteger(c) && c >= 0 && c < puzzle.letters.length)
         : [];
+      /*
+       * The clock is restored but never left running. A reload cannot be
+       * timed honestly — the page was not open — so what was banked is kept
+       * and the clock starts again on the next squiggle.
+       */
+      elapsed = Number.isFinite(saved.elapsed) && saved.elapsed >= 0
+        ? Math.floor(saved.elapsed) : 0;
+      startedAt = null;
       return true;
     }
     return false;
@@ -259,8 +431,22 @@
 
   function save() {
     Store.save(KEY, {
-      puzzle: puzzle, found: found, hinted: hinted, solved: solved
+      puzzle: puzzle, found: found, hinted: hinted, solved: solved,
+      elapsed: onClock(), times: times
     });
+  }
+
+  /** Files a solve, and says where it landed. */
+  function record(sum) {
+    const key = shape();
+    const list = times[key] || [];
+    const entry = { total: sum.total, raw: sum.raw, hints: sum.hints,
+      title: puzzle.title, at: Date.now() };
+    list.push(entry);
+    list.sort((a, b) => a.total - b.total);
+    times[key] = list.slice(0, TOP_N);
+    fresh = times[key].indexOf(entry) >= 0 ? entry : null;
+    return times[key].indexOf(entry);
   }
 
   /* ---- rendering -------------------------------------------------------- */
@@ -295,6 +481,18 @@
       }
       for (const cell of board.children) {
         const i = Number(cell.dataset.i);
+        /*
+         * The letter is written every time, not only when the grid is
+         * rebuilt. The cells above are reused whenever the new board has as
+         * many squares as the old one — which happens often, since the
+         * builder only picks from ten shapes — and a reused cell kept the
+         * letter it had. The symptom was a new theme appearing over the
+         * previous puzzle's letters.
+         */
+        const face = cell.firstElementChild;
+        if (face && face.textContent !== puzzle.letters[i]) {
+          face.textContent = puzzle.letters[i];
+        }
         const entry = wordAt(i);
         const done = entry && isFound(entry);
         cell.dataset.state = done ? (entry.spanner ? 'span' : 'found') : 'open';
@@ -439,6 +637,7 @@
     const i = cellFrom(event, true);
     if (i < 0 || locked(i)) return;
     drawing = true;
+    startClock();
     trail = [i];
     render();
     if (event.pointerId !== undefined && event.target.setPointerCapture) {
@@ -454,7 +653,13 @@
     event.preventDefault();
   }
 
-  function finish() {
+  /*
+   * The end of a drag. Named apart from finish() below on purpose: both were
+   * called `finish` once, declarations hoist, and the later one silently
+   * took the name — so every pointerup ran the puzzle-complete handler and
+   * no traced word was ever submitted. Nothing in the file looked wrong.
+   */
+  function endTrail() {
     if (!drawing) return;
     drawing = false;
     const path = trail.slice();
@@ -462,39 +667,63 @@
     submit(path);
   }
 
-  function samePath(a, b) {
-    if (a.length !== b.length) return false;
-    for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
+  /*
+   * The same squares, in any order. What a word owns is its cells, not the
+   * order they were laid in — so a path over exactly those cells claims
+   * exactly that word's squares and leaves the tiling intact, which is the
+   * invariant the whole game rests on.
+   */
+  function sameCells(laid, path) {
+    if (laid.length !== path.length) return false;
+    const own = new Set(laid);
+    for (const i of path) if (!own.has(i)) return false;
     return true;
   }
 
+  function reading(path) {
+    let out = '';
+    for (const i of path) out += puzzle.letters[i];
+    return out;
+  }
+
+  function backwards(word) {
+    return word.split('').reverse().join('');
+  }
+
   /*
-   * Matched on the PATH alone, never on the letters.
+   * Two tests, and it takes both.
    *
-   * The path has to be the one the builder laid: two different squiggles can
-   * spell the same word on a dense board, and accepting the wrong one leaves
-   * the real word's cells claimed by its neighbour, which makes the rest of
-   * the puzzle unsolvable through no fault of the player. Since the cells
-   * decide the letters, the path is the whole identity — and comparing the
-   * typed-out letters as well is not a second check, it is a bug waiting to
-   * happen. It was one: reading a backwards trace gave `dracsid` for
-   * `discard`, and the word test rejected it before the reversed-path test
-   * could accept it.
+   * **The same squares.** A word must be traced over the cells the builder
+   * gave it. Two different squiggles can spell the same word on a dense
+   * board, and accepting one that borrowed a neighbour's cells would leave
+   * the real word unsolvable through no fault of the player.
+   *
+   * **Spelling the word, from either end.** The ORDER within those cells is
+   * not checked, because it is not always meaningful: DRESS puts its two
+   * S's on two particular squares, and a player who traces them in the other
+   * order has drawn a squiggle nobody could tell from the intended one —
+   * same squares, same letters, same word. Refusing that refuses a correct
+   * answer. What the letters still rule out is a scramble of the right cells
+   * spelling nothing.
+   *
+   * Order used to be the whole test, and it rejected every backwards trace,
+   * because reading `discard` from the far end gives `dracsid`. Hence
+   * comparing the reading against the word AND its reverse.
    */
   function submit(path) {
     if (path.length < 2) { render(); return; }
-    const back = path.slice().reverse();
+    const drawn = reading(path);
     for (const entry of puzzle.words) {
       if (isFound(entry)) continue;
-      // Either way round: a squiggle read from either end is the same one.
-      if (!samePath(entry.cells, path) && !samePath(entry.cells, back)) continue;
+      if (!sameCells(entry.cells, path)) continue;
+      if (drawn !== entry.word && drawn !== backwards(entry.word)) continue;
       found.push(entry.word);
       save();
       render();
       flash(entry.spanner ? 'The spanner! ' + entry.word : entry.word, 'good');
       say(entry.word + ' found. ' + found.length + ' of ' +
         puzzle.words.length + '.');
-      if (found.length === puzzle.words.length) done();
+      if (done()) finish();
       return;
     }
     render();
@@ -503,25 +732,112 @@
     if (path.length >= 3) flash('Not one of them', 'bad');
   }
 
-  function done() {
+  function finish() {
+    stopClock();
     solved++;
+    const sum = reckon();
+    const rank = record(sum);
     save();
+
     const title = $('over-title');
     if (title) title.textContent = 'Solved';
     const sub = $('over-sub');
     if (sub) sub.textContent = puzzle.title;
     const count = $('over-count');
     if (count) {
-      count.textContent = puzzle.words.length + ' words, ' +
-        puzzle.cols + '×' + puzzle.rows + ', not a letter spare';
+      count.textContent = puzzle.words.length + ' words, ' + shape() +
+        ', not a letter spare';
     }
+    const tag = $('best-tag');
+    if (tag) tag.hidden = rank !== 0;
+
+    const sums = $('sums');
+    if (sums) {
+      sums.textContent = '';
+      sums.append(sumLine('On the clock', asTime(sum.raw)));
+      sums.append(sumLine(
+        sum.hints ? sum.hints + (sum.hints === 1 ? ' hint' : ' hints') : 'No hints',
+        sum.penalty ? '+' + Math.round(sum.penalty / 1000) + 's' : '0s',
+        sum.penalty ? 'penalty' : ''));
+      sums.append(sumLine('Your time at ' + shape(), asTime(sum.total), 'final'));
+    }
+
     const tallyAll = $('over-solved');
     if (tallyAll) {
       tallyAll.textContent = solved === 1
         ? 'Your first' : solved + ' puzzles solved';
     }
-    say('Solved. ' + puzzle.title + '.');
+    say('Solved. ' + puzzle.title + '. ' + asTime(sum.total) + '.');
     if (overSheet) overSheet.open();
+  }
+
+  function sumLine(label, value, className) {
+    const row = document.createElement('div');
+    if (className) row.className = className;
+    const a = document.createElement('span');
+    a.textContent = label;
+    const b = document.createElement('span');
+    b.textContent = value;
+    row.append(a, b);
+    return row;
+  }
+
+  /* ---- the leaderboard --------------------------------------------------- */
+
+  /*
+   * Kept per board shape, because they are not comparable: a 7x9 board is
+   * more than twice the work of a 5x7 and a single list would only ever show
+   * the small ones. Sorted small to large so a shape's difficulty is legible
+   * from the order.
+   */
+  function shapesPlayed() {
+    return Object.keys(times).filter(k => times[k] && times[k].length)
+      .sort((a, b) => cells(a) - cells(b));
+  }
+
+  function cells(key) {
+    const parts = key.split('\u00d7');
+    return Number(parts[0]) * Number(parts[1]);
+  }
+
+  function renderBoard() {
+    const body = $('board-body');
+    if (!body) return;
+    body.textContent = '';
+    const played = shapesPlayed();
+    if (!played.length) {
+      const p = document.createElement('p');
+      p.className = 'score-empty';
+      p.textContent = 'No times yet. Solve a board and it lands here under ' +
+        'its own size — and every hint you take adds to the clock, more each ' +
+        'time.';
+      body.append(p);
+      return;
+    }
+    for (const key of played) {
+      const head = document.createElement('h3');
+      head.className = 'score-shape';
+      head.textContent = key;
+      body.append(head);
+
+      const ol = document.createElement('ol');
+      ol.className = 'score-list';
+      times[key].forEach(entry => {
+        const li = document.createElement('li');
+        const time = document.createElement('span');
+        time.textContent = asTime(entry.total);
+        const detail = document.createElement('span');
+        detail.className = 'detail';
+        detail.textContent = entry.hints
+          ? asTime(entry.raw) + ' + ' + entry.hints +
+            (entry.hints === 1 ? ' hint' : ' hints')
+          : 'no hints';
+        li.append(time, detail);
+        if (fresh && entry === fresh) li.dataset.fresh = '';
+        ol.append(li);
+      });
+      body.append(ol);
+    }
   }
 
   /* ---- hints ------------------------------------------------------------ */
@@ -541,10 +857,13 @@
     }
     const entry = left[Math.floor(Math.random() * left.length)];
     hinted.push(entry.cells[0]);
+    // Each hint costs more than the last, so the price is worth saying out
+    // loud rather than discovering on the finish screen.
+    const cost = Math.round(hinted.length * HINT_PENALTY_MS / 1000);
     save();
     render();
-    flash('A word starts here', 'good');
-    say('A word starts at the marked letter.');
+    flash('A word starts here  ·  +' + cost + 's', 'good');
+    say('A word starts at the marked letter. That cost ' + cost + ' seconds.');
   }
 
   /* ---- setting up ------------------------------------------------------- */
@@ -555,19 +874,36 @@
       flash('No themes to play', 'bad');
       return false;
     }
-    // A fresh seed each time, so the same theme is a different board.
-    for (let tries = 0; tries < 8; tries++) {
-      const set = sets[Math.floor(Math.random() * sets.length)];
+    const set = sets[Math.floor(Math.random() * sets.length)];
+    /*
+     * Several boards, and the clearest one wins. A fresh seed each time, so
+     * the same theme is a different board — and a board where fewer words
+     * can be traced two ways is a board that will not refuse a squiggle the
+     * player drew correctly. A perfect board may not exist for these words,
+     * so this takes the best it built rather than searching for one.
+     */
+    let best = null;
+    let bestScore = Infinity;
+    for (let tries = 0; tries < BOARD_TRIES; tries++) {
       const made = build(set, Math.floor(Math.random() * 0xffffffff));
-      if (made) {
-        puzzle = made;
-        found = [];
-        hinted = [];
-        trail = [];
-        save();
-        render();
-        return true;
-      }
+      if (!made) continue;
+      const score = murkiness(made);
+      if (score < bestScore) { bestScore = score; best = made; }
+      if (!score) break;
+    }
+    if (best) {
+      puzzle = best;
+      found = [];
+      hinted = [];
+      trail = [];
+      fresh = null;
+      elapsed = 0;
+      startedAt = null;
+      if (ticker) { clearInterval(ticker); ticker = null; }
+      save();
+      render();
+      paintClock();
+      return true;
     }
     flash('Could not build a board', 'bad');
     return false;
@@ -579,7 +915,14 @@
   else render();
 
   overSheet = Modal.create($('over'));
+  boardSheet = Modal.create($('board-sheet'), {
+    trigger: $('board-btn'),
+    onOpen: renderBoard
+  });
   Modal.create($('rules'), { trigger: $('rules-btn') });
+  paintClock();
+  // A finished board that was restored keeps its clock stopped.
+  if (done()) stopClock();
 
   on($('new-btn'), 'click', () => {
     if (overSheet) overSheet.close();
@@ -595,15 +938,15 @@
   if (window.PointerEvent) {
     on(board, 'pointerdown', start);
     on(board, 'pointermove', move);
-    on(board, 'pointerup', finish);
-    on(board, 'pointercancel', finish);
+    on(board, 'pointerup', endTrail);
+    on(board, 'pointercancel', endTrail);
   } else {
     on(board, 'mousedown', start);
     on(board, 'mousemove', move);
-    on(board, 'mouseup', finish);
+    on(board, 'mouseup', endTrail);
   }
   // A finger lifted outside the board still ends the squiggle.
-  window.addEventListener('pointerup', finish);
+  window.addEventListener('pointerup', endTrail);
 
   window.addEventListener('resize', sizeBoard);
   window.addEventListener('orientationchange', sizeBoard);

@@ -7,6 +7,51 @@ const read = f => fs.readFileSync(path.join(repoRoot, f), 'utf8');
 
 // These guard the deploy surface: what reaches games.payne.run, and what
 // must not. They are static checks, so they need no browser page.
+/*
+ * A hazard that ships silently, so it is checked before it can.
+ *
+ * Two functions declared with the same name in one scope is not an error in
+ * JavaScript: declarations hoist and the later one takes the name. `node
+ * --check` is happy, nothing looks wrong on the page, and every call goes to
+ * the wrong function. It happened in Word Squiggles — a drag-end handler and
+ * a puzzle-complete handler both called `finish` — and it broke the entire
+ * game: every pointerup opened the "Solved" sheet and no traced word was
+ * ever submitted.
+ *
+ * There is no linter here and this is the sort of thing a linter is for.
+ */
+test.describe('source hazards', { tag: '@nodom' }, () => {
+  test('no script declares the same function name twice', async () => {
+    const scripts = [];
+    const walk = dir => {
+      for (const entry of fs.readdirSync(path.join(repoRoot, dir), { withFileTypes: true })) {
+        if (entry.name.startsWith('_') || entry.name.startsWith('.')) continue;
+        const rel = dir + '/' + entry.name;
+        if (entry.isDirectory()) walk(rel);
+        else if (entry.name.endsWith('.js')) scripts.push(rel.replace(/^\.\//, ''));
+      }
+    };
+    walk('js');
+    walk('games');
+    expect(scripts.length).toBeGreaterThan(20);
+
+    const clashes = [];
+    for (const file of scripts) {
+      const seen = new Map();
+      for (const line of read(file).split('\n')) {
+        // Indentation stands in for scope: two declarations at the same
+        // depth in one file are the case that bites.
+        const match = line.match(/^(\s*)function\s+([A-Za-z_$][\w$]*)\s*\(/);
+        if (!match) continue;
+        const key = match[1].length + ':' + match[2];
+        if (seen.has(key)) clashes.push(file + ': ' + match[2] + ' declared twice');
+        seen.set(key, true);
+      }
+    }
+    expect(clashes).toEqual([]);
+  });
+});
+
 test.describe('what gets published', { tag: '@nodom' }, () => {
   test('the test suite is excluded from the Pages build', async () => {
     const config = read('_config.yml');

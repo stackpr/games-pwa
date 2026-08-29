@@ -121,6 +121,97 @@ test.describe('the board', () => {
     expect(bad).toEqual([]);
   });
 
+  test('a new puzzle redraws the letters', async ({ page }) => {
+    /*
+     * The bug this exists for: the cells were only rebuilt when the new
+     * board had a different number of squares, and the builder picks from
+     * ten shapes, so a new theme regularly landed on the same size and
+     * inherited the previous puzzle's letters. What was on screen was not
+     * the puzzle being played.
+     */
+    const bad = await page.evaluate(() => {
+      const out = [];
+      for (let n = 0; n < 25; n++) {
+        document.getElementById('new-btn').click();
+        const p = JSON.parse(localStorage.getItem('games.word-squiggles.v1')).puzzle;
+        const shown = [...document.querySelectorAll('#board .cell')]
+          .map(c => c.textContent);
+        if (shown.length !== p.letters.length) {
+          out.push('board has ' + shown.length + ' cells for ' + p.letters.length);
+        } else if (shown.join('') !== p.letters.join('')) {
+          out.push('screen shows ' + shown.join('') + ' for ' + p.letters.join(''));
+        }
+        if (document.getElementById('theme').textContent !== p.title) {
+          out.push('theme says the wrong thing');
+        }
+        if (out.length) return out.slice(0, 2);
+      }
+      return out;
+    });
+    expect(bad).toEqual([]);
+  });
+
+  test('a word can rarely be spelled off its own squares', async ({ page }) => {
+    /*
+     * The only ambiguity that matters. A path over a word's OWN cells in
+     * another order is accepted, so it is not ambiguity; a path that strays
+     * onto a neighbour's cells is refused, and that is what makes a player
+     * trace a word correctly and be told they are wrong.
+     *
+     * The builder cannot rule it out — a clean board may not exist for a
+     * given set of words — so it builds several and keeps the least murky.
+     * This pins the result rather than the method: with one board it
+     * measured 53%, with six it measures 27%.
+     */
+    const rate = await page.evaluate(() => {
+      const DIRS = [[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]];
+      function strays(letters, cols, rows, entry) {
+        const own = new Set(entry.cells);
+        const used = new Set();
+        let found = false;
+        function go(i, k, off) {
+          if (found) return;
+          if (k === entry.word.length) { if (off) found = true; return; }
+          const x = i % cols, y = (i - x) / cols;
+          for (const [dy, dx] of DIRS) {
+            const nx = x + dx, ny = y + dy;
+            if (nx < 0 || nx >= cols || ny < 0 || ny >= rows) continue;
+            const j = ny * cols + nx;
+            if (used.has(j) || letters[j] !== entry.word[k]) continue;
+            used.add(j); go(j, k + 1, off || !own.has(j)); used.delete(j);
+            if (found) return;
+          }
+        }
+        for (let i = 0; i < letters.length && !found; i++) {
+          if (letters[i] !== entry.word[0]) continue;
+          used.clear(); used.add(i); go(i, 1, !own.has(i));
+        }
+        return found;
+      }
+      let words = 0, murky = 0;
+      for (let n = 0; n < 12; n++) {
+        const p = JSON.parse(localStorage.getItem('games.word-squiggles.v1')).puzzle;
+        for (const e of p.words) {
+          words++;
+          if (strays(p.letters, p.cols, p.rows, e)) murky++;
+        }
+        document.getElementById('new-btn').click();
+      }
+      return murky / words;
+    });
+    expect(rate, 'too many words can be spelled off their own squares')
+      .toBeLessThan(0.45);
+  });
+
+  test('every theme has enough words to be worth meeting again', async ({ page }) => {
+    const sets = await page.evaluate(() => window.SquiggleSets.all()
+      .map(s => ({ title: s.title, n: s.words.length })));
+    expect(sets.length).toBe(20);
+    for (const set of sets) {
+      expect(set.n, set.title + ' is too thin a pool').toBeGreaterThanOrEqual(28);
+    }
+  });
+
   test('the grid is not predetermined', async ({ page }) => {
     /*
      * The whole point of building at open time. Same twenty themes, but a
@@ -166,6 +257,108 @@ test.describe('playing', () => {
     await expect(page.locator('#tally')).toContainText('1 of ' + p.words.length);
   });
 
+  test('duplicate letters count in either order', async ({ page }) => {
+    /*
+     * DRESS puts its two S's on two particular squares. A player who traces
+     * them in the other order has drawn a squiggle nobody could tell from
+     * the intended one — same squares, same letters, same word — and
+     * refusing it refuses a correct answer.
+     *
+     * The swap has to be one a finger could actually draw, so this hunts for
+     * a word where exchanging two neighbouring cells leaves every step still
+     * touching, dealing new boards until it finds one.
+     */
+    const swap = await page.evaluate(() => {
+      const touching = (a, b, cols) => {
+        const ax = a % cols, ay = (a - ax) / cols;
+        const bx = b % cols, by = (b - bx) / cols;
+        return a !== b && Math.abs(ax - bx) <= 1 && Math.abs(ay - by) <= 1;
+      };
+      for (let n = 0; n < 40; n++) {
+        const p = JSON.parse(localStorage.getItem('games.word-squiggles.v1')).puzzle;
+        for (const e of p.words) {
+          for (let k = 0; k + 1 < e.word.length; k++) {
+            if (e.word[k] !== e.word[k + 1]) continue;
+            const path = e.cells.slice();
+            const t = path[k]; path[k] = path[k + 1]; path[k + 1] = t;
+            let drawable = true;
+            for (let i = 1; i < path.length; i++) {
+              if (!touching(path[i - 1], path[i], p.cols)) { drawable = false; break; }
+            }
+            if (drawable) return { word: e.word, path: path, laid: e.cells };
+          }
+        }
+        document.getElementById('new-btn').click();
+      }
+      return null;
+    });
+    test.skip(!swap, 'no drawable duplicate-letter swap turned up in 40 boards');
+
+    // Not the order the builder laid, but the same squares.
+    expect(swap.path).not.toEqual(swap.laid);
+    expect(swap.path.slice().sort()).toEqual(swap.laid.slice().sort());
+
+    await trace(page, swap.path);
+    await expect(flash(page)).toContainText(swap.word);
+    await expect(page.locator('#tally')).toContainText('1 of ');
+  });
+
+  test('the right letters over the wrong squares is still refused',
+    async ({ page }) => {
+      /*
+       * The other half of the rule. Order within a word's own cells is free,
+       * but the SQUARES are not: a path that borrows a neighbour's cell
+       * would leave the real word unsolvable, so it has to be refused
+       * however well it spells.
+       *
+       * Every word, every position, every cell on the board — an earlier
+       * version only looked at cells next to the second-to-last square and
+       * skipped in every run it ever had, so this half of the rule went
+       * untested. A skip here is nearly as bad as a failure.
+       */
+      const swapped = await page.evaluate(() => {
+        const touching = (a, b, cols) => {
+          const ax = a % cols, ay = (a - ax) / cols;
+          const bx = b % cols, by = (b - bx) / cols;
+          return a !== b && Math.abs(ax - bx) <= 1 && Math.abs(ay - by) <= 1;
+        };
+        for (let n = 0; n < 40; n++) {
+          const p = JSON.parse(localStorage.getItem('games.word-squiggles.v1')).puzzle;
+          for (const e of p.words) {
+            const own = new Set(e.cells);
+            for (let k = 0; k < e.cells.length; k++) {
+              for (let j = 0; j < p.letters.length; j++) {
+                // A cell this word does not own, carrying the letter it needs.
+                if (own.has(j) || p.letters[j] !== e.word[k]) continue;
+                const path = e.cells.slice();
+                path[k] = j;
+                if (new Set(path).size !== path.length) continue;
+                let drawable = true;
+                for (let i = 1; i < path.length; i++) {
+                  if (!touching(path[i - 1], path[i], p.cols)) { drawable = false; break; }
+                }
+                if (drawable) return { word: e.word, path: path, laid: e.cells };
+              }
+            }
+          }
+          document.getElementById('new-btn').click();
+        }
+        return null;
+      });
+      expect(swapped, 'no borrowed-cell path found in 40 boards').not.toBeNull();
+
+      // It spells the word exactly, and uses one square that is not its own.
+      const spelled = await page.evaluate(([puzzle, path]) =>
+        path.map(i => puzzle.letters[i]).join(''),
+      [await puzzleOf(page), swapped.path]);
+      expect(spelled).toBe(swapped.word);
+      expect(swapped.path).not.toEqual(swapped.laid);
+
+      await trace(page, swapped.path);
+      await expect(flash(page)).toHaveText('Not one of them');
+      await expect(page.locator('#tally')).toContainText('0 of ');
+    });
+
   test('a squiggle that is not a word is refused', async ({ page }) => {
     const p = await puzzleOf(page);
     // Three cells in a row along the top, which is vanishingly unlikely to
@@ -202,6 +395,92 @@ test.describe('playing', () => {
     expect(p.words.some(w => w.cells[0] === at), 'the hint is not a word start').toBe(true);
     // Still nothing found — a hint is a nudge, not an answer.
     await expect(page.locator('#tally')).toContainText('0 of ' + p.words.length);
+  });
+});
+
+test.describe('the clock and the leaderboard', () => {
+  test('the clock does not start until the first squiggle', async ({ page }) => {
+    await expect(page.locator('#clock')).toHaveText('0:00');
+    await page.waitForTimeout(1300);
+    // Reading the theme, or picking the phone back up, costs nothing.
+    await expect(page.locator('#clock')).toHaveText('0:00');
+
+    const p = await puzzleOf(page);
+    await trace(page, p.words[0].cells);
+    await expect(page.locator('#clock')).not.toHaveText('0:00', { timeout: 3000 });
+  });
+
+  test('a hint costs time, and each one costs more', async ({ page }) => {
+    await page.locator('#hint-btn').click();
+    await expect(flash(page)).toContainText('+15s');
+    await page.locator('#hint-btn').click();
+    await expect(flash(page)).toContainText('+30s');
+    await page.locator('#hint-btn').click();
+    await expect(flash(page)).toContainText('+45s');
+    await expect(page.locator('#board .cell[data-hint]')).toHaveCount(3);
+  });
+
+  test('solving records a time under the board size', async ({ page }) => {
+    const p = await puzzleOf(page);
+    for (const entry of p.words) await trace(page, entry.cells);
+    await expect(page.locator('#over')).toHaveAttribute('data-open', /.*/);
+
+    const shape = p.cols + '\u00d7' + p.rows;
+    await expect(page.locator('#sums .final')).toContainText(shape);
+    // No hints taken, so nothing was added to the clock.
+    await expect(page.locator('#sums')).toContainText('No hints');
+
+    const saved = await page.evaluate(k =>
+      JSON.parse(localStorage.getItem(k)).times, KEY);
+    expect(Object.keys(saved)).toContain(shape);
+    expect(saved[shape]).toHaveLength(1);
+    expect(saved[shape][0].hints).toBe(0);
+    expect(saved[shape][0].total).toBe(saved[shape][0].raw);
+  });
+
+  test('a hint is added to the time that is recorded', async ({ page }) => {
+    const p = await puzzleOf(page);
+    await page.locator('#hint-btn').click();
+    for (const entry of p.words) await trace(page, entry.cells);
+
+    await expect(page.locator('#sums')).toContainText('1 hint');
+    await expect(page.locator('#sums')).toContainText('+15s');
+
+    const shape = p.cols + '\u00d7' + p.rows;
+    const saved = await page.evaluate(k =>
+      JSON.parse(localStorage.getItem(k)).times, KEY);
+    const entry = saved[shape][0];
+    expect(entry.hints).toBe(1);
+    // Fifteen seconds on top of the clock, give or take the run's own time.
+    expect(entry.total - entry.raw).toBe(15000);
+  });
+
+  test('the leaderboard is empty until something is solved, and split by size',
+    async ({ page }) => {
+      await page.locator('#board-btn').click();
+      await expect(page.locator('#board-body .score-empty')).toBeVisible();
+      await page.locator('#board-sheet [data-close]').click();
+
+      const p = await puzzleOf(page);
+      for (const entry of p.words) await trace(page, entry.cells);
+      await page.locator('#over [data-close]').click();
+      await page.locator('#board-btn').click();
+
+      const shape = p.cols + '\u00d7' + p.rows;
+      await expect(page.locator('#board-body .score-shape')).toHaveText([shape]);
+      await expect(page.locator('#board-body .score-list li')).toHaveCount(1);
+      await expect(page.locator('#board-body .detail')).toHaveText('no hints');
+    });
+
+  test('a nonsense time is not restored', async ({ page }) => {
+    await page.evaluate(key => {
+      const saved = JSON.parse(localStorage.getItem(key));
+      saved.times = { '6×8': [{ total: 'soon' }, { total: 900, hints: -2 }], 'zz': [] };
+      localStorage.setItem(key, JSON.stringify(saved));
+    }, KEY);
+    await page.reload();
+    await page.locator('#board-btn').click();
+    await expect(page.locator('#board-body .score-empty')).toBeVisible();
   });
 });
 
