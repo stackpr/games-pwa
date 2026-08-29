@@ -75,6 +75,23 @@ const look = (page, word) => page.evaluate(w => window.Dictionary.look(w), word)
 const health = page => page.evaluate(() => window.Dictionary.health());
 const reason = page => page.evaluate(() => window.Dictionary.last());
 
+/*
+ * The library probes the services on load. A test that starts asking before
+ * that has settled is racing it, which under a loaded suite shows up as an
+ * occasional wrong verdict — so every test waits for the state it needs
+ * rather than for a guessed number of milliseconds. The generous timeout is
+ * because the whole suite runs two workers deep and a probe is two real
+ * round trips through the route mocks.
+ */
+const SETTLE = { timeout: 20000 };
+
+/** Waits until a named service has been judged, one way or the other. */
+async function settled(page, id, state) {
+  await expect
+    .poll(() => page.evaluate(key => window.Dictionary.health()[key].state, id), SETTLE)
+    .toBe(state);
+}
+
 /**
  * The word these tests send to the network must be one the shipped list does
  * not answer, or the mocks are never reached and every count is zero.
@@ -90,7 +107,8 @@ async function open(page, opts) {
   await page.goto(URL);
   await clearState(page);
   // The load probe settles before any test asks a question of its own.
-  await expect.poll(() => page.evaluate(() => window.Dictionary.ready())).toBe(true);
+  await expect.poll(() => page.evaluate(() => window.Dictionary.ready()), SETTLE)
+    .toBe(true);
   await assertRareIsRare(page);
 }
 
@@ -219,6 +237,7 @@ test.describe('two services', () => {
     await serve(page, SECOND, { known: [RARE] });
     await page.goto(URL);
     await clearState(page);
+    await settled(page, 'freedictionaryapi.com', 'up');
     const seen = counter(page);
 
     // The first is asked, fails, and the question moves along rather than
@@ -257,6 +276,9 @@ test.describe('two services', () => {
       await serve(page, SECOND, { known: [RARE] });
       await page.goto(URL);
       await clearState(page);
+      // Both verdicts in, so the lookup below is not racing the probe.
+      await settled(page, 'api.dictionaryapi.dev', 'down');
+      await settled(page, 'freedictionaryapi.com', 'up');
       const seen = counter(page);
 
       expect(await look(page, RARE)).toBe('yes');
@@ -270,7 +292,8 @@ test.describe('two services', () => {
       await serveBoth(page, { probe: false });
       await page.goto(URL);
       await clearState(page);
-      await expect.poll(() => page.evaluate(() => window.Dictionary.ready())).toBe(false);
+      await expect.poll(() => page.evaluate(() => window.Dictionary.ready()), SETTLE)
+        .toBe(false);
 
       const seen = counter(page);
       const started = Date.now();
@@ -290,7 +313,8 @@ test.describe('two services', () => {
       await serveBoth(page, { probe: false });
       await page.goto(URL);
       await clearState(page);
-      await expect.poll(() => page.evaluate(() => window.Dictionary.ready())).toBe(false);
+      await expect.poll(() => page.evaluate(() => window.Dictionary.ready()), SETTLE)
+        .toBe(false);
 
       const first = await health(page);
       // A failed control word is not a stumble, so it counts straight to the
@@ -314,7 +338,8 @@ test.describe('two services', () => {
     await serveBoth(page, { probe: false });
     await page.goto(URL);
     await clearState(page);
-    await expect.poll(() => page.evaluate(() => window.Dictionary.ready())).toBe(false);
+    await expect.poll(() => page.evaluate(() => window.Dictionary.ready()), SETTLE)
+      .toBe(false);
 
     // Wind the clock past the backoff by ageing the stored record, which is
     // what the library actually reads.
@@ -324,10 +349,20 @@ test.describe('two services', () => {
       localStorage.setItem(key, JSON.stringify(saved));
     }, KEY);
 
-    await unserve(page);
+    /*
+     * Re-routed without unrouting first — Playwright matches the most
+     * recently added handler, and an unroute/route pair races the reload
+     * below, which showed up as the probe escaping to the real network and
+     * marking both services down for the rest of the test.
+     */
     await serveBoth(page, { known: [RARE] });
     await page.reload();
-    await expect.poll(() => page.evaluate(() => window.Dictionary.ready())).toBe(true);
+    /*
+     * Driven rather than waited for. probe() resolves to ready(), so this
+     * says what happened instead of timing out after twenty seconds with
+     * nothing to show for it.
+     */
+    expect(await page.evaluate(() => window.Dictionary.probe())).toBe(true);
     expect(await look(page, RARE)).toBe('yes');
   });
 });

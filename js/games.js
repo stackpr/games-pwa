@@ -181,6 +181,13 @@ const GAMES = [
     path: 'games/word-sprint/'
   },
   {
+    name: 'Word Squiggles',
+    section: 'solitaire',
+    description: 'Every letter belongs to a themed word',
+    emoji: '\u{1F300}',
+    path: 'games/word-squiggles/'
+  },
+  {
     name: 'Honeycomb: Spelling',
     section: 'solitaire',
     description: 'Seven random letters, checked online',

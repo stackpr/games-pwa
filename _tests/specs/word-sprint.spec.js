@@ -275,8 +275,13 @@ test.describe('words the page does not carry', () => {
     await type(page, 'zjqxw');
     await expect(clock(page)).not.toHaveText('0:00', { timeout: 3000 });
     await page.keyboard.press('Enter');
-    await expect(flash(page)).toContainText('Checking ZJQXW');
-
+    /*
+     * The "Checking" line is deliberately not asserted here: it lasts
+     * exactly as long as the deadline, so a poll that starts late under a
+     * loaded suite can miss the whole window and fail for no reason. The
+     * test below owns that state, with a request it releases by hand. What
+     * matters here is that the game comes back at all.
+     */
     await expect(flash(page)).toContainText('Could not check', { timeout: 15000 });
     await expect(row(page, 0).nth(0)).toHaveText('', { timeout: 3000 });
     await expect(row(page, 0).nth(0)).not.toHaveAttribute('data-mark', /.*/);
@@ -305,6 +310,9 @@ test.describe('words the page does not carry', () => {
     await type(page, 'zjqxw');
     await expect(clock(page)).not.toHaveText('0:00', { timeout: 3000 });
     await page.keyboard.press('Enter');
+    // Held open by a request this test releases itself, so the transient
+    // states can be asserted without racing a timer.
+    await expect(flash(page)).toContainText('Checking ZJQXW');
     await expect(clock(page)).toHaveAttribute('data-held', /.*/);
 
     const stopped = await clock(page).textContent();
