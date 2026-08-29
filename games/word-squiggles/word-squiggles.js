@@ -457,10 +457,9 @@
   function finish() {
     if (!drawing) return;
     drawing = false;
-    const word = trail.map(i => puzzle.letters[i]).join('');
     const path = trail.slice();
     trail = [];
-    submit(word, path);
+    submit(path);
   }
 
   function samePath(a, b) {
@@ -469,25 +468,32 @@
     return true;
   }
 
-  function submit(word, path) {
+  /*
+   * Matched on the PATH alone, never on the letters.
+   *
+   * The path has to be the one the builder laid: two different squiggles can
+   * spell the same word on a dense board, and accepting the wrong one leaves
+   * the real word's cells claimed by its neighbour, which makes the rest of
+   * the puzzle unsolvable through no fault of the player. Since the cells
+   * decide the letters, the path is the whole identity — and comparing the
+   * typed-out letters as well is not a second check, it is a bug waiting to
+   * happen. It was one: reading a backwards trace gave `dracsid` for
+   * `discard`, and the word test rejected it before the reversed-path test
+   * could accept it.
+   */
+  function submit(path) {
     if (path.length < 2) { render(); return; }
+    const back = path.slice().reverse();
     for (const entry of puzzle.words) {
       if (isFound(entry)) continue;
-      /*
-       * The path has to be the one the builder laid, not merely a path
-       * spelling the same letters. Two different squiggles can spell the
-       * same word on a dense board, and accepting the wrong one would leave
-       * the real word's cells claimed by its neighbour — which makes the
-       * rest of the puzzle unsolvable.
-       */
-      if (entry.word !== word) continue;
-      if (!samePath(entry.cells, path) &&
-          !samePath(entry.cells, path.slice().reverse())) continue;
+      // Either way round: a squiggle read from either end is the same one.
+      if (!samePath(entry.cells, path) && !samePath(entry.cells, back)) continue;
       found.push(entry.word);
       save();
       render();
-      flash(entry.spanner ? 'The spanner! ' + word : word, 'good');
-      say(word + ' found. ' + found.length + ' of ' + puzzle.words.length + '.');
+      flash(entry.spanner ? 'The spanner! ' + entry.word : entry.word, 'good');
+      say(entry.word + ' found. ' + found.length + ' of ' +
+        puzzle.words.length + '.');
       if (found.length === puzzle.words.length) done();
       return;
     }

@@ -259,10 +259,13 @@ test.describe('words the page does not carry', () => {
      * The deadline lives in js/lib/dictionary.js; this checks the game comes
      * back from it.
      */
-    await unserve(page);
-    // The control word still answers: a source that fails its probe is set
-    // aside, and this test is about a service that accepts the question and
-    // never answers it.
+    /*
+     * Re-routed without unrouting first: Playwright matches the most
+     * recently added handler, and an unroute/route pair has raced the
+     * page often enough to be worth avoiding. The control word still
+     * answers — a source that fails its probe is set aside, and this test
+     * is about a service that accepts the question and never answers it.
+     */
     for (const api of APIS) {
       await page.route(api, route => {
         if (decodeURIComponent(route.request().url().split('/').pop()) === PROBE) {
@@ -296,7 +299,7 @@ test.describe('words the page does not carry', () => {
     // This is a race, so a wait on someone else's server is not the
     // player's time. Held rather than paused-and-forgotten: every path out
     // of the lookup has to start it again.
-    await unserve(page);
+    // Re-routed rather than unrouted first, for the reason above.
     let answer = null;
     for (const api of APIS) {
       await page.route(api, route => {
@@ -326,7 +329,7 @@ test.describe('words the page does not carry', () => {
   });
 
   test('a new word during a lookup discards the answer', async ({ page }) => {
-    await unserve(page);
+    // Re-routed rather than unrouted first, for the reason above.
     let answer = null;
     for (const api of APIS) {
       await page.route(api, route => {
