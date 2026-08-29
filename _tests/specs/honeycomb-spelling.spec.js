@@ -1,5 +1,5 @@
 const { test, expect } = require('@playwright/test');
-const { clearState, trackExternalRequests, trackErrors } = require('../helpers');
+const { clearState, trackExternalRequests, trackErrors, dictionaryAnswer } = require('../helpers');
 
 const URL = '/games/honeycomb-spelling/';
 const KEY = 'games.honeycomb-spelling.v1';
@@ -33,28 +33,20 @@ async function dictionary(page, opts = {}) {
   const reject = new Set(opts.reject || []);
   for (const api of APIS) {
     await page.route(api, async route => {
-      const word = decodeURIComponent(route.request().url().split('/').pop());
-      // The control word always lands: a source that fails it is never asked
-      // about a real word, which would make most of these tests measure the
-      // wrong thing.
-      if (word === PROBE) {
-        return route.fulfill({ status: 200, contentType: 'application/json', body: '[{}]' });
-      }
-      if (word === NONSENSE) {
-        return route.fulfill({ status: 404, contentType: 'application/json', body: '{}' });
-      }
+      const url = route.request().url();
+      const word = decodeURIComponent(url.split('/').pop());
+      // Each service answers the way it really answers — see
+      // dictionaryAnswer in helpers.js. The controls always land: a source
+      // that fails one is never asked about a real word, which would make
+      // most of these tests measure the wrong thing.
+      const say = found => route.fulfill(dictionaryAnswer(url, found));
+      if (word === PROBE) return say(true);
+      if (word === NONSENSE) return say(false);
       if (opts.abort) return route.abort('failed');
       if (opts.status) {
         return route.fulfill({ status: opts.status, contentType: 'application/json', body: '{}' });
       }
-      const found = !reject.has(word);
-      await route.fulfill({
-        status: found ? 200 : 404,
-        contentType: 'application/json',
-        body: found
-          ? JSON.stringify([{ word, meanings: [] }])
-          : JSON.stringify({ title: 'No Definitions Found' }),
-      });
+      return say(!reject.has(word));
     });
   }
 }
@@ -73,17 +65,10 @@ async function unserve(page) {
 async function routeBoth(page, handler) {
   for (const api of APIS) {
     await page.route(api, route => {
-      const word = decodeURIComponent(route.request().url().split('/').pop());
-      if (word === PROBE) {
-        return route.fulfill({
-          status: 200, contentType: 'application/json', body: '[{}]'
-        });
-      }
-      if (word === NONSENSE) {
-        return route.fulfill({
-          status: 404, contentType: 'application/json', body: '{}'
-        });
-      }
+      const url = route.request().url();
+      const word = decodeURIComponent(url.split('/').pop());
+      if (word === PROBE) return route.fulfill(dictionaryAnswer(url, true));
+      if (word === NONSENSE) return route.fulfill(dictionaryAnswer(url, false));
       return handler(route, word);
     });
   }

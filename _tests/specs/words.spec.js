@@ -1,4 +1,5 @@
 const { test, expect } = require('@playwright/test');
+const { dictionaryAnswer } = require('../helpers');
 
 /*
  * js/lib/words.js — the words the site ships, so that "is that a word?" is
@@ -13,13 +14,9 @@ test.describe('the shipped word list', { tag: '@nodom' }, () => {
     // Routed so the dictionary's load probe never reaches the real internet.
     for (const api of ['https://api.dictionaryapi.dev/**', 'https://freedictionaryapi.com/**']) {
       await page.route(api, route => {
-        const word = decodeURIComponent(route.request().url().split('/').pop());
-        if (word === 'zqxjvwkfp') {
-          return route.fulfill({ status: 404, contentType: 'application/json', body: '{}' });
-        }
-        return route.fulfill({
-          status: 200, contentType: 'application/json', body: '[{}]'
-        });
+        const url = route.request().url();
+        const word = decodeURIComponent(url.split('/').pop());
+        return route.fulfill(dictionaryAnswer(url, word !== 'zqxjvwkfp'));
       });
     }
     await page.goto(URL);

@@ -1,4 +1,5 @@
 const { test, expect } = require('@playwright/test');
+const { dictionaryAnswer } = require('../helpers');
 
 /*
  * js/lib/modal.js and css/modal.css — the overlay dialog every game uses.
@@ -22,7 +23,8 @@ const hitAt = (page, box) => page.evaluate(([x, y]) => {
 test.beforeEach(async ({ page }) => {
   // The dictionary probe is not this file's business; keep it off the wire.
   for (const api of ['https://api.dictionaryapi.dev/**', 'https://freedictionaryapi.com/**']) {
-    await page.route(api, route => route.fulfill({ status: 404, body: '{}' }));
+    await page.route(api, route =>
+      route.fulfill(dictionaryAnswer(route.request().url(), false)));
   }
   await page.goto(URL);
 });

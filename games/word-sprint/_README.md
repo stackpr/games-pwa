@@ -95,10 +95,12 @@ owns the requests and remembers the answer — so the second time anybody plays
 that word, anywhere on the site, it is instant.
 
 It asks **two** services in turn, because the first one went down entirely
-and took word checking in both word games with it. A source has to answer a
-control word before it is trusted with a real one, and a source that fails is
-left alone for a growing interval rather than retried on every guess. The
-details, and why a source must prove itself, are in the library and in
+and took word checking in both word games with it. Each is read by its own
+rule — one says no with a `404`, the other answers `200` to everything and
+says no with an empty `entries` array — and each must find a control word and
+refuse a nonsense one before it is trusted. A source that fails is left alone
+for a growing interval rather than retried on every guess, and a lookup only
+ever asks a source already known good. The details are in the library and in
 CLAUDE.md.
 
 Three outcomes, and the third is the one to get right:

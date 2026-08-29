@@ -42,16 +42,26 @@ to leave out a caveat.
      exactly those grounds. They are tried in order and the first verdict
      wins.
 
+     **Each source carries its own rule for reading an answer**, because
+     they do not answer alike and a shared rule gets one of them wrong.
+     `api.dictionaryapi.dev` says no with a `404`. `freedictionaryapi.com`
+     answers **`200` to everything** and puts the verdict in the body:
+     `entries` holds the senses for a word and is an empty array for
+     anything else. Reading its status alone makes every string a word —
+     which is how `bigie` was accepted on the live site. The endpoint was
+     right and the interpretation was wrong, so a new source needs its
+     answer shape established, not just its URL.
+
      **A source must prove itself on TWO controls before it may answer** —
-     a real word it has to find, and a nonsense string it has to refuse. A
-     wrong URL can be wrong in two directions and each poisons a different
-     verdict: `404` to everything makes every real word "not a word", since
-     `404` is how these services say no; `200` to everything makes every
-     string a word. The second is the worse one, because it is silent and it
-     accepts a player's typos — `bigie` was accepted that way on the live
-     site, by a probe that checked only the first. Checking one control
-     catches one direction and sails past the other. A wrong URL must cost a
-     disabled source, never a poisoned verdict, in either direction.
+     a real word it has to find, and a nonsense string it has to refuse —
+     and both are read through that source's own rule, so what is tested is
+     the whole interpretation rather than a status code. A source can be
+     wrong in two directions and each poisons a different verdict: refusing
+     everything makes every real word "not a word"; accepting everything
+     makes every string a word. The second is worse, because it is silent
+     and it accepts a player's typos. Checking one control catches one
+     direction and sails past the other. Being wrong must cost a disabled
+     source, never a poisoned verdict, in either direction.
 
      **The second control costs one console line per service, per probe.**
      Refusing a word is a `404`, and the browser logs every non-2xx itself —

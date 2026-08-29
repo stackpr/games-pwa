@@ -1,5 +1,6 @@
 const { test, expect } = require('@playwright/test');
-const { freshPage, serviceWorkerReady, trackExternalRequests, trackErrors } = require('../helpers');
+const { freshPage, serviceWorkerReady, trackExternalRequests, trackErrors,
+  dictionaryAnswer } = require('../helpers');
 
 const JOKE_API = 'https://icanhazdadjoke.com/**';
 
@@ -37,15 +38,11 @@ const DICTIONARIES = [
 async function mockDictionaries(page) {
   for (const api of DICTIONARIES) {
     await page.route(api, route => {
-      const word = decodeURIComponent(route.request().url().split('/').pop());
+      const url = route.request().url();
+      const word = decodeURIComponent(url.split('/').pop());
       // A source has to refuse a nonsense control as well as find a real
-      // word, or the library treats it as answering yes to anything.
-      if (word === 'zqxjvwkfp') {
-        return route.fulfill({ status: 404, contentType: 'application/json', body: '{}' });
-      }
-      return route.fulfill({
-        status: 200, contentType: 'application/json', body: '[{}]'
-      });
+      // word, and each service says no its own way — see dictionaryAnswer.
+      return route.fulfill(dictionaryAnswer(url, word !== 'zqxjvwkfp'));
     });
   }
 }

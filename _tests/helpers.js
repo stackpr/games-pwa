@@ -63,7 +63,34 @@ function trackErrors(page) {
   return errors;
 }
 
+/**
+ * A reply shaped the way the real service at `url` shapes one.
+ *
+ * The two dictionaries do not answer alike, and a mock that pretends they do
+ * tests a shape that does not exist. api.dictionaryapi.dev says no with a
+ * 404; freedictionaryapi.com answers 200 to everything and says no with an
+ * empty `entries` array. Getting that wrong in the library is how `bigie`
+ * was accepted as a word, so the mocks carry the difference too.
+ */
+function dictionaryAnswer(url, found) {
+  if (url.includes('freedictionaryapi.com')) {
+    return {
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        word: url.split('/').pop(),
+        entries: found ? [{ language: { code: 'en' }, partOfSpeech: 'noun' }] : [],
+        source: { url: 'https://en.wiktionary.org' }
+      })
+    };
+  }
+  return found
+    ? { status: 200, contentType: 'application/json', body: '[{"word":"x"}]' }
+    : { status: 404, contentType: 'application/json', body: '{"title":"No Definitions Found"}' };
+}
+
 module.exports = {
+  dictionaryAnswer,
   freshPage,
   clearState,
   serviceWorkerReady,

@@ -62,14 +62,42 @@ window.Dictionary = (function () {
    * checking in both games with it. See CLAUDE.md for the standing terms
    * every network dependency here is held to.
    */
+  /*
+   * Each source carries its own `reads`, because they do not answer the same
+   * way and a shared rule gets one of them wrong. It turns a Response into
+   * 'yes', 'no', or null for "that was not a verdict".
+   */
   const SOURCES = [
     {
       id: 'api.dictionaryapi.dev',
-      url: w => 'https://api.dictionaryapi.dev/api/v2/entries/en/' + w
+      url: w => 'https://api.dictionaryapi.dev/api/v2/entries/en/' + w,
+      // Says no with a 404. Anything else non-2xx is a bad day, not a no.
+      reads: res => {
+        if (res.ok) return Promise.resolve('yes');
+        if (res.status === 404) return Promise.resolve('no');
+        return Promise.resolve(null);
+      }
     },
     {
       id: 'freedictionaryapi.com',
-      url: w => 'https://freedictionaryapi.com/api/v1/entries/en/' + w
+      url: w => 'https://freedictionaryapi.com/api/v1/entries/en/' + w,
+      /*
+       * This one answers 200 to EVERYTHING and puts the verdict in the body:
+       * `entries` holds the senses for a word and is an empty array for
+       * anything else. Reading the status alone makes every string a word,
+       * which is exactly how `bigie` was accepted on the live site — the
+       * endpoint was right and the interpretation was wrong.
+       */
+      reads: res => {
+        if (res.status === 404) return Promise.resolve('no');
+        if (!res.ok) return Promise.resolve(null);
+        return res.json().then(
+          body => (body && Array.isArray(body.entries) && body.entries.length
+            ? 'yes' : 'no'),
+          // A body we cannot read is not a verdict either way.
+          () => null
+        );
+      }
     }
   ];
 
@@ -264,22 +292,29 @@ window.Dictionary = (function () {
       ask(src.url(PROBE_NONSENSE))
     ]).then(([yes, no]) => {
       if (!yes.res) return disqualify(src, yes.why);
-      if (!yes.res.ok) {
-        return disqualify(src, 'HTTP ' + yes.res.status + ' for "' + PROBE_WORD + '"');
-      }
       if (!no.res) return disqualify(src, no.why);
       /*
-       * The dangerous answer. A source calling this a word is not a
-       * dictionary at the URL we are using, and trusting it would accept
-       * every typo a player makes.
+       * Read through the source's own rule, so what is being tested is the
+       * whole interpretation — endpoint, status handling and body shape
+       * together — rather than a status code. A source whose shape we have
+       * misunderstood fails here, which is the point.
        */
-      if (no.res.ok) {
-        return disqualify(src, 'calls "' + PROBE_NONSENSE + '" a word, so it is ' +
-          'answering yes to anything');
-      }
-      if (!known.has(PROBE_WORD)) remember(PROBE_WORD, 'yes');
-      mark(src, true, 'answered both controls');
-      return true;
+      return Promise.all([src.reads(yes.res), src.reads(no.res)])
+        .then(([sawWord, sawJunk]) => {
+          if (sawWord !== 'yes') {
+            return disqualify(src, 'does not find "' + PROBE_WORD + '"' +
+              (sawWord === null ? ' (HTTP ' + yes.res.status + ')' : ''));
+          }
+          // The dangerous one: a source that calls this a word would accept
+          // every typo a player makes.
+          if (sawJunk !== 'no') {
+            return disqualify(src, 'calls "' + PROBE_NONSENSE + '" a word, so it ' +
+              'is answering yes to anything');
+          }
+          if (!known.has(PROBE_WORD)) remember(PROBE_WORD, 'yes');
+          mark(src, true, 'answered both controls');
+          return true;
+        });
     });
   }
 
@@ -397,20 +432,22 @@ window.Dictionary = (function () {
       return Promise.resolve(note(w, 'off', said, started));
     }
     const src = list[i];
-    return ask(src.url(w)).then(out => {
-      if (out.res && out.res.ok) {
-        mark(src, true, 'answered');
-        return note(w, remember(w, 'yes'), 'answered by ' + src.id, started);
-      }
-      if (out.res && out.res.status === 404) {
-        // Trustworthy only because the source passed both its controls.
-        mark(src, true, 'answered');
-        return note(w, remember(w, 'no'), 'answered by ' + src.id, started);
-      }
-      const why = out.res ? 'HTTP ' + out.res.status : out.why;
+    const onwards = why => {
       mark(src, false, why);
       tried.push(src.id + ': ' + why);
       return fromSources(list, i + 1, w, started, tried);
+    };
+
+    return ask(src.url(w)).then(out => {
+      if (!out.res) return onwards(out.why);
+      // Through the source's own rule, the same one its controls passed.
+      return src.reads(out.res).then(verdict => {
+        if (verdict === 'yes' || verdict === 'no') {
+          mark(src, true, 'answered');
+          return note(w, remember(w, verdict), 'answered by ' + src.id, started);
+        }
+        return onwards('HTTP ' + out.res.status);
+      });
     });
   }
 

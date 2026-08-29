@@ -1,5 +1,5 @@
 const { test, expect } = require('@playwright/test');
-const { clearState } = require('../helpers');
+const { clearState, dictionaryAnswer } = require('../helpers');
 
 // Any page that loads js/lib/dictionary.js will do; Word Sprint is the one
 // that also uses the cached verdicts synchronously.
@@ -35,32 +35,21 @@ const wordOf = route => decodeURIComponent(route.request().url().split('/').pop(
 async function serve(page, api, opts) {
   const options = opts || {};
   await page.route(api, route => {
+    const url = route.request().url();
     const word = wordOf(route);
-    if (word === PROBE) {
-      if (options.probe === false) {
-        return route.fulfill({ status: 404, contentType: 'application/json', body: '{}' });
-      }
-      return route.fulfill({ status: 200, contentType: 'application/json', body: '[{}]' });
-    }
+    const say = found => route.fulfill(dictionaryAnswer(url, found));
+
+    if (word === PROBE) return say(options.probe !== false);
     if (word === NONSENSE) {
-      // `liar` is a service answering 200 to everything — a wrong path on a
-      // host that serves a page instead of an error.
-      if (options.liar) {
-        return route.fulfill({ status: 200, contentType: 'application/json', body: '[{}]' });
-      }
-      return route.fulfill({ status: 404, contentType: 'application/json', body: '{}' });
-    }
-    if (options.liar) {
-      return route.fulfill({ status: 200, contentType: 'application/json', body: '[{}]' });
+      // `liar` is a service that calls everything a word — the failure the
+      // second control exists to catch.
+      return say(Boolean(options.liar));
     }
     if (options.abort) return route.abort('failed');
     if (options.hang) return; // never answered
     if (options.status) return route.fulfill({ status: options.status, body: '{}' });
-    const known = options.known || [];
-    if (known.indexOf(word) >= 0) {
-      return route.fulfill({ status: 200, contentType: 'application/json', body: '[{}]' });
-    }
-    return route.fulfill({ status: 404, contentType: 'application/json', body: '{}' });
+    if (options.liar) return say(true);
+    return say((options.known || []).indexOf(word) >= 0);
   });
 }
 
@@ -306,6 +295,55 @@ test.describe('two services', () => {
       expect(seen.first, 'the unproven service was asked about a real word').toBe(0);
       expect(seen.second).toBe(1);
       expect((await health(page))['api.dictionaryapi.dev'].state).toBe('down');
+    });
+
+  test('freedictionaryapi.com is read by its body, not its status',
+    async ({ page }) => {
+      /*
+       * That service answers 200 to EVERYTHING and puts the verdict in the
+       * body: `entries` carries the senses for a word and is an empty array
+       * for anything else. Reading the status alone makes every string a
+       * word — which is exactly how `bigie` was accepted on the live site.
+       * The endpoint was right; the interpretation was wrong.
+       */
+      await serve(page, FIRST, { status: 503 });
+      await page.route(SECOND, route => {
+        const word = wordOf(route);
+        const entries = word === 'zqxjvwkfp' ? [] : [{ partOfSpeech: 'noun' }];
+        // 200 either way, exactly as the real service does.
+        return route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({ word: word, entries: entries,
+            source: { url: 'https://en.wiktionary.org' } })
+        });
+      });
+      await page.goto(URL);
+      await clearState(page);
+      await settled(page, 'freedictionaryapi.com', 'up');
+
+      // A word it holds, and a string it does not — both arriving as 200.
+      expect(await look(page, RARE)).toBe('yes');
+      expect(await look(page, 'wossname')).toBe('yes');
+      const empty = await page.evaluate(() => window.Dictionary.look('zqxjvwkfp'));
+      expect(empty, 'an empty entries array is a no, not a yes').toBe('no');
+    });
+
+  test('a service whose body never carries entries is not trusted',
+    async ({ page }) => {
+      // The same service answering 200 with no verdict in it at all — a
+      // wrong path on that host would look like this.
+      await serve(page, FIRST, { status: 503 });
+      await page.route(SECOND, route => route.fulfill({
+        status: 200, contentType: 'text/html', body: '<!doctype html><p>hello'
+      }));
+      await page.goto(URL);
+      await clearState(page);
+      await settled(page, 'freedictionaryapi.com', 'down');
+
+      const state = await health(page);
+      expect(state['freedictionaryapi.com'].why).toContain(PROBE);
+      expect(await look(page, RARE)).toBe('off');
     });
 
   test('a service that says yes to anything is never trusted', async ({ page }) => {

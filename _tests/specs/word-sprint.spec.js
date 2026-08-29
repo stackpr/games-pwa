@@ -1,5 +1,5 @@
 const { test, expect } = require('@playwright/test');
-const { clearState, trackExternalRequests } = require('../helpers');
+const { clearState, trackExternalRequests, dictionaryAnswer } = require('../helpers');
 
 const URL = '/games/word-sprint/';
 const KEY = 'games.word-sprint.v1';
@@ -47,19 +47,15 @@ async function dictionary(page, opts) {
   const options = opts || {};
   for (const api of APIS) {
     await page.route(api, route => {
-      const word = decodeURIComponent(route.request().url().split('/').pop());
-      if (word === PROBE) {
-        return route.fulfill({ status: 200, contentType: 'application/json', body: '[{}]' });
-      }
-      if (word === NONSENSE) {
-        return route.fulfill({ status: 404, contentType: 'application/json', body: '{}' });
-      }
+      const url = route.request().url();
+      const word = decodeURIComponent(url.split('/').pop());
+      // Each service is answered the way it really answers — see
+      // dictionaryAnswer in helpers.js.
+      const say = found => route.fulfill(dictionaryAnswer(url, found));
+      if (word === PROBE) return say(true);
+      if (word === NONSENSE) return say(false);
       if (options.abort) return route.abort('failed');
-      const known = options.known || [];
-      if (known.indexOf(word) >= 0) {
-        return route.fulfill({ status: 200, contentType: 'application/json', body: '[{}]' });
-      }
-      return route.fulfill({ status: 404, contentType: 'application/json', body: '{}' });
+      return say((options.known || []).indexOf(word) >= 0);
     });
   }
 }
@@ -274,13 +270,10 @@ test.describe('words the page does not carry', () => {
      */
     for (const api of APIS) {
       await page.route(api, route => {
-        const w = decodeURIComponent(route.request().url().split('/').pop());
-        if (w === PROBE) {
-          return route.fulfill({ status: 200, contentType: 'application/json', body: '[{}]' });
-        }
-        if (w === NONSENSE) {
-          return route.fulfill({ status: 404, contentType: 'application/json', body: '{}' });
-        }
+        const url = route.request().url();
+        const w = decodeURIComponent(url.split('/').pop());
+        if (w === PROBE) return route.fulfill(dictionaryAnswer(url, true));
+        if (w === NONSENSE) return route.fulfill(dictionaryAnswer(url, false));
         /* never answered */
       });
     }
@@ -313,13 +306,10 @@ test.describe('words the page does not carry', () => {
     let answer = null;
     for (const api of APIS) {
       await page.route(api, route => {
-        const w = decodeURIComponent(route.request().url().split('/').pop());
-        if (w === PROBE) {
-          return route.fulfill({ status: 200, contentType: 'application/json', body: '[{}]' });
-        }
-        if (w === NONSENSE) {
-          return route.fulfill({ status: 404, contentType: 'application/json', body: '{}' });
-        }
+        const url = route.request().url();
+        const w = decodeURIComponent(url.split('/').pop());
+        if (w === PROBE) return route.fulfill(dictionaryAnswer(url, true));
+        if (w === NONSENSE) return route.fulfill(dictionaryAnswer(url, false));
         answer = route;
       });
     }
@@ -347,13 +337,10 @@ test.describe('words the page does not carry', () => {
     let answer = null;
     for (const api of APIS) {
       await page.route(api, route => {
-        const w = decodeURIComponent(route.request().url().split('/').pop());
-        if (w === PROBE) {
-          return route.fulfill({ status: 200, contentType: 'application/json', body: '[{}]' });
-        }
-        if (w === NONSENSE) {
-          return route.fulfill({ status: 404, contentType: 'application/json', body: '{}' });
-        }
+        const url = route.request().url();
+        const w = decodeURIComponent(url.split('/').pop());
+        if (w === PROBE) return route.fulfill(dictionaryAnswer(url, true));
+        if (w === NONSENSE) return route.fulfill(dictionaryAnswer(url, false));
         answer = route;
       });
     }
