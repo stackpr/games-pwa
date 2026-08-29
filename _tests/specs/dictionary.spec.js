@@ -10,6 +10,13 @@ const APIS = [FIRST, SECOND];
 const KEY = 'games.dictionary.v1';
 // The control word every source has to answer before it is trusted.
 const PROBE = 'apple';
+/*
+ * A word the shipped list does not carry, so the question actually reaches a
+ * service. It has to be one js/lib/words.js will never hold: RARE used
+ * to do this job and stopped working the day the list grew to include it,
+ * which is why the guard below exists rather than a comment saying "careful".
+ */
+const RARE = 'snollygoster';
 
 const wordOf = route => decodeURIComponent(route.request().url().split('/').pop());
 
@@ -68,6 +75,15 @@ const look = (page, word) => page.evaluate(w => window.Dictionary.look(w), word)
 const health = page => page.evaluate(() => window.Dictionary.health());
 const reason = page => page.evaluate(() => window.Dictionary.last());
 
+/**
+ * The word these tests send to the network must be one the shipped list does
+ * not answer, or the mocks are never reached and every count is zero.
+ */
+async function assertRareIsRare(page) {
+  const shipped = await page.evaluate(w => window.Words.has(w), RARE);
+  expect(shipped, RARE + ' is on the shipped list; pick another rare word').toBe(false);
+}
+
 /** Loads the page with both services already mocked, as they must be. */
 async function open(page, opts) {
   await serveBoth(page, opts);
@@ -75,12 +91,13 @@ async function open(page, opts) {
   await clearState(page);
   // The load probe settles before any test asks a question of its own.
   await expect.poll(() => page.evaluate(() => window.Dictionary.ready())).toBe(true);
+  await assertRareIsRare(page);
 }
 
 test.describe('the shared dictionary', () => {
   test('answers yes, no, and off', async ({ page }) => {
-    await open(page, { known: ['quixotic'] });
-    expect(await look(page, 'quixotic')).toBe('yes');
+    await open(page, { known: [RARE] });
+    expect(await look(page, RARE)).toBe('yes');
     expect(await look(page, 'zzzzqqq')).toBe('no');
 
     await unserve(page);
@@ -90,11 +107,11 @@ test.describe('the shared dictionary', () => {
   });
 
   test('a verdict is asked for once, then remembered', async ({ page }) => {
-    await open(page, { known: ['quixotic'] });
+    await open(page, { known: [RARE] });
     const seen = counter(page);
 
-    expect(await look(page, 'quixotic')).toBe('yes');
-    expect(await look(page, 'quixotic')).toBe('yes');
+    expect(await look(page, RARE)).toBe('yes');
+    expect(await look(page, RARE)).toBe('yes');
     expect(await look(page, 'zzzzqqq')).toBe('no');
     expect(await look(page, 'zzzzqqq')).toBe('no');
     // Two words, one request each, and the first service answered both.
@@ -103,16 +120,16 @@ test.describe('the shared dictionary', () => {
   });
 
   test('what it was told survives a reload', async ({ page }) => {
-    await open(page, { known: ['quixotic'] });
-    expect(await look(page, 'quixotic')).toBe('yes');
+    await open(page, { known: [RARE] });
+    expect(await look(page, RARE)).toBe('yes');
     expect(await look(page, 'zzzzqqq')).toBe('no');
 
     await page.reload();
     const seen = counter(page);
     // Straight out of the cache, and answerable without waiting.
-    expect(await page.evaluate(() => window.Dictionary.verdict('quixotic'))).toBe('yes');
+    expect(await page.evaluate(() => window.Dictionary.verdict('snollygoster'))).toBe('yes');
     expect(await page.evaluate(() => window.Dictionary.verdict('zzzzqqq'))).toBe('no');
-    expect(await look(page, 'quixotic')).toBe('yes');
+    expect(await look(page, RARE)).toBe('yes');
     expect(seen.n).toBe(0);
   });
 
@@ -140,13 +157,13 @@ test.describe('the shared dictionary', () => {
   });
 
   test('offline it asks nothing at all', async ({ page, context }) => {
-    await open(page, { known: ['quixotic'] });
+    await open(page, { known: [RARE] });
     const seen = counter(page);
     await context.setOffline(true);
     try {
       // Checked before fetching, not caught after: a request the browser
       // cannot complete is logged by the browser itself. See CLAUDE.md.
-      expect(await look(page, 'quixotic')).toBe('off');
+      expect(await look(page, RARE)).toBe('off');
       expect(seen.n).toBe(0);
       expect((await reason(page)).why).toBe('browser reports offline');
     } finally {
@@ -164,21 +181,21 @@ test.describe('the shared dictionary', () => {
   });
 
   test('the cache is stored under the shared key', async ({ page }) => {
-    await open(page, { known: ['quixotic'] });
-    await look(page, 'quixotic');
+    await open(page, { known: [RARE] });
+    await look(page, RARE);
     await look(page, 'zzzzqqq');
 
     const saved = await page.evaluate(key => JSON.parse(localStorage.getItem(key)), KEY);
-    expect(saved.yes.split(' ')).toContain('quixotic');
+    expect(saved.yes.split(' ')).toContain(RARE);
     expect(saved.no.split(' ')).toContain('zzzzqqq');
   });
 
   test('a corrupt cache is dropped, not carried', async ({ page }) => {
-    await open(page, { known: ['quixotic'] });
+    await open(page, { known: [RARE] });
     await page.evaluate(key => localStorage.setItem(key, 'not json'), KEY);
     await page.reload();
     expect(await page.evaluate(() => window.Dictionary.size())).toBeLessThanOrEqual(1);
-    expect(await look(page, 'quixotic')).toBe('yes');
+    expect(await look(page, RARE)).toBe('yes');
   });
 
   test('it stops growing at its cap', async ({ page }) => {
@@ -199,14 +216,14 @@ test.describe('the shared dictionary', () => {
 test.describe('two services', () => {
   test('the second answers when the first will not', async ({ page }) => {
     await serve(page, FIRST, { status: 503 });
-    await serve(page, SECOND, { known: ['quixotic'] });
+    await serve(page, SECOND, { known: [RARE] });
     await page.goto(URL);
     await clearState(page);
     const seen = counter(page);
 
     // The first is asked, fails, and the question moves along rather than
     // becoming an 'off' — which is the whole point of having two.
-    expect(await look(page, 'quixotic')).toBe('yes');
+    expect(await look(page, RARE)).toBe('yes');
     expect(seen.first).toBe(1);
     expect(seen.second).toBe(1);
     expect((await reason(page)).why).toContain('freedictionaryapi.com');
@@ -226,12 +243,12 @@ test.describe('two services', () => {
        * allowed to answer for anything.
        */
       await serve(page, FIRST, { probe: false });
-      await serve(page, SECOND, { known: ['quixotic'] });
+      await serve(page, SECOND, { known: [RARE] });
       await page.goto(URL);
       await clearState(page);
       const seen = counter(page);
 
-      expect(await look(page, 'quixotic')).toBe('yes');
+      expect(await look(page, RARE)).toBe('yes');
       expect(seen.first, 'the unproven service was asked about a real word').toBe(0);
       expect(seen.second).toBe(1);
       expect((await health(page))['api.dictionaryapi.dev'].state).toBe('down');
@@ -246,7 +263,7 @@ test.describe('two services', () => {
 
       const seen = counter(page);
       const started = Date.now();
-      expect(await look(page, 'quixotic')).toBe('off');
+      expect(await look(page, RARE)).toBe('off');
       /*
        * The backoff is the point: asking again buys nothing and would cost
        * the player two deadlines of waiting for an answer already known.
@@ -297,10 +314,10 @@ test.describe('two services', () => {
     }, KEY);
 
     await unserve(page);
-    await serveBoth(page, { known: ['quixotic'] });
+    await serveBoth(page, { known: [RARE] });
     await page.reload();
     await expect.poll(() => page.evaluate(() => window.Dictionary.ready())).toBe(true);
-    expect(await look(page, 'quixotic')).toBe('yes');
+    expect(await look(page, RARE)).toBe('yes');
   });
 });
 
@@ -352,7 +369,7 @@ test.describe('saying what went wrong', () => {
     expect((await health(page))['api.dictionaryapi.dev'].why).toBe('HTTP 429');
 
     await unserve(page);
-    await serveBoth(page, { known: ['quixotic'] });
+    await serveBoth(page, { known: [RARE] });
     // Both were marked down by the 429s, so age them back into contention.
     await page.evaluate(key => {
       const saved = JSON.parse(localStorage.getItem(key) || '{}');
@@ -360,16 +377,16 @@ test.describe('saying what went wrong', () => {
       localStorage.setItem(key, JSON.stringify(saved));
     }, KEY);
 
-    expect(await look(page, 'quixotic')).toBe('yes');
+    expect(await look(page, RARE)).toBe('yes');
     const ok = await reason(page);
     expect(ok.why).toContain('answered by');
-    expect(ok.word).toBe('quixotic');
+    expect(ok.word).toBe(RARE);
     expect(ok.verdict).toBe('yes');
     expect(ok.ms).toBeGreaterThanOrEqual(0);
 
     // The cached answer is an answer, and says so rather than leaving the
     // last failure standing as if it were this word's.
-    expect(await look(page, 'quixotic')).toBe('yes');
+    expect(await look(page, RARE)).toBe('yes');
     expect((await reason(page)).why).toBe('already known');
   });
 
@@ -405,12 +422,12 @@ test.describe('saying what went wrong', () => {
      * count here: the 404 that means 'no' is a real non-2xx response, and
      * the browser logs that itself whatever we do.
      */
-    await open(page, { known: ['quixotic', 'flummox'] });
+    await open(page, { known: [RARE, 'flummox'] });
     const mine = [];
     page.on('console', msg => {
       if (msg.text().includes('Dictionary')) mine.push(msg.text());
     });
-    for (const w of ['quixotic', 'flummox', 'zzzzqqq', 'quixotic']) await look(page, w);
+    for (const w of [RARE, 'flummox', 'zzzzqqq', RARE]) await look(page, w);
     expect(mine).toEqual([]);
   });
 });

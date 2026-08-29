@@ -57,6 +57,27 @@ async function unserve(page) {
   for (const api of APIS) await page.unroute(api);
 }
 
+/**
+ * Routes BOTH services with one handler, and answers the control word for
+ * free. Two mistakes this exists to prevent: mocking only the first service
+ * leaves the second reaching the real internet, and a handler that fails the
+ * control word disqualifies the source before the behaviour under test gets
+ * to run. Neither is what any of these tests mean.
+ */
+async function routeBoth(page, handler) {
+  for (const api of APIS) {
+    await page.route(api, route => {
+      const word = decodeURIComponent(route.request().url().split('/').pop());
+      if (word === PROBE) {
+        return route.fulfill({
+          status: 200, contentType: 'application/json', body: '[{}]'
+        });
+      }
+      return handler(route, word);
+    });
+  }
+}
+
 /** Seeds saved state and reloads. */
 async function seed(page, { limit, scores } = {}) {
   await page.evaluate(([key, lim, sc]) => {
@@ -499,7 +520,7 @@ test.describe('the dictionary', () => {
 
     let release;
     const held = new Promise(r => { release = r; });
-    await page.route(API, async route => {
+    await routeBoth(page, async route => {
       await held;
       await route.fulfill({
         status: 200, contentType: 'application/json', body: JSON.stringify([{ word }]),
@@ -525,7 +546,7 @@ test.describe('the dictionary', () => {
     let release;
     const held = new Promise(r => { release = r; });
     let asked = 0;
-    await page.route(API, async route => {
+    await routeBoth(page, async route => {
       asked++;
       await held;
       await route.fulfill({
@@ -604,7 +625,7 @@ test.describe('the retry queue', () => {
       const word = centre.repeat(4);
 
       let asked = 0;
-      await page.route(API, async route => {
+      await routeBoth(page, async route => {
         asked++;
         // Unanswered the first time, fine the second.
         if (asked === 1) return route.fulfill({ status: 503, body: '{}' });
@@ -903,7 +924,7 @@ test.describe('finishing', () => {
 
     let release;
     const held = new Promise(r => { release = r; });
-    await page.route(API, async route => {
+    await routeBoth(page, async route => {
       await held;
       await route.fulfill({
         status: 200, contentType: 'application/json', body: JSON.stringify([{ word }]),
@@ -934,7 +955,7 @@ test.describe('finishing', () => {
     const word = centre.repeat(5);
 
     let asked = 0;
-    await page.route(API, async route => {
+    await routeBoth(page, async route => {
       asked++;
       if (asked === 1) return route.fulfill({ status: 503, body: '{}' });
       await route.fulfill({
@@ -981,7 +1002,7 @@ test.describe('finishing', () => {
     const { centre } = await hive(page);
     await unserve(page);
     // Never resolves at all — no status, no failure, just silence.
-    await page.route(API, () => {});
+    await routeBoth(page, () => { /* never answered */ });
 
     await guess(page, centre.repeat(4));
     await page.locator('#new').click();
@@ -1249,7 +1270,7 @@ test.describe('the page itself', () => {
     await play(page);
     await context.setOffline(true);
     try {
-      await page.route(API, route => route.abort('failed'));
+      await routeBoth(page, route => route.abort('failed'));
       const { centre } = await hive(page);
       await guess(page, centre.repeat(4));
       await expect(page.locator('#flash')).toHaveText(centre.repeat(4));

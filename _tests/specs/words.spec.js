@@ -42,9 +42,10 @@ test.describe('the shipped word list', { tag: '@nodom' }, () => {
      * The list this replaced was cut by frequency alone, with no dictionary
      * check at all, so it carried whatever tokenising the internet turns up:
      * brands, acronyms, first names, and runs of one letter. Every one of
-     * these was in it. The fix is a case-sensitive dictionary test — the
-     * lower-case form has to be an entry in its own right, which is what
-     * keeps Doug and ESPN out while leaving `jack` and `march` in.
+     * these was in it. The fix is a case-SENSITIVE dictionary test — the
+     * lower-case form has to be an entry in its own right, which keeps Doug
+     * and ESPN out while leaving `jack` and `march` in. Lower-casing the
+     * dictionary first, the obvious version, lets every name back through.
      */
     for (const junk of ['aaaa', 'espn', 'nasa', 'ipod', 'usda', 'xbox',
       'tokyo', 'obama', 'iphone', 'http', 'doug', 'judas']) {
@@ -57,6 +58,38 @@ test.describe('the shipped word list', { tag: '@nodom' }, () => {
     // would take all of these, which is why it is not the test used.
     for (const word of ['jack', 'march', 'frank', 'robin', 'mason', 'polish']) {
       expect(await has(page, word), word + ' is an ordinary word').toBe(true);
+    }
+  });
+
+  test('inflections count as words', async ({ page }) => {
+    /*
+     * The dictionary behind this list is Webster's Second, which is 1934 and
+     * American, and it holds base forms. Requiring bare membership dropped
+     * `walked`, `boxes`, `hoping` and `shopped` — everyday words a player
+     * would be plainly annoyed to see refused — so regular inflections are
+     * derived back to a base form and accepted.
+     */
+    for (const word of ['walked', 'boxes', 'hoping', 'shopped', 'using',
+      'bigger', 'fastest', 'carried', 'happily', 'running']) {
+      expect(await has(page, word), word + ' is a word').toBe(true);
+    }
+  });
+
+  test('British spellings count as words', async ({ page }) => {
+    // The dictionary is American. This is not a list of exceptions, it is
+    // how a whole country spells, so it is a rule in the generator.
+    for (const word of ['colour', 'centre', 'realise', 'licence', 'offence',
+      'programme', 'humour', 'theatre', 'metres', 'neighbours']) {
+      expect(await has(page, word), word + ' is a word').toBe(true);
+    }
+  });
+
+  test('words invented since 1934 count too', async ({ page }) => {
+    // Nothing derives these; they are a short hand-written list, kept to
+    // words a player would be annoyed to see refused.
+    for (const word of ['online', 'website', 'internet', 'email', 'laptop',
+      'download', 'podcast', 'okay', 'apps', 'wifi']) {
+      expect(await has(page, word), word + ' is a word').toBe(true);
     }
   });
 
@@ -78,15 +111,21 @@ test.describe('the shipped word list', { tag: '@nodom' }, () => {
      * connection — and does not depend on a service that has already gone
      * down once and taken both word games with it.
      */
+    /*
+     * Counted for this word alone. The library also probes the services on
+     * load with a control word, and a counter that took every request would
+     * be racing that probe rather than testing anything.
+     */
     const asked = [];
     page.on('request', req => {
-      if (/dictionaryapi/.test(req.url())) asked.push(req.url());
+      if (/dictionaryapi/.test(req.url()) && req.url().endsWith('/juice')) {
+        asked.push(req.url());
+      }
     });
-    const before = asked.length;
     expect(await page.evaluate(() => window.Dictionary.look('juice'))).toBe('yes');
     const said = await page.evaluate(() => window.Dictionary.last());
     expect(said.why).toBe('on the shipped list');
-    expect(asked.length, 'asked a service about a word we ship').toBe(before);
+    expect(asked, 'asked a service about a word we ship').toEqual([]);
   });
 
   test('it still works with no network at all', async ({ page, context }) => {
@@ -94,7 +133,7 @@ test.describe('the shipped word list', { tag: '@nodom' }, () => {
     try {
       expect(await page.evaluate(() => window.Dictionary.look('juice'))).toBe('yes');
       // Offline is only a problem for words the list does not carry.
-      expect(await page.evaluate(() => window.Dictionary.look('quixotical'))).toBe('off');
+      expect(await page.evaluate(() => window.Dictionary.look('snollygoster'))).toBe('off');
     } finally {
       await context.setOffline(false);
     }

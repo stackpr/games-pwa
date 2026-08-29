@@ -47,7 +47,7 @@ Five is the default, being the one everybody expects.
 
 Two files, and the split matters.
 
-**`js/lib/words.js` decides what the game accepts.** Twenty-six thousand
+**`js/lib/words.js` decides what the game accepts.** Forty thousand
 ordinary English words, 4 to 15 letters, shared with Honeycomb: Spelling and
 consulted by `js/lib/dictionary.js` before it will consider asking a service.
 "Is that a word?" is not a question about Word Sprint, so it is not Word
@@ -88,7 +88,7 @@ complete filter and does not pretend to be.
 
 ## When a word is not on the page
 
-Twenty-six thousand words is wide but not complete, and being told a real word
+Forty thousand words is wide but not complete, and being told a real word
 "is not a word" is the most annoying thing this game can do. So a guess the
 list does not carry is looked up through **`js/lib/dictionary.js`**, which
 owns the requests and remembers the answer — so the second time anybody plays

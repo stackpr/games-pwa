@@ -88,6 +88,115 @@ monday friday sunday april march
 """.split())
 
 
+# --- what counts as "a real word" ------------------------------------------
+#
+# web2 is Webster's Second, and it is 1934 and American. On its own it drops
+# three whole classes of ordinary word, and the specs caught it doing so:
+# every British spelling, every irregular inflection, and everything invented
+# since the war. It also simply lacks some common entries — `box` is not in
+# it, though `boxfish` and `boxwood` are. Frequency alone is no good either:
+# that was the previous version, and it accepted espn, ipod, nasa and aaaa.
+#
+# So membership is web2 plus three derivations and one hand-written list.
+
+def stems(word):
+    """Regular inflections, back to the base forms worth testing."""
+    out = []
+    for suf, base in (('ies', 'y'), ('ied', 'y'), ('ier', 'y'),
+                      ('iest', 'y'), ('ily', 'y')):
+        if word.endswith(suf) and len(word) - len(suf) >= 2:
+            out.append(word[:-len(suf)] + base)
+    for suf in ('s', 'es', 'ed', 'ing', 'er', 'est', 'ly', 'ness'):
+        if not word.endswith(suf) or len(word) - len(suf) < 2:
+            continue
+        stem = word[:-len(suf)]
+        out.append(stem)
+        if suf in ('ed', 'ing', 'er', 'est'):
+            out.append(stem + 'e')                   # baked -> bake
+            if len(stem) > 2 and stem[-1] == stem[-2]:
+                out.append(stem[:-1])                # shopped -> shop
+    return out
+
+
+# Systematic, so a rule rather than a list: these are not exceptions, they
+# are how a whole country spells.
+BRITISH = (
+    ('our', 'or'), ('ours', 'ors'), ('oured', 'ored'), ('ouring', 'oring'),
+    ('re', 'er'), ('res', 'ers'),
+    ('ise', 'ize'), ('ised', 'ized'), ('ising', 'izing'), ('ises', 'izes'),
+    ('isation', 'ization'), ('isations', 'izations'),
+    ('yse', 'yze'), ('ysed', 'yzed'), ('ysing', 'yzing'),
+    ('ence', 'ense'), ('ences', 'enses'),
+    ('mme', 'm'), ('mmes', 'ms'),
+    ('logue', 'log'), ('logues', 'logs'),
+    ('gement', 'gment'), ('gements', 'gments'),
+    ('lled', 'led'), ('lling', 'ling'), ('llor', 'lor'), ('ller', 'ler'),
+)
+
+
+def american(word):
+    """British spellings as the American forms web2 would hold."""
+    out = []
+    for suf, swap in BRITISH:
+        if word.endswith(suf) and len(word) > len(suf):
+            out.append(word[:-len(suf)] + swap)
+    return out
+
+
+# Irregular inflections, common words web2 is missing outright, and the
+# vocabulary that postdates it. Hand-written because there is no rule for
+# any of it — and deliberately short: it holds words a player would be
+# annoyed to see refused, not every word that exists.
+EXTRA = set("""
+box boxes boxed women feet teeth geese mice lice oxen children people
+held heard paid began became died knives lives wives leaves loaves selves
+thieves wolves calves halves shelves hooves scarves
+built spent slept swept crept knelt dealt meant felt kept left lost sold
+told sought taught caught bought brought fought thought sang sung rang rung
+drank drunk swam swum flew flown grew grown threw thrown blew blown knew
+known drew drawn wore worn tore torn bore born spoke spoken broke broken
+chose chosen froze frozen stole stolen wrote written rode ridden drove
+driven arose arisen shook shaken took taken gave given ate eaten fell
+fallen ran run saw seen went gone did done had has was were been being
+online offline internet website websites email emails download downloads
+downloaded downloading upload uploads uploaded laptop laptops desktop
+desktops smartphone smartphones podcast podcasts blog blogs blogger
+username password passwords login logout browser browsers software hardware
+database databases keyboard keyboards printer printers scanner webcam
+wifi modem router routers server servers offline app apps
+video videos audio photo photos selfie selfies emoji meme memes
+teenager teenagers preteen babysitter
+okay anymore anytime someday everyday goodbye
+lifestyle mainstream marketplace workforce workplace healthcare
+paperwork wheelchair backyard hometown neighbourhood
+airline airlines airport airports playoff playoffs
+recycle recycling reusable
+stats stat info intro demo combo promo photo
+expertise coordination coordinator coordinate coordinates
+mindset timeline lineup startup checkout takeout
+vegan pasta pizza yogurt smoothie muffin bagel
+gameplay soundtrack artwork
+teenage jetlag sunscreen
+arguably fundraising automation
+""".split())
+
+
+def known(word, web2):
+    """Is this an ordinary English word, by any of the evidence we have?"""
+    if word in web2 or word in EXTRA:
+        return True
+    for form in stems(word):
+        if form in web2 or form in EXTRA:
+            return True
+    for form in american(word):
+        if form in web2 or form in EXTRA:
+            return True
+        for stem in stems(form):
+            if stem in web2:
+                return True
+    return False
+
+
 def usable(word):
     return (word.isalpha() and word.isascii() and word.islower()
             and word not in BLOCK)
@@ -108,7 +217,7 @@ def main():
     web2 = get_english_words_set(['web2'], lower=False)
 
     pool = [w for w in top_n_list('en', 900000) if usable(w)]
-    known = set(pool)
+    in_pool = set(pool)
     zipf = {w: zipf_frequency(w, 'en') for w in pool}
 
     # ---- the shared list ------------------------------------------------
@@ -128,7 +237,7 @@ def main():
         w for w in pool
         if MIN_LEN <= len(w) <= MAX_LEN
         and zipf[w] >= SHARED_CUT
-        and w in web2
+        and known(w, web2)
     )
 
     # ---- Word Sprint's answers ------------------------------------------
@@ -139,11 +248,16 @@ def main():
         for w in pool:
             if len(w) != n:
                 continue
-            if zipf[w] < ANSWER_CUT or w in NOT_ANSWERS or w not in web2:
+            if zipf[w] < ANSWER_CUT or w in NOT_ANSWERS:
+                continue
+            # Answers are held to web2 itself, not the wider test: the hidden
+            # word should be one nobody can argue with, and the derivations
+            # above are exactly where an argument would come from.
+            if w not in web2:
                 continue
             # No plurals as answers: the singular is the interesting word and
             # a trailing S is a free letter. Guessing them is still allowed.
-            if w.endswith('s') and w[:-1] in known and len(w[:-1]) >= 3:
+            if w.endswith('s') and w[:-1] in in_pool and len(w[:-1]) >= 3:
                 continue
             picks.append(w)
             if len(picks) >= ANSWER_CAP:

@@ -7,9 +7,9 @@
  * asks only about the ones it does not carry. Both want the same three-way
  * answer and both want yesterday's answers to still be free today.
  *
- * Ordinary words never leave the device: js/lib/words.js ships twenty-six
- * thousand of them and is consulted first, so a service is asked only about
- * what the site does not already know.
+ * Ordinary words never leave the device: js/lib/words.js ships forty thousand
+ * of them and is consulted first, so a service is asked only about what the
+ * site does not already know.
  *
  *   Dictionary.look(word)  -> Promise of 'yes' | 'no' | 'off'
  *   Dictionary.verdict(w)  -> 'yes' | 'no' | null, from the cache alone
