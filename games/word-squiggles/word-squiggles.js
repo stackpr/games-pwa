@@ -303,7 +303,6 @@
         if (!done && hinted.indexOf(i) !== -1) cell.dataset.hint = '';
         else delete cell.dataset.hint;
       }
-      sizeBoard();
     }
 
     const theme = $('theme');
@@ -327,6 +326,15 @@
         list.append(chip);
       }
     }
+
+    /*
+     * Sized last, and again on the next frame. The word list below wraps to
+     * however many chips there are, which changes the height the board has
+     * to fit into — measuring before it is built measures a box that will
+     * not exist by the time anything is painted.
+     */
+    sizeBoard();
+    if (window.requestAnimationFrame) requestAnimationFrame(sizeBoard);
   }
 
   /*
@@ -342,7 +350,15 @@
     const gap = 0.25 * 16;
     const wide = (box.width - gap * (puzzle.cols - 1)) / puzzle.cols;
     const tall = (box.height - gap * (puzzle.rows - 1)) / puzzle.rows;
-    const cell = Math.max(22, Math.min(wide, tall));
+    /*
+     * Floored so the letters stay readable, but floored LOW: a nine-row
+     * board on a short phone genuinely has less room than a comfortable
+     * cell, and a floor that wins over the measurement makes the board
+     * taller than its stage — which .stage then clips, silently eating the
+     * bottom row. Whole pixels, because a fraction rounds the wrong way and
+     * spills.
+     */
+    const cell = Math.max(16, Math.floor(Math.min(wide, tall)));
     board.style.width = (cell * puzzle.cols + gap * (puzzle.cols - 1)) + 'px';
     board.style.height = (cell * puzzle.rows + gap * (puzzle.rows - 1)) + 'px';
   }
@@ -379,10 +395,29 @@
     return Boolean(entry && isFound(entry));
   }
 
-  function cellFrom(event) {
+  /*
+   * How far from a cell's centre still counts as being in it, as a fraction
+   * of the cell. A drag from one centre to a diagonal neighbour passes
+   * through the corner where four cells meet, and without this it picks up
+   * whichever neighbour it grazed on the way — so the squiggle recorded is
+   * not the one the player drew, and a word they traced correctly is
+   * refused. Corners are dead space; the middle of a cell is what selects
+   * it.
+   */
+  const INNER = 0.34;
+
+  function cellFrom(event, loose) {
     const node = document.elementFromPoint(event.clientX, event.clientY);
     const cell = node && node.closest ? node.closest('.cell') : null;
-    return cell ? Number(cell.dataset.i) : -1;
+    if (!cell) return -1;
+    // A tap starts anywhere in the cell; only the drag is fussy.
+    if (loose) return Number(cell.dataset.i);
+    const box = cell.getBoundingClientRect();
+    if (!box.width || !box.height) return -1;
+    const dx = Math.abs(event.clientX - (box.left + box.width / 2)) / box.width;
+    const dy = Math.abs(event.clientY - (box.top + box.height / 2)) / box.height;
+    if (dx > INNER || dy > INNER) return -1;
+    return Number(cell.dataset.i);
   }
 
   function extend(i) {
@@ -401,7 +436,7 @@
 
   function start(event) {
     if (!puzzle || event.button > 0) return;
-    const i = cellFrom(event);
+    const i = cellFrom(event, true);
     if (i < 0 || locked(i)) return;
     drawing = true;
     trail = [i];

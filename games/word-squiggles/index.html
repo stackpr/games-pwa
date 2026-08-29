@@ -87,12 +87,18 @@
       justify-content: center;
       min-height: 0;
       padding: 0 0.5rem;
-      /* A cap, not a suggestion: sizeBoard() floors the cell size so letters
-         stay readable, which means an extreme window can ask for a board
-         taller than this box. Clipping beats painting over the controls. */
+      /* A cap, not a suggestion. sizeBoard() measures against this box and
+         floors the cell size so letters stay readable, so an extreme window
+         can still ask for a board taller than it. Clipping is the lesser
+         failure; painting over the word list is the worse one. */
       overflow: hidden;
     }
     .board {
+      /* Never shrink. It is a flex item with an explicit pixel size, and the
+         default flex-shrink would squeeze its width without touching the
+         height JS gave it — which is exactly how square cells stop being
+         square. */
+      flex: none;
       display: grid;
       gap: 0.25rem;
       touch-action: none;  /* the drag is ours, not the browser's scroll */
