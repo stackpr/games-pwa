@@ -15,14 +15,36 @@
 
   const BANKRUPT = 'BANKRUPT';
   const LOSE = 'LOSE A TURN';
-  // Twenty-four wedges. The small values outnumber the big ones, which is
-  // what keeps a spin worth thinking about rather than worth waiting for.
+  /*
+   * Thirty wedges. The middle values repeat and the big ones are singletons,
+   * so a spin is still worth thinking about rather than worth waiting for —
+   * but there is a lot more of a spread to land in than there was.
+   *
+   * The wheel it replaced was 24 wedges holding nine distinct values, and
+   * four of them were penalties. That made a penalty one spin in six — 60%
+   * odds of hitting one across five spins — and put nearly every cash
+   * landing between 500 and 900, with a single 2500 doing all the work of
+   * feeling lucky. It came up narrow and punishing, and it was.
+   *
+   * Now: eighteen distinct values from 400 to 3000, and three penalties in
+   * thirty, so one spin in ten. See _README.md for the numbers.
+   */
   const WHEEL = [
-    600, BANKRUPT, 900, 500, 700, 550, LOSE, 800,
-    500, 650, 600, BANKRUPT, 750, 500, 700, 600,
-    550, 900, LOSE, 650, 600, 800, 2500, 500
+    650, 500, 900, BANKRUPT, 700, 550, 1200, 600,
+    800, 450, 1000, 500, 750, LOSE, 600, 850,
+    500, 1500, 700, 400, 950, 650, BANKRUPT, 550,
+    1100, 600, 2000, 750, 3000, 800
   ];
   const LOOPS = 3;              // copies of the wheel in the reel track
+
+  /*
+   * The wheel, for the specs. They force a spin by seeding a wedge index,
+   * and hard-coding those indexes means every edit to the wheel above
+   * quietly changes what a test is testing — a test that says "wedge 1 is
+   * BANKRUPT" keeps passing while testing a cash wedge. They look them up
+   * instead.
+   */
+  window.SpinWheel = { wedges: WHEEL.slice(), BANKRUPT: BANKRUPT, LOSE: LOSE };
 
   const KEY_ROWS = ['QWERTYUIOP', 'ASDFGHJKL', 'ZXCVBNM'];
 

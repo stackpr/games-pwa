@@ -56,6 +56,35 @@ to whoever was up.
 The seats show held money on a second line, `+$700`, under the bank rather
 than added into it: it is not banked, and a spin can still take it.
 
+
+## The wheel
+
+Thirty wedges: **eighteen distinct cash values from $400 to $3,000**, two
+`BANKRUPT` and one `LOSE A TURN`. Middle values repeat and the big ones are
+singletons, so the shape is a pyramid rather than a flat draw — a spin is
+worth thinking about rather than worth waiting for.
+
+It replaced a 24-wedge wheel that was both narrower and meaner than it
+looked:
+
+| | before | now |
+| --- | --- | --- |
+| Wedges | 24 | 30 |
+| Distinct cash values | 9 | 18 |
+| Range | $500–$2,500 | $400–$3,000 |
+| Penalty wedges | 4 (16.7%) | 3 (10%) |
+| A penalty within five spins | 60% | 41% |
+
+The old range flattered itself: a single $2,500 wedge did all the work of
+feeling lucky, and every other landing sat between $500 and $900. One spin
+in six was a penalty, which is often enough that a turn ending badly stopped
+being a swing and started being the norm.
+
+**The specs look wedges up rather than naming indexes.** `window.SpinWheel`
+exposes the wheel for that. A test that says "wedge 1 is BANKRUPT" keeps
+passing after the wheel is edited, while quietly exercising a cash wedge —
+which is the kind of test that is worse than none.
+
 ## Solving is a commitment
 
 The first version had the player say the answer out loud and the table tap

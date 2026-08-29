@@ -39,15 +39,38 @@ async function seed(page, patch) {
   await page.reload();
 }
 
+/*
+ * Wedge indexes, looked up rather than written down. Pinning them means an
+ * edit to the wheel quietly changes what a test tests — "wedge 1 is
+ * BANKRUPT" goes on passing while exercising a cash wedge.
+ */
+async function wedges(page) {
+  const wheel = await page.evaluate(() => window.SpinWheel);
+  const cash = wheel.wedges.findIndex(v => typeof v === 'number');
+  const bankrupt = wheel.wedges.indexOf(wheel.BANKRUPT);
+  const lose = wheel.wedges.indexOf(wheel.LOSE);
+  expect(cash, 'no cash wedge on the wheel').toBeGreaterThanOrEqual(0);
+  expect(bankrupt, 'no BANKRUPT on the wheel').toBeGreaterThanOrEqual(0);
+  expect(lose, 'no LOSE A TURN on the wheel').toBeGreaterThanOrEqual(0);
+  return { cash: cash, bankrupt: bankrupt, lose: lose,
+    pays: wheel.wedges[cash] };
+}
+
 /** Spins with the wedge forced, and waits for the reel to settle. */
 async function spin(page, wedge) {
   await page.evaluate(w => {
     const saved = JSON.parse(localStorage.getItem('games.spin-words.v1'));
     saved.wedge = w;
     localStorage.setItem('games.spin-words.v1', JSON.stringify(saved));
-    // The wedge is drawn from the head of Math.random, so pinning that head
-    // pins where the reel lands.
-    Math.random = () => (w + 0.5) / 24;
+    /*
+     * The wedge is drawn from the head of Math.random, so pinning that head
+     * pins where the reel lands — scaled by the wheel's ACTUAL length, which
+     * this used to write down as 24. Growing the wheel then silently moved
+     * every forced spin onto a different wedge, and the tests carried on
+     * passing while testing the wrong ones.
+     */
+    const total = window.SpinWheel.wedges.length;
+    Math.random = () => (w + 0.5) / total;
   }, wedge);
   await page.locator('#spin').click();
   await expect(page.locator('body')).not.toHaveAttribute('data-phase', 'spinning');
@@ -99,27 +122,75 @@ test.describe('passing the phone', () => {
     });
 });
 
+test.describe('the wheel', () => {
+  test('is mostly cash, and spread out', async ({ page }) => {
+    /*
+     * The wheel this replaced was 24 wedges holding nine distinct values,
+     * four of them penalties — a penalty one spin in six, and nearly every
+     * cash landing between $500 and $900 with one $2,500 doing all the work
+     * of feeling lucky. It played narrow and punishing.
+     *
+     * These are floors, not the current numbers, so the wheel can be tuned
+     * without rewriting the test — but not back to what it was.
+     */
+    const wheel = await page.evaluate(() => window.SpinWheel);
+    const cash = wheel.wedges.filter(v => typeof v === 'number');
+    const penalties = wheel.wedges.length - cash.length;
+    const distinct = [...new Set(cash)].sort((a, b) => a - b);
+
+    expect(penalties / wheel.wedges.length,
+      'penalties come up too often').toBeLessThanOrEqual(0.12);
+    expect(distinct.length,
+      'too few different values to land on').toBeGreaterThanOrEqual(15);
+    expect(distinct[0], 'the floor is too high').toBeLessThanOrEqual(500);
+    expect(distinct[distinct.length - 1],
+      'nothing worth spinning for').toBeGreaterThanOrEqual(2000);
+
+    // Both kinds of penalty are still on it — this is not a way to make the
+    // game safe, only less punishing.
+    expect(wheel.wedges).toContain(wheel.BANKRUPT);
+    expect(wheel.wedges).toContain(wheel.LOSE);
+  });
+
+  test('no two penalties sit next to each other', async ({ page }) => {
+    // Including around the join, since the reel is a loop.
+    const wheel = await page.evaluate(() => window.SpinWheel);
+    const bad = wheel.wedges.map((v, i) => {
+      const next = wheel.wedges[(i + 1) % wheel.wedges.length];
+      return typeof v !== 'number' && typeof next !== 'number' ? i : -1;
+    }).filter(i => i >= 0);
+    expect(bad, 'two penalties in a row on the reel').toEqual([]);
+  });
+});
+
 test.describe('spinning and calling', () => {
   test('a cash wedge opens the keyboard', async ({ page }) => {
     await seed(page, {});
-    await spin(page, 0);                      // wedge 0 is $600
+    const at = await wedges(page);
+    await spin(page, at.cash);
     expect(await phase(page)).toBe('pick');
-    await expect(page.locator('#key-hint')).toContainText('$600');
+    await expect(page.locator('#key-hint'))
+      .toContainText('$' + at.pays.toLocaleString('en-US'));
   });
 
   test('a consonant that is there pays per letter and keeps the phone',
     async ({ page }) => {
       await seed(page, {});
-      await spin(page, 0);
+      const at = await wedges(page);
+      await spin(page, at.cash);
       await key(page, 'T').click();           // four Ts in the puzzle
       expect(await phase(page)).toBe('spin');
-      await expect(page.locator('#turn')).toContainText('$2,400');
+      // Four times the wedge, whatever the wedge happens to be worth — a
+      // figure written down here is a figure that goes stale the next time
+      // the wheel is edited.
+      await expect(page.locator('#turn'))
+        .toContainText('$' + (at.pays * 4).toLocaleString('en-US'));
       expect(await boardText(page)).toBe('..TT.. ..T. T... .....');
     });
 
   test('a consonant that is not there ends the turn', async ({ page }) => {
     await seed(page, {});
-    await spin(page, 0);
+    await spin(page, (await wedges(page)).cash);
     await key(page, 'Z').click();
     expect(await phase(page)).toBe('pass');
     await expect(page.locator('#pass-note')).toContainText('No Z');
@@ -128,7 +199,7 @@ test.describe('spinning and calling', () => {
 
   test('called letters go dark and stay unclickable', async ({ page }) => {
     await seed(page, { called: 'T' });
-    await spin(page, 0);
+    await spin(page, (await wedges(page)).cash);
     await expect(key(page, 'T')).toHaveAttribute('data-used', '');
     await expect(key(page, 'T')).toBeDisabled();
     await expect(key(page, 'R')).toBeEnabled();
@@ -136,7 +207,7 @@ test.describe('spinning and calling', () => {
 
   test('vowels cannot be called for free', async ({ page }) => {
     await seed(page, {});
-    await spin(page, 0);
+    await spin(page, (await wedges(page)).cash);
     for (const ch of 'AEIOU') await expect(key(page, ch)).toBeDisabled();
     for (const ch of 'BCDFG') await expect(key(page, ch)).toBeEnabled();
   });
@@ -149,7 +220,7 @@ test.describe('spinning and calling', () => {
 
   test('bankrupt takes this puzzle only, not the bank', async ({ page }) => {
     await seed(page, { round: [1800, 0, 0], banks: [4000, 0, 0] });
-    await spin(page, 1);                      // wedge 1 is BANKRUPT
+    await spin(page, (await wedges(page)).bankrupt);
     expect(await phase(page)).toBe('pass');
     await expect(page.locator('#pass-note')).toContainText('Bankrupt');
     await expect(bank(page, 0)).toHaveText('$4,000');
@@ -160,13 +231,13 @@ test.describe('spinning and calling', () => {
 
   test('bankrupt takes nobody else\'s puzzle money', async ({ page }) => {
     await seed(page, { round: [1800, 700, 0] });
-    await spin(page, 1);
+    await spin(page, (await wedges(page)).bankrupt);
     await expect(held(page, 1)).toHaveText('+$700');
   });
 
   test('lose a turn just passes the phone', async ({ page }) => {
     await seed(page, { round: [900, 0, 0] });
-    await spin(page, 6);                      // wedge 6 is LOSE A TURN
+    await spin(page, (await wedges(page)).lose);
     expect(await phase(page)).toBe('pass');
     await expect(page.locator('#pass-note')).toContainText('lost a turn');
     // Only Bankrupt takes money — see _README.md.
@@ -177,7 +248,7 @@ test.describe('spinning and calling', () => {
     async ({ page }) => {
       // The reported bug: $700, one bad guess, and the next turn showed $0.
       await seed(page, { round: [700, 0, 0], called: 'E' });
-      await spin(page, 0);
+      await spin(page, (await wedges(page)).cash);
       await key(page, 'X').click();
       expect(await phase(page)).toBe('pass');
       await expect(held(page, 0)).toHaveText('+$700');
@@ -195,7 +266,7 @@ test.describe('the call clock', () => {
     await page.goto(URL);
     await clearState(page);
     await seed(page, { round: [700, 0, 0] });
-    await spin(page, 0);
+    await spin(page, (await wedges(page)).cash);
     expect(await phase(page)).toBe('pick');
     await expect(page.locator('#clock')).toHaveText('10');
 
@@ -215,7 +286,7 @@ test.describe('the call clock', () => {
     await page.goto(URL);
     await clearState(page);
     await seed(page, {});
-    await spin(page, 0);
+    await spin(page, (await wedges(page)).cash);
     await key(page, 'T').click();
     expect(await phase(page)).toBe('spin');
 
@@ -508,7 +579,7 @@ test.describe('players', () => {
   test('turns walk round every seat', async ({ page }) => {
     await seed(page, { players: 4, names: ['', '', '', ''], banks: [0, 0, 0, 0],
       current: 3 });
-    await spin(page, 0);
+    await spin(page, (await wedges(page)).cash);
     await key(page, 'Z').click();
     await expect(seat(page, 0)).toHaveAttribute('data-active', '');
   });
@@ -622,11 +693,13 @@ test.describe('the puzzles', () => {
 test.describe('persistence', () => {
   test('a game in progress survives a reload', async ({ page }) => {
     await seed(page, { round: [0, 0, 0] });
-    await spin(page, 0);
+    const at = await wedges(page);
+    await spin(page, at.cash);
     await key(page, 'T').click();
     await page.reload();
     expect(await phase(page)).toBe('spin');
-    await expect(page.locator('#turn')).toContainText('$2,400');
+    await expect(page.locator('#turn'))
+      .toContainText('$' + (at.pays * 4).toLocaleString('en-US'));
     expect(await boardText(page)).toBe('..TT.. ..T. T... .....');
   });
 
@@ -681,7 +754,7 @@ test.describe('presentation', () => {
     await page.setViewportSize({ width: 390, height: 844 });
     await seed(page, { phase: 'spin' });
     const before = await page.locator('#board').boundingBox();
-    await spin(page, 0);
+    await spin(page, (await wedges(page)).cash);
     const after = await page.locator('#board').boundingBox();
     expect(Math.abs(after.y - before.y), 'the keyboard pane is taller')
       .toBeLessThanOrEqual(1);
@@ -691,7 +764,7 @@ test.describe('presentation', () => {
     for (const size of [{ width: 320, height: 568 }, { width: 844, height: 390 }]) {
       await page.setViewportSize(size);
       await seed(page, {});
-      await spin(page, 0);
+      await spin(page, (await wedges(page)).cash);
       const fits = await page.evaluate(() => {
         const rows = [...document.querySelectorAll('.keys-row')];
         const box = document.querySelector('.panel').getBoundingClientRect();
