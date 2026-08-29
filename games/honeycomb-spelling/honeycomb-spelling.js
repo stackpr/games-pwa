@@ -600,8 +600,8 @@
     if (offline) el.netNote.textContent = OFFLINE_NOTE;
     else if (dictOut) {
       el.netNote.textContent = 'The dictionary is not answering just now. ' +
-        'Only words from the site’s own small vocabulary will score ' +
-        'until it is back.';
+        'The twenty-six thousand words the site carries still score; ' +
+        'anything rarer will not count until it is back.';
     }
   }
 

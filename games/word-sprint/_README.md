@@ -45,43 +45,52 @@ Five is the default, being the one everybody expects.
 
 ## The words
 
-`words.js` is **generated, not written** — `_gen_words.py` beside it is the
+Two files, and the split matters.
+
+**`js/lib/words.js` decides what the game accepts.** Twenty-six thousand
+ordinary English words, 4 to 15 letters, shared with Honeycomb: Spelling and
+consulted by `js/lib/dictionary.js` before it will consider asking a service.
+"Is that a word?" is not a question about Word Sprint, so it is not Word
+Sprint's list to keep.
+
+**`words.js` here holds only the answer pool** — the words that may be the
+hidden one, which is a far narrower question: words everybody knows, no
+plurals, no proper nouns, common enough that nobody feels cheated by the
+reveal. 1,212 / 1,431 / 1,714 of them at four, five and six letters.
+
+Both are **generated, not written** — `_gen_words.py` at the repo root is the
 generator, run by hand and never shipped or served. The site keeps no build
-step; the generator's *output* is committed like any other source file. It
-is regenerated only deliberately, and the commit should say so.
-
-Two lists per length:
-
-| List | Size (4 / 5 / 6) | What it is |
-| --- | --- | --- |
-| Answers | 700 / 700 / 700 | Words everybody knows. Only these are ever the hidden word. |
-| Guesses | 4,152 / 5,888 / 7,549 | Everything the page accepts as a try. Includes every answer. |
-
-Roughly 56 KB over the wire, gzipped, which is what Pages serves.
+step; the generator's *output* is committed like any other source file. It is
+regenerated only deliberately, and the commit should say so.
 
 Three filters shape them, and the third is the one a machine cannot do:
 
-1. **Frequency.** Answers are the most common words at that length; guesses
-   reach much further down.
-2. **No plurals as answers.** A trailing S is a free letter and the singular
-   is the interesting word. Plurals are still perfectly good *guesses*.
-3. **No proper nouns as answers.** Frequency data is case-folded, so `japan`,
-   `tyler` and `paris` look like ordinary words. Two filters catch them: a
-   case-preserving dictionary (`web2`) removes anything that only exists
-   capitalised, and a hand-written `NOT_ANSWERS` list removes the rest. That
-   list had to be written by hand because the obvious automatic test —
-   "is the capitalised form also a dictionary word?" — also catches *state*,
-   *school*, *space* and *march*. Names are still accepted as guesses; they
-   are only barred from being the answer.
+1. **Frequency.** Answers are the most common words at that length; the
+   shared list reaches much further down.
+2. **A real dictionary.** Every word must appear in web2 **with its own
+   lower-case entry**. This is the filter the first version of the wide list
+   did not have, and the omission showed: cut by frequency alone it carried
+   `espn`, `nasa`, `ipod`, `xbox`, `tokyo`, `obama`, `iphone`, `http` and
+   `aaaa`, because word-frequency data is scraped from real text and real
+   text is full of things that are not words. Lower-casing the dictionary
+   first is not enough either — that lets every capitalised name back in
+   (`doug`, `judas`). The lower-case form has to be an entry in its own
+   right, which keeps `jack`, `march` and `polish` while dropping the names.
+3. **No plurals, and no proper nouns, as answers.** A trailing S is a free
+   letter and the singular is the interesting word. For names, the
+   case-sensitive test above does most of it and a hand-written
+   `NOT_ANSWERS` list does the rest — the obvious automatic test, "is the
+   capitalised form also a word?", also catches *state*, *school*, *space*
+   and *march*. Plurals and names are still perfectly good *guesses*.
 
-A short blocklist keeps the obvious profanity out of both lists. It is not a
+A short blocklist keeps the obvious profanity out of both. It is not a
 complete filter and does not pretend to be.
 
 ## When a word is not on the page
 
-Seventeen thousand words is wide but not complete, and being told a real word
+Twenty-six thousand words is wide but not complete, and being told a real word
 "is not a word" is the most annoying thing this game can do. So a guess the
-page does not carry is looked up through **`js/lib/dictionary.js`**, which
+list does not carry is looked up through **`js/lib/dictionary.js`**, which
 owns the requests and remembers the answer — so the second time anybody plays
 that word, anywhere on the site, it is instant.
 

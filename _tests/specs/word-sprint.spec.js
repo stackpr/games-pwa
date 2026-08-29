@@ -481,11 +481,28 @@ test.describe('the words', () => {
     expect(bad).toEqual([]);
   });
 
-  test('the lists are wide enough to play with', async ({ page }) => {
+  test('the answer pool is wide enough that words do not come round', async ({ page }) => {
     const counts = await page.evaluate(() => window.SprintWords.counts());
     for (const n of [4, 5, 6]) {
-      expect(counts[n].answers).toBeGreaterThan(300);
-      expect(counts[n].guesses).toBeGreaterThan(2000);
+      expect(counts[n].answers).toBeGreaterThan(900);
     }
+  });
+
+  test('what the game accepts is the shared list, not this game\'s', async ({ page }) => {
+    /*
+     * Accepting a word is not a question about Word Sprint, so it is not
+     * Word Sprint's list. js/lib/words.js answers it for the whole site;
+     * this game only holds the words that may be the hidden one.
+     */
+    const out = await page.evaluate(() => ({
+      shared: window.Words.size(),
+      // Ordinary words the answer pool would never contain.
+      wide: ['juice', 'rater', 'moped', 'gecko'].filter(w => window.SprintWords.has(w)),
+      // The junk a frequency-only list carries: brands, acronyms, names.
+      junk: ['espn', 'ipod', 'nasa', 'doug', 'aaaa'].filter(w => window.SprintWords.has(w)),
+    }));
+    expect(out.shared).toBeGreaterThan(20000);
+    expect(out.wide).toHaveLength(4);
+    expect(out.junk, 'the list carries things that are not words').toEqual([]);
   });
 });

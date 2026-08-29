@@ -476,9 +476,10 @@
           <tbody id="board-rows"></tbody>
         </table>
         <p class="board-empty" id="board-empty" hidden>No games at this limit yet.</p>
-        <p class="rules-note" id="net-note" hidden>You look offline. Only
-          words from the site&rsquo;s own small vocabulary will score until you
-          have a connection &mdash; everything else is checked online.</p>
+        <p class="rules-note" id="net-note" hidden>You look offline. The
+          twenty-six thousand words the site carries still score; anything
+          rarer is checked online, so it will not count until you have a
+          connection again.</p>
       </div>
       <div class="sheet-actions">
         <button class="go" id="play" type="button">Play</button>
@@ -557,12 +558,12 @@
       </ul>
       <p class="rules-note">
         The seven letters are drawn fresh every game. A guess is checked first
-        against the site&rsquo;s own small vocabulary and then, if that does not
-        know it, in a real dictionary &mdash; so the whole language is in play,
-        and, unlike everything else here, this game needs a connection. If the
-        dictionary does not answer, the word waits in the strip below the hive
-        and is asked about again; a word that is never answered costs you
-        nothing.
+        against the twenty-six thousand words the site carries &mdash; which
+        needs no connection and answers at once &mdash; and then, if those do
+        not know it, in a real dictionary online, so the whole language is in
+        play. If the dictionary does not answer, the word waits in the strip
+        below the hive and is asked about again; a word that is never answered
+        costs you nothing.
       </p>
       <p class="rules-note">
         Lookups use
@@ -584,6 +585,7 @@
   <script src="../../js/lib/modal.js"></script>
   <script src="../../js/lib/timer.js"></script>
   <script src="../../js/lib/vocab.js"></script>
+  <script src="../../js/lib/words.js"></script>
   <script src="../../js/lib/dictionary.js"></script>
   <script src="honeycomb-spelling.js"></script>
   <script>

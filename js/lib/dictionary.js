@@ -7,6 +7,10 @@
  * asks only about the ones it does not carry. Both want the same three-way
  * answer and both want yesterday's answers to still be free today.
  *
+ * Ordinary words never leave the device: js/lib/words.js ships twenty-six
+ * thousand of them and is consulted first, so a service is asked only about
+ * what the site does not already know.
+ *
  *   Dictionary.look(word)  -> Promise of 'yes' | 'no' | 'off'
  *   Dictionary.verdict(w)  -> 'yes' | 'no' | null, from the cache alone
  *   Dictionary.ready()     -> is any source known to be answering?
@@ -357,6 +361,17 @@ window.Dictionary = (function () {
     if (!valid(w)) return Promise.resolve('no');
     if (known.has(w)) {
       return Promise.resolve(note(w, known.get(w), 'already known', started));
+    }
+
+    /*
+     * The shipped list, before anything goes near a network. This is what
+     * makes an ordinary word free: no request, no wait, no connection, and
+     * no dependence on a service that has already gone down once. It is a
+     * yes-list only — a miss here is not a no, it is a question for someone
+     * else — so nothing below changes except that it is asked far less.
+     */
+    if (window.Words && window.Words.has(w)) {
+      return Promise.resolve(note(w, 'yes', 'on the shipped list', started));
     }
 
     /*
