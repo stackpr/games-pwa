@@ -15,6 +15,9 @@ const APIS = [
 ];
 const API = APIS[0];
 const PROBE = 'apple';
+// A source must also REFUSE this one, or it is answering yes to
+// anything and is not trusted with a real word.
+const NONSENSE = 'zqxjvwkfp';
 
 const clock = page => page.locator('#clock');
 const flash = page => page.locator('#flash');
@@ -47,6 +50,9 @@ async function dictionary(page, opts) {
       const word = decodeURIComponent(route.request().url().split('/').pop());
       if (word === PROBE) {
         return route.fulfill({ status: 200, contentType: 'application/json', body: '[{}]' });
+      }
+      if (word === NONSENSE) {
+        return route.fulfill({ status: 404, contentType: 'application/json', body: '{}' });
       }
       if (options.abort) return route.abort('failed');
       const known = options.known || [];
@@ -268,8 +274,12 @@ test.describe('words the page does not carry', () => {
      */
     for (const api of APIS) {
       await page.route(api, route => {
-        if (decodeURIComponent(route.request().url().split('/').pop()) === PROBE) {
+        const w = decodeURIComponent(route.request().url().split('/').pop());
+        if (w === PROBE) {
           return route.fulfill({ status: 200, contentType: 'application/json', body: '[{}]' });
+        }
+        if (w === NONSENSE) {
+          return route.fulfill({ status: 404, contentType: 'application/json', body: '{}' });
         }
         /* never answered */
       });
@@ -303,8 +313,12 @@ test.describe('words the page does not carry', () => {
     let answer = null;
     for (const api of APIS) {
       await page.route(api, route => {
-        if (decodeURIComponent(route.request().url().split('/').pop()) === PROBE) {
+        const w = decodeURIComponent(route.request().url().split('/').pop());
+        if (w === PROBE) {
           return route.fulfill({ status: 200, contentType: 'application/json', body: '[{}]' });
+        }
+        if (w === NONSENSE) {
+          return route.fulfill({ status: 404, contentType: 'application/json', body: '{}' });
         }
         answer = route;
       });
@@ -333,8 +347,12 @@ test.describe('words the page does not carry', () => {
     let answer = null;
     for (const api of APIS) {
       await page.route(api, route => {
-        if (decodeURIComponent(route.request().url().split('/').pop()) === PROBE) {
+        const w = decodeURIComponent(route.request().url().split('/').pop());
+        if (w === PROBE) {
           return route.fulfill({ status: 200, contentType: 'application/json', body: '[{}]' });
+        }
+        if (w === NONSENSE) {
+          return route.fulfill({ status: 404, contentType: 'application/json', body: '{}' });
         }
         answer = route;
       });
@@ -363,7 +381,8 @@ test.describe('words the page does not carry', () => {
     await expect(row(page, 0).nth(0)).toHaveAttribute('data-mark', /right|near|wrong/);
     // The load probe asks about its control word and nothing else; a word
     // the page carries must never leave the device.
-    expect(external.filter(url => !url.endsWith('/' + PROBE))).toEqual([]);
+    const controls = ['/' + PROBE, '/' + NONSENSE];
+    expect(external.filter(url => !controls.some(c => url.endsWith(c)))).toEqual([]);
   });
 });
 

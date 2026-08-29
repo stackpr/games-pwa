@@ -36,9 +36,17 @@ const DICTIONARIES = [
 
 async function mockDictionaries(page) {
   for (const api of DICTIONARIES) {
-    await page.route(api, route => route.fulfill({
-      status: 200, contentType: 'application/json', body: '[{}]'
-    }));
+    await page.route(api, route => {
+      const word = decodeURIComponent(route.request().url().split('/').pop());
+      // A source has to refuse a nonsense control as well as find a real
+      // word, or the library treats it as answering yes to anything.
+      if (word === 'zqxjvwkfp') {
+        return route.fulfill({ status: 404, contentType: 'application/json', body: '{}' });
+      }
+      return route.fulfill({
+        status: 200, contentType: 'application/json', body: '[{}]'
+      });
+    });
   }
 }
 
@@ -215,7 +223,25 @@ test.describe('app shell', () => {
     ];
     const stray = external.filter(url => !ALLOWED.some(host => url.startsWith(host)));
     expect(stray, 'no CDNs, fonts or analytics').toEqual([]);
-    expect(errors).toEqual([]);
+
+    /*
+     * The dictionary probe asks each service to REFUSE a nonsense control —
+     * that is how it catches a service answering yes to everything — and a
+     * refusal is a 404, which the browser logs itself. No catch suppresses
+     * that; see CLAUDE.md. So those lines are expected, but pinned to
+     * exactly the number the probe can account for, so they cannot quietly
+     * grow into real errors hiding among them.
+     */
+    const pages = await Promise.all(hrefs.map(async href => {
+      const body = await (await page.request.get(href)).text();
+      return body.includes('js/lib/dictionary.js');
+    }));
+    const asking = pages.filter(Boolean).length;
+    const refusals = errors.filter(line => /Failed to load resource/.test(line));
+    const ours = errors.filter(line => !/Failed to load resource/.test(line));
+    expect(ours, 'the site logged an error of its own').toEqual([]);
+    expect(refusals.length, 'more refused-control lines than the probe explains')
+      .toBeLessThanOrEqual(asking * 2);
   });
 
   test('every precached URL exists', async ({ page }) => {

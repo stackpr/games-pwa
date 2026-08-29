@@ -12,9 +12,15 @@ test.describe('the shipped word list', { tag: '@nodom' }, () => {
   test.beforeEach(async ({ page }) => {
     // Routed so the dictionary's load probe never reaches the real internet.
     for (const api of ['https://api.dictionaryapi.dev/**', 'https://freedictionaryapi.com/**']) {
-      await page.route(api, route => route.fulfill({
-        status: 200, contentType: 'application/json', body: '[{}]'
-      }));
+      await page.route(api, route => {
+        const word = decodeURIComponent(route.request().url().split('/').pop());
+        if (word === 'zqxjvwkfp') {
+          return route.fulfill({ status: 404, contentType: 'application/json', body: '{}' });
+        }
+        return route.fulfill({
+          status: 200, contentType: 'application/json', body: '[{}]'
+        });
+      });
     }
     await page.goto(URL);
   });

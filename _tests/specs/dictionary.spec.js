@@ -7,9 +7,13 @@ const URL = '/games/word-sprint/';
 const FIRST = 'https://api.dictionaryapi.dev/api/v2/entries/en/**';
 const SECOND = 'https://freedictionaryapi.com/api/v1/entries/en/**';
 const APIS = [FIRST, SECOND];
-const KEY = 'games.dictionary.v1';
-// The control word every source has to answer before it is trusted.
+const KEY = 'games.dictionary.v2';
+// The two controls every source has to get right before it is trusted: it
+// must FIND this one...
 const PROBE = 'apple';
+// ...and REFUSE this one. A source that says yes to both is not a dictionary
+// at the URL we are using; see js/lib/dictionary.js.
+const NONSENSE = 'zqxjvwkfp';
 /*
  * A word the shipped list does not carry, so the question actually reaches a
  * service. It has to be one js/lib/words.js will never hold: RARE used
@@ -38,6 +42,17 @@ async function serve(page, api, opts) {
       }
       return route.fulfill({ status: 200, contentType: 'application/json', body: '[{}]' });
     }
+    if (word === NONSENSE) {
+      // `liar` is a service answering 200 to everything — a wrong path on a
+      // host that serves a page instead of an error.
+      if (options.liar) {
+        return route.fulfill({ status: 200, contentType: 'application/json', body: '[{}]' });
+      }
+      return route.fulfill({ status: 404, contentType: 'application/json', body: '{}' });
+    }
+    if (options.liar) {
+      return route.fulfill({ status: 200, contentType: 'application/json', body: '[{}]' });
+    }
     if (options.abort) return route.abort('failed');
     if (options.hang) return; // never answered
     if (options.status) return route.fulfill({ status: options.status, body: '{}' });
@@ -64,7 +79,10 @@ function counter(page) {
   page.on('request', req => {
     const url = req.url();
     if (!url.includes('dictionaryapi.dev') && !url.includes('freedictionaryapi.com')) return;
-    if (url.endsWith('/' + PROBE)) { seen.probes++; return; }
+    if (url.endsWith('/' + PROBE) || url.endsWith('/' + NONSENSE)) {
+      seen.probes++;
+      return;
+    }
     if (url.includes('freedictionaryapi.com')) seen.second++;
     else seen.first++;
   });
@@ -286,6 +304,41 @@ test.describe('two services', () => {
       expect(seen.second).toBe(1);
       expect((await health(page))['api.dictionaryapi.dev'].state).toBe('down');
     });
+
+  test('a service that says yes to anything is never trusted', async ({ page }) => {
+    /*
+     * The failure this exists for, and the one that actually bit: a wrong
+     * path on a host that serves a page rather than an error answers 200 to
+     * everything, so every string is a word. `bigie` was accepted that way
+     * on the live site.
+     *
+     * Checking only that a real word comes back FOUND passes such a source
+     * happily — which is exactly what the first version of the probe did. It
+     * has to be refused a string no dictionary could hold as well.
+     */
+    await serve(page, FIRST, { liar: true });
+    await serve(page, SECOND, { known: [RARE] });
+    await page.goto(URL);
+    await clearState(page);
+    await settled(page, 'api.dictionaryapi.dev', 'down');
+
+    const state = await health(page);
+    expect(state['api.dictionaryapi.dev'].why).toContain(NONSENSE);
+    // And the honest one still answers, so one liar does not cost the game.
+    expect(await look(page, RARE)).toBe('yes');
+    expect(await look(page, 'zzzzqqq')).toBe('no');
+  });
+
+  test('a liar on its own leaves the question unanswered', async ({ page }) => {
+    // Better nothing than a wrong yes: 'off' costs a player no try, while a
+    // wrong 'yes' hands them a word that is not one.
+    await serveBoth(page, { liar: true });
+    await page.goto(URL);
+    await clearState(page);
+    await expect.poll(() => page.evaluate(() => window.Dictionary.ready()), SETTLE)
+      .toBe(false);
+    expect(await look(page, 'bigie')).toBe('off');
+  });
 
   test('with both down, a lookup is refused rather than waited on',
     async ({ page }) => {

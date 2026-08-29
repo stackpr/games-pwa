@@ -15,6 +15,9 @@ const API = APIS[0];
 // Asked for on load to prove a source works before it is trusted with a real
 // word, so the mock always answers it whatever else it is told to do.
 const PROBE = 'apple';
+// A source must also REFUSE this one, or it is answering yes to
+// anything and is not trusted with a real word.
+const NONSENSE = 'zqxjvwkfp';
 const VOWELS = 'aeiou';
 
 /**
@@ -36,6 +39,9 @@ async function dictionary(page, opts = {}) {
       // wrong thing.
       if (word === PROBE) {
         return route.fulfill({ status: 200, contentType: 'application/json', body: '[{}]' });
+      }
+      if (word === NONSENSE) {
+        return route.fulfill({ status: 404, contentType: 'application/json', body: '{}' });
       }
       if (opts.abort) return route.abort('failed');
       if (opts.status) {
@@ -71,6 +77,11 @@ async function routeBoth(page, handler) {
       if (word === PROBE) {
         return route.fulfill({
           status: 200, contentType: 'application/json', body: '[{}]'
+        });
+      }
+      if (word === NONSENSE) {
+        return route.fulfill({
+          status: 404, contentType: 'application/json', body: '{}'
         });
       }
       return handler(route, word);
@@ -1270,7 +1281,14 @@ test.describe('the page itself', () => {
     for (const url of external) {
       expect(HOSTS.some(host => url.startsWith(host)), url).toBe(true);
     }
-    expect(errors).toEqual([]);
+    /*
+     * The probe asks each service to refuse a nonsense control, and a
+     * refusal is a 404 the browser logs itself — one per service, and no
+     * catch suppresses it. What must hold is that the game adds nothing to
+     * it. See CLAUDE.md.
+     */
+    const ours = errors.filter(line => !/Failed to load resource/.test(line));
+    expect(ours, 'the game logged an error of its own').toEqual([]);
   });
 
   test('the page still loads with no network at all', async ({ page, context }) => {

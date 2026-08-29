@@ -33,7 +33,14 @@
  * game is asking. See CLAUDE.md.
  */
 window.Dictionary = (function () {
-  const KEY = 'games.dictionary.v1';
+  /*
+   * v2, not v1: while a source was trusted on one control alone it could
+   * answer yes to anything, and those verdicts were cached and persisted.
+   * A wrong 'yes' cannot be told from a right one after the fact, so the old
+   * key is abandoned rather than migrated. That costs a few lookups; keeping
+   * it would cost wrong answers for ever.
+   */
+  const KEY = 'games.dictionary.v2';
   // Enough to cover a lot of play, small enough that the write stays cheap.
   const MAX = 3000;
   /*
@@ -80,6 +87,23 @@ window.Dictionary = (function () {
    * rather than a poisoned verdict.
    */
   const PROBE_WORD = 'apple';
+  /*
+   * And the other control, which matters just as much and was missing at
+   * first. A source can be wrong in two directions:
+   *
+   *   404 to everything — a wrong path on a strict host — makes every real
+   *   word "not a word", because 404 is how these services say no.
+   *
+   *   200 to everything — a wrong path on a host that serves a page rather
+   *   than an error — makes every string a word. This one is worse: it is
+   *   silent, and it accepts a player's typos. `bigie` was accepted this
+   *   way, which is how the hole was found.
+   *
+   * Checking only that a real word comes back found catches the first and
+   * sails straight past the second, so a source has to get BOTH controls
+   * right: this string must come back not-found.
+   */
+  const PROBE_NONSENSE = 'zqxjvwkfp';
 
   /*
    * Health, and the growing wait after a failure. A service that is down
@@ -134,7 +158,14 @@ window.Dictionary = (function () {
       well[src.id] = {
         state: h.state,
         at: Number.isFinite(h.at) ? h.at : 0,
-        fails: Number.isFinite(h.fails) && h.fails >= 0 ? Math.min(h.fails, 20) : 0
+        fails: Number.isFinite(h.fails) && h.fails >= 0 ? Math.min(h.fails, 20) : 0,
+        /*
+         * The reason survives too. A source set aside stays that way through
+         * its whole backoff without being asked again, so dropping this left
+         * `health()` unable to say WHY a service was not being used for the
+         * next half hour — which is the one question it exists to answer.
+         */
+        why: typeof h.why === 'string' ? h.why : undefined
       };
     }
   })();
@@ -206,22 +237,49 @@ window.Dictionary = (function () {
     return out;
   }
 
+  function disqualify(src, why) {
+    mark(src, false, why, true);
+    console.warn('Dictionary: not using ' + src.id + ' — ' + why + '; trying ' +
+      'again in ' + Math.round(waitFor(well[src.id].fails) / 1000) + 's');
+    return false;
+  }
+
   /*
-   * Ask one source for the control word and record what came back. Only a
-   * 2xx counts: a 404 here is a wrong endpoint, not a missing word.
+   * Put a source through both controls. It has to find a word every English
+   * dictionary holds, AND refuse a string no dictionary could — see the note
+   * on PROBE_NONSENSE for why either one alone proves nothing.
    */
   function test(src) {
-    return ask(src.url(PROBE_WORD)).then(out => {
-      const good = Boolean(out.res && out.res.ok);
-      const why = out.res ? 'HTTP ' + out.res.status : out.why;
-      if (good && !known.has(PROBE_WORD)) remember(PROBE_WORD, 'yes');
-      mark(src, good, why, true);
-      if (!good) {
-        console.warn('Dictionary: ' + src.id + ' did not answer for "' +
-          PROBE_WORD + '" — ' + why + '; not using it for ' +
-          Math.round(waitFor(well[src.id].fails) / 1000) + 's');
+    /*
+     * Both controls at once, not one after the other. Asked in turn they
+     * cost two deadlines per source and four across both — up to twenty-four
+     * seconds before a game can even say the dictionary is down, which is
+     * most of a minute of a player being told nothing. Asked together the
+     * whole probe is one deadline. The cost is one extra request against a
+     * source that was going to fail the first control anyway, which is
+     * nothing next to the wait it saves.
+     */
+    return Promise.all([
+      ask(src.url(PROBE_WORD)),
+      ask(src.url(PROBE_NONSENSE))
+    ]).then(([yes, no]) => {
+      if (!yes.res) return disqualify(src, yes.why);
+      if (!yes.res.ok) {
+        return disqualify(src, 'HTTP ' + yes.res.status + ' for "' + PROBE_WORD + '"');
       }
-      return good;
+      if (!no.res) return disqualify(src, no.why);
+      /*
+       * The dangerous answer. A source calling this a word is not a
+       * dictionary at the URL we are using, and trusting it would accept
+       * every typo a player makes.
+       */
+      if (no.res.ok) {
+        return disqualify(src, 'calls "' + PROBE_NONSENSE + '" a word, so it is ' +
+          'answering yes to anything');
+      }
+      if (!known.has(PROBE_WORD)) remember(PROBE_WORD, 'yes');
+      mark(src, true, 'answered both controls');
+      return true;
     });
   }
 
@@ -413,5 +471,5 @@ window.Dictionary = (function () {
   probeSoon();
 
   return { look, verdict, ready, probe, health, last, size,
-    KEY, MAX, DEADLINE, SOURCES, PROBE_WORD, BACKOFF_MS };
+    KEY, MAX, DEADLINE, SOURCES, PROBE_WORD, PROBE_NONSENSE, BACKOFF_MS };
 })();

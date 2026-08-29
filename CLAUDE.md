@@ -42,13 +42,26 @@ to leave out a caveat.
      exactly those grounds. They are tried in order and the first verdict
      wins.
 
-     **A source must prove itself before it may answer.** Each is probed
-     with a control word every English dictionary has, and one that cannot
-     answer that is not consulted. This is not belt-and-braces: a wrong
-     endpoint answers `404` to everything, and `404` is how these services
-     say "not a word", so an unverified source would quietly start calling
-     real words wrong — the exact failure this library exists to prevent. A
-     wrong URL must cost a disabled source, never a poisoned verdict.
+     **A source must prove itself on TWO controls before it may answer** —
+     a real word it has to find, and a nonsense string it has to refuse. A
+     wrong URL can be wrong in two directions and each poisons a different
+     verdict: `404` to everything makes every real word "not a word", since
+     `404` is how these services say no; `200` to everything makes every
+     string a word. The second is the worse one, because it is silent and it
+     accepts a player's typos — `bigie` was accepted that way on the live
+     site, by a probe that checked only the first. Checking one control
+     catches one direction and sails past the other. A wrong URL must cost a
+     disabled source, never a poisoned verdict, in either direction.
+
+     **The second control costs one console line per service, per probe.**
+     Refusing a word is a `404`, and the browser logs every non-2xx itself —
+     the same fact `js/joke.js` is built around. It is the price of catching
+     a service that says yes to anything, and it is paid on a game's first
+     load rather than on every guess. Both controls are asked **at once**:
+     in turn they cost two deadlines a service and four across both, which
+     is the better part of a minute before a game can say the dictionary is
+     down. The specs pin the number of those lines rather than ignoring
+     them, so a real error cannot hide among them.
 
      **A dead service is asked again on a growing delay** (30s, doubling, to
      30 minutes), and the record outlives the page. Retrying every word
@@ -171,7 +184,7 @@ Use the `add-game` skill, or by hand:
    `games.<slug>.v1` and store a single JSON object. Two keys are
    deliberately **shared across games**, and both earn it by holding
    something that is not about any one game: `games.party-names.v1` (who is
-   at the table) and `games.dictionary.v1` (whether a word is a word). Do
+   at the table) and `games.dictionary.v2` (whether a word is a word). Do
    not add a third without the same argument.
 7. Add `_tests/specs/<slug>.spec.js` and run the suite.
 
