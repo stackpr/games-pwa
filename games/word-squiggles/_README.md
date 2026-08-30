@@ -131,8 +131,11 @@ A solve is timed, and the times are kept **per board size**. A 7×9 is more
 than twice the work of a 5×7, so one list would only ever show the small
 boards; separate lists make a size's difficulty legible from the order.
 
-- **The clock starts on your first squiggle**, not on load. Reading the
-  theme costs nothing.
+- **The clock starts the moment the board is on screen**, not on the first
+  squiggle. Reading the theme and finding the first word is the solving —
+  a player staring at the grid is already playing, and starting on the first
+  drag would have paid for exactly that thinking. A restored board picks the
+  clock back up for the same reason; a finished one leaves it stopped.
 - **Each hint adds more than the last** — 15s, then 30s, then 45s. The
   first is a nudge and the fourth is being carried, so they should not cost
   the same. Arithmetic rather than doubling, because a player who wants four

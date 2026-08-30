@@ -399,15 +399,48 @@ test.describe('playing', () => {
 });
 
 test.describe('the clock and the leaderboard', () => {
-  test('the clock does not start until the first squiggle', async ({ page }) => {
-    await expect(page.locator('#clock')).toHaveText('0:00');
-    await page.waitForTimeout(1300);
-    // Reading the theme, or picking the phone back up, costs nothing.
-    await expect(page.locator('#clock')).toHaveText('0:00');
-
-    const p = await puzzleOf(page);
-    await trace(page, p.words[0].cells);
+  test('the clock starts as soon as the board is up', async ({ page }) => {
+    /*
+     * Working out the theme and finding the first word IS the solving, so
+     * the clock cannot wait for a drag — a player studying the grid is
+     * already playing. It used to start on the first squiggle, which paid
+     * for exactly that thinking.
+     */
     await expect(page.locator('#clock')).not.toHaveText('0:00', { timeout: 3000 });
+  });
+
+  test('a new puzzle restarts the clock, running', async ({ page }) => {
+    await page.waitForTimeout(1200);
+    await page.locator('#new-btn').click();
+    // Back to zero for the new board, and moving again without being poked.
+    await expect(page.locator('#clock')).not.toHaveText('0:00', { timeout: 3000 });
+    const early = await page.locator('#clock').textContent();
+    expect(['0:00', '0:01', '0:02']).toContain(early);
+  });
+
+  test('a restored board picks its clock back up', async ({ page }) => {
+    await page.waitForTimeout(1200);
+    await page.reload();
+    // The puzzle is on screen again, so it is being solved again.
+    const first = await page.locator('#clock').textContent();
+    await expect(page.locator('#clock')).not.toHaveText(first, { timeout: 4000 });
+  });
+
+  test('a solved board leaves the clock alone', async ({ page }) => {
+    const p = await puzzleOf(page);
+    for (const entry of p.words) await trace(page, entry.cells);
+    await expect(page.locator('#over')).toHaveAttribute('data-open', /.*/);
+
+    const stopped = await page.locator('#clock').textContent();
+    await page.waitForTimeout(1500);
+    expect(await page.locator('#clock').textContent(),
+      'the clock kept running after the puzzle was solved').toBe(stopped);
+
+    // And still stopped after a reload, rather than timing a finished board.
+    await page.reload();
+    const after = await page.locator('#clock').textContent();
+    await page.waitForTimeout(1500);
+    expect(await page.locator('#clock').textContent()).toBe(after);
   });
 
   test('a hint costs time, and each one costs more', async ({ page }) => {

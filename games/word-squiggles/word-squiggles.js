@@ -328,8 +328,13 @@
     ticker = setInterval(paintClock, 200);
   }
 
-  // Starts on the first squiggle, not on load: reading the theme, or picking
-  // the phone up again, costs nothing.
+  /*
+   * Starts as soon as the puzzle is on screen, because that is when the
+   * solving starts: the board and its theme are both readable from the
+   * first moment, and a player studying them before drawing anything is
+   * already playing. Waiting for the first squiggle would have paid for
+   * exactly that thinking.
+   */
   function startClock() {
     if (startedAt || done()) return;
     startedAt = Date.now();
@@ -637,7 +642,6 @@
     const i = cellFrom(event, true);
     if (i < 0 || locked(i)) return;
     drawing = true;
-    startClock();
     trail = [i];
     render();
     if (event.pointerId !== undefined && event.target.setPointerCapture) {
@@ -903,6 +907,8 @@
       save();
       render();
       paintClock();
+      // The board is up, so the clock is running.
+      startClock();
       return true;
     }
     flash('Could not build a board', 'bad');
@@ -921,8 +927,12 @@
   });
   Modal.create($('rules'), { trigger: $('rules-btn') });
   paintClock();
-  // A finished board that was restored keeps its clock stopped.
+  /*
+   * A restored board picks up where it left off — running, because the
+   * puzzle is on screen again. A finished one stays stopped.
+   */
   if (done()) stopClock();
+  else startClock();
 
   on($('new-btn'), 'click', () => {
     if (overSheet) overSheet.close();
