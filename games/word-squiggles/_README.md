@@ -27,10 +27,13 @@ board.** Take six to nine words from the set, add up their letters, and use
 any factorisation that gives a sensible shape — 5–7 columns, 6–9 rows. Almost
 every subset fits *some* board, so the search almost never has to reject one.
 
-That single inversion is why the same twenty themes stay worth playing.
-Measured over 300 puzzles: **298 distinct word-sets, ten different board
-shapes, every one solved, median 21ms and 262ms at worst.** A theme that
-comes round again is a new board, a different subset and a different shape.
+That single inversion is why a theme stays worth playing. Measured over 300
+puzzles, back when there were twenty themes rather than a hundred and twenty:
+**298 distinct word-sets, ten different board shapes, every one solved,
+median 21ms and 262ms at worst.** A theme that comes round again is a new
+board, a different subset and a different shape — which is why the numbers
+are quoted at the harder end of the two, twenty themes rather than the pool
+there is now.
 
 ### The pruning that makes it fast
 
@@ -110,20 +113,31 @@ plus the reading is what the rule was always trying to say.
 
 ## The themes
 
-`sets.js` holds twenty, written for this game rather than borrowed from
-`js/lib/vocab.js`. The shared vocabulary exists for the describing games: its
-categories are broad and its terms carry the words you would *say* while
-describing them, which is a different job. Here the theme is the only clue,
-so it has to be tight enough that noticing it is a moment.
+`sets.js` holds a hundred and twenty, written for this game rather than
+borrowed from `js/lib/vocab.js`. The shared vocabulary exists for the
+describing games: its categories are broad and its terms carry the words you
+would *say* while describing them, which is a different job. Here the theme
+is the only clue, so it has to be tight enough that noticing it is a moment.
 
 Each set carries **thirty-odd** words and a puzzle uses six to nine, and that
 surplus is the whole point: the pool is what decides whether a theme is worth
-meeting again. 675 words across the twenty. Twenty is the floor the loader
-enforces.
+meeting again. 3,668 words across the hundred and twenty. Twenty words is the
+floor the loader enforces.
 
 Two rules when adding one: four to eleven letters (shorter is noise, longer
 will not lie on a small board), and no word containing another in the same
-set, which would make a found word ambiguous.
+set, which would make a found word ambiguous. Two more that only bite in
+bulk: a title nobody already has, and a theme that does not overlap one — a
+second sea set or a second set of walking words is one set that repeats
+itself.
+
+**Check those four with a script, not by eye.** They are all mechanical, and
+the hundred added in one go arrived carrying `bin` and `peg` (too short),
+`masthood` and `spindry` (not words), `lace` alongside `bootlace`, a
+duplicate `ode`, and a "Camping out" that was "At the campsite" again. Every
+one of those was caught by running the rules over the list rather than
+reading it. Draft new sets somewhere a script can read them, run the rules,
+then paste in what survives.
 
 ## The clock, and what a hint costs
 

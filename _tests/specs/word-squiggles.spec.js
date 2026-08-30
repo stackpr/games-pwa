@@ -206,15 +206,57 @@ test.describe('the board', () => {
   test('every theme has enough words to be worth meeting again', async ({ page }) => {
     const sets = await page.evaluate(() => window.SquiggleSets.all()
       .map(s => ({ title: s.title, n: s.words.length })));
-    expect(sets.length).toBe(20);
+    // Not an exact count — sets get added. Deep enough to be worth having,
+    // and none silently thrown away by the loader's filter.
+    expect(sets.length).toBeGreaterThanOrEqual(100);
+    expect(sets.length).toBe(await page.evaluate(() => window.SquiggleSets.count()));
     for (const set of sets) {
       expect(set.n, set.title + ' is too thin a pool').toBeGreaterThanOrEqual(28);
     }
   });
 
+  test('the themes obey their own rules', async ({ page }) => {
+    /*
+     * The rules in sets.js, enforced rather than trusted. A hundred sets
+     * were added in one sitting and eye-checking them missed `bin` (too
+     * short to lay), `lace` sitting inside `bootlace` (a found word that
+     * could be either), a duplicate `ode`, and two themes with the same
+     * title. All four are mechanical, so they belong here.
+     */
+    /*
+     * Read from the source rather than from `all()`, because `all()` is the
+     * filter: it drops a mis-shaped word silently, which is the very thing
+     * being looked for. A theme quietly one word shorter is the failure.
+     */
+    const src = await (await page.request.get('/games/word-squiggles/sets.js')).text();
+    const faults = [];
+    const titles = {};
+    const blocks = src.match(/\{ title: '[^']*', words: \[[^\]]*\]/g) || [];
+    expect(blocks.length, 'could not read the sets out of the source')
+      .toBeGreaterThanOrEqual(100);
+    for (const block of blocks) {
+      const title = block.match(/title: '([^']*)'/)[1];
+      if (titles[title]) faults.push('two themes called ' + title);
+      titles[title] = 1;
+      const words = [...block.matchAll(/'([^']*)'/g)].slice(1).map(m => m[1]);
+      const seen = {};
+      for (const w of words) {
+        if (!/^[a-z]{4,11}$/.test(w)) faults.push(title + ': ' + w + ' is the wrong shape');
+        if (seen[w]) faults.push(title + ': ' + w + ' twice');
+        seen[w] = 1;
+      }
+      for (const a of words) {
+        for (const b of words) {
+          if (a !== b && b.includes(a)) faults.push(title + ': ' + a + ' inside ' + b);
+        }
+      }
+    }
+    expect(faults).toEqual([]);
+  });
+
   test('the grid is not predetermined', async ({ page }) => {
     /*
-     * The whole point of building at open time. Same twenty themes, but a
+     * The whole point of building at open time. A repeated theme is common enough at any pool size, and a
      * repeated theme must not mean a repeated board — so both the shape and
      * the chosen words have to vary.
      */
