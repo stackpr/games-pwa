@@ -143,6 +143,39 @@ test.describe('playing', () => {
     await expect(page.locator('#timer')).not.toHaveText('0:00', { timeout: 3000 });
   });
 
+  test('the toggle names both modes, in words and in the glyph', async ({ page }) => {
+    /*
+     * It used to read "Flag mode" off and "Flagging" on, which names one
+     * mode and its absence — leaving what a tap does right now to be
+     * inferred. Two named states say it outright, and the struck-through
+     * flag says the same thing to anyone reading the icon.
+     */
+    const btn = page.locator('#flag-btn');
+    const glyph = page.locator('#flag-glyph');
+
+    await expect(page.locator('#flag-label')).toHaveText('Clearing');
+    await expect(glyph).toHaveAttribute('href', '#glyph-flag-off');
+
+    await btn.click();
+    await expect(page.locator('#flag-label')).toHaveText('Flagging');
+    await expect(glyph).toHaveAttribute('href', '#glyph-flag');
+
+    await btn.click();
+    await expect(page.locator('#flag-label')).toHaveText('Clearing');
+    await expect(glyph).toHaveAttribute('href', '#glyph-flag-off');
+
+    // Both glyphs are actually in the sprite — a `use` pointing at nothing
+    // renders nothing at all, and says nothing about it.
+    for (const id of ['glyph-flag', 'glyph-flag-off']) {
+      await expect(page.locator('symbol#' + id)).toHaveCount(1);
+    }
+    // The struck flag draws something, rather than being masked away.
+    expect(await page.evaluate(() => {
+      const s = document.querySelector('#glyph-flag-off');
+      return [...s.querySelectorAll('path')].every(p => p.getTotalLength() > 0);
+    })).toBe(true);
+  });
+
   test('flag mode flags instead of opening, and the counter follows', async ({ page }) => {
     const before = Number(await minesLeft(page).textContent());
     await page.locator('#flag-btn').click();

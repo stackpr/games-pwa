@@ -320,6 +320,29 @@
     <symbol id="glyph-flag" viewBox="0 0 24 24">
       <path d="M6 2h1.6v19H6V2Zm2.6 1h10.2l-2.6 4 2.6 4H8.6V3Z"/>
     </symbol>
+    <!--
+      The same flag struck through. Two decisions worth keeping:
+
+      The gap around the stroke is a MASK, not a line painted in the
+      background colour, because this button has two backgrounds — panel
+      when it is off and red when it is on — so a painted gap would show as
+      a stripe of the wrong colour in one of them.
+
+      The slash runs top-left to bottom-right, which looks backwards next to
+      most struck-through icons and is the only direction that works here.
+      The other diagonal cuts the banner corner to corner and leaves two
+      loose triangles: at 18px the flag stops being a flag. This one crosses
+      the pole and the empty lower right, so the banner survives whole.
+    -->
+    <mask id="glyph-flag-cut" maskUnits="userSpaceOnUse" x="0" y="0" width="24" height="24">
+      <rect x="0" y="0" width="24" height="24" fill="#fff"/>
+      <path d="M5.1 2.6 21.4 18.9 18.9 21.4 2.6 5.1Z" fill="#000"/>
+    </mask>
+    <symbol id="glyph-flag-off" viewBox="0 0 24 24">
+      <path d="M6 2h1.6v19H6V2Zm2.6 1h10.2l-2.6 4 2.6 4H8.6V3Z"
+        mask="url(#glyph-flag-cut)"/>
+      <path d="M4.8 3.6 20.4 19.2 19.2 20.4 3.6 4.8Z"/>
+    </symbol>
     <symbol id="glyph-clock" viewBox="0 0 24 24">
       <path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Zm0 2.2a7.8 7.8 0 1 1 0 15.6 7.8 7.8 0 0 1 0-15.6ZM11 6.5v6.2l4.6 2.7.9-1.5-3.9-2.3V6.5H11Z"/>
     </symbol>
@@ -354,8 +377,8 @@
 
   <div class="footer">
     <button id="flag-btn" class="flag-toggle" type="button" aria-pressed="false">
-      <svg aria-hidden="true"><use href="#glyph-flag"></use></svg>
-      <span id="flag-label">Flag mode</span>
+      <svg aria-hidden="true"><use id="flag-glyph" href="#glyph-flag-off"></use></svg>
+      <span id="flag-label">Clearing</span>
     </button>
     <span class="board-size" id="board-size">&nbsp;</span>
   </div>

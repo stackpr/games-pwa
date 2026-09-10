@@ -398,10 +398,20 @@
         state.mineCount + ' mines';
     }
 
+    /*
+     * Two named modes rather than one named mode and its absence: the
+     * button says what a tap will do right now, so "Clearing" is a state
+     * and not just Flagging switched off. The struck-through flag carries
+     * the same thing for anyone reading the icon instead of the word.
+     */
     const flag = $('flag-btn');
     if (flag) flag.setAttribute('aria-pressed', flagMode ? 'true' : 'false');
     const flagLabel = $('flag-label');
-    if (flagLabel) flagLabel.textContent = flagMode ? 'Flagging' : 'Flag mode';
+    if (flagLabel) flagLabel.textContent = flagMode ? 'Flagging' : 'Clearing';
+    const flagGlyph = $('flag-glyph');
+    if (flagGlyph) {
+      flagGlyph.setAttribute('href', flagMode ? '#glyph-flag' : '#glyph-flag-off');
+    }
   }
 
   function say(text) {

@@ -91,9 +91,28 @@ What a resize does depends on whether the game has begun:
 
 Three ways in, because one is never enough across touch and desktop:
 
-- **Flag mode** — the big toggle in the footer. While it is on, a tap flags.
+- **The footer toggle**, which is **Clearing** or **Flagging**. While it says
+  Flagging, a tap flags.
 - **Press and hold** (400ms) — always flags, whatever the mode says.
 - **Right-click** — desktop.
+
+**Both modes are named.** It read "Flag mode" when off and "Flagging" when
+on, which names one mode and its absence and leaves the player to infer what
+a tap does the rest of the time — on a board where a wrong tap ends the game.
+Two names make it a statement of the current state rather than a switch, and
+the icon carries the same thing for anyone reading it instead of the word: a
+plain flag while flagging, a struck-through flag while clearing.
+
+That struck-through glyph is `#glyph-flag-off`, and two things about it are
+deliberate. The gap between the flag and the stroke is a **mask**, because
+the button has two backgrounds — panel when off, `--flag` red when on — so a
+gap painted in one of them would show as a stripe of the wrong colour in the
+other. And the stroke runs **top-left to bottom-right**, which is the
+opposite of the usual struck-through icon: the conventional diagonal cuts
+this flag's banner corner to corner and leaves two loose triangles, and at
+the 18px it is actually drawn at the flag stops being a flag. This diagonal
+crosses the pole and the empty lower right instead, so the banner survives
+whole.
 
 The long-press and the tap share one square, so a fired long-press sets a
 `swallow` flag that eats the click behind it. That flag is cleared on the
