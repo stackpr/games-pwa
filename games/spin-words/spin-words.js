@@ -20,20 +20,15 @@
    * so a spin is still worth thinking about rather than worth waiting for —
    * but there is a lot more of a spread to land in than there was.
    *
-   * The wheel it replaced was 24 wedges holding nine distinct values, and
-   * four of them were penalties. That made a penalty one spin in six — 60%
-   * odds of hitting one across five spins — and put nearly every cash
-   * landing between 500 and 900, with a single 2500 doing all the work of
-   * feeling lucky. It came up narrow and punishing, and it was.
-   *
-   * Now: eighteen distinct values from 400 to 3000, and three penalties in
-   * thirty, so one spin in ten. See _README.md for the numbers.
+   * Four penalties in thirty: one spin in 7.5. Widening the wheel from 24
+   * to 30 without adding a penalty dropped that to one in ten, which read
+   * as no penalties at all. See _README.md for the numbers.
    */
   const WHEEL = [
     650, 500, 900, BANKRUPT, 700, 550, 1200, 600,
-    800, 450, 1000, 500, 750, LOSE, 600, 850,
-    500, 1500, 700, 400, 950, 650, BANKRUPT, 550,
-    1100, 600, 2000, 750, 3000, 800
+    800, 3000, 1000, LOSE, 750, 600, 850, 500,
+    1500, 700, BANKRUPT, 400, 950, 650, 550, 1100,
+    600, 2000, LOSE, 750, 450, 800
   ];
   const LOOPS = 3;              // copies of the wheel in the reel track
 

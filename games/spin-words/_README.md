@@ -60,25 +60,37 @@ than added into it: it is not banked, and a spin can still take it.
 ## The wheel
 
 Thirty wedges: **eighteen distinct cash values from $400 to $3,000**, two
-`BANKRUPT` and one `LOSE A TURN`. Middle values repeat and the big ones are
+`BANKRUPT` and two `LOSE A TURN`. Middle values repeat and the big ones are
 singletons, so the shape is a pyramid rather than a flat draw — a spin is
 worth thinking about rather than worth waiting for.
 
 It replaced a 24-wedge wheel that was both narrower and meaner than it
-looked:
+looked, and it took two goes to land:
 
-| | before | now |
-| --- | --- | --- |
-| Wedges | 24 | 30 |
-| Distinct cash values | 9 | 18 |
-| Range | $500–$2,500 | $400–$3,000 |
-| Penalty wedges | 4 (16.7%) | 3 (10%) |
-| A penalty within five spins | 60% | 41% |
+| | original | too soft | now |
+| --- | --- | --- | --- |
+| Wedges | 24 | 30 | 30 |
+| Distinct cash values | 9 | 18 | 18 |
+| Range | $500–$2,500 | $400–$3,000 | $400–$3,000 |
+| Penalty wedges | 4 (16.7%) | 3 (10%) | 4 (13.3%) |
+| A penalty within five spins | 60% | 41% | 51% |
 
 The old range flattered itself: a single $2,500 wedge did all the work of
 feeling lucky, and every other landing sat between $500 and $900. One spin
 in six was a penalty, which is often enough that a turn ending badly stopped
 being a swing and started being the norm.
+
+**Widening the wheel is itself a nerf to the penalties**, which is the part
+the first fix got wrong. Six more cash wedges went in and the penalty count
+did not change, so one spin in six quietly became one in ten — and one in
+ten reads, across a real game, as none at all. The threat is what makes a
+long consonant run a decision instead of a formality, so it has to be
+*felt*. Four in thirty is deliberately between the two: less often than the
+wheel that was punishing, more often than the wheel that had no teeth.
+
+The four sit at wedges 3, 11, 18 and 26 — gaps of 8, 7, 8, 7. The reel is a
+visible strip rather than a hidden draw, so clumped penalties look like a
+dead half of the wheel even when the odds are right.
 
 **The specs look wedges up rather than naming indexes.** `window.SpinWheel`
 exposes the wheel for that. A test that says "wedge 1 is BANKRUPT" keeps

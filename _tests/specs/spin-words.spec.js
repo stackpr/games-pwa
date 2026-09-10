@@ -130,7 +130,7 @@ test.describe('the wheel', () => {
      * cash landing between $500 and $900 with one $2,500 doing all the work
      * of feeling lucky. It played narrow and punishing.
      *
-     * These are floors, not the current numbers, so the wheel can be tuned
+     * These are bounds, not the current numbers, so the wheel can be tuned
      * without rewriting the test — but not back to what it was.
      */
     const wheel = await page.evaluate(() => window.SpinWheel);
@@ -138,8 +138,18 @@ test.describe('the wheel', () => {
     const penalties = wheel.wedges.length - cash.length;
     const distinct = [...new Set(cash)].sort((a, b) => a - b);
 
+    /*
+     * A BAND, not a ceiling, and the floor is the half that was missing.
+     * The first version of this test only guarded "too punishing", so
+     * widening the wheel from 24 wedges to 30 without adding a penalty
+     * passed cleanly while taking the rate from one spin in six to one in
+     * ten — which plays as no penalties at all. The threat is what makes a
+     * long consonant run a decision, so it has to be felt.
+     */
     expect(penalties / wheel.wedges.length,
-      'penalties come up too often').toBeLessThanOrEqual(0.12);
+      'penalties come up too often').toBeLessThanOrEqual(0.16);
+    expect(penalties / wheel.wedges.length,
+      'the wheel has no teeth left').toBeGreaterThanOrEqual(0.11);
     expect(distinct.length,
       'too few different values to land on').toBeGreaterThanOrEqual(15);
     expect(distinct[0], 'the floor is too high').toBeLessThanOrEqual(500);
@@ -160,6 +170,22 @@ test.describe('the wheel', () => {
       return typeof v !== 'number' && typeof next !== 'number' ? i : -1;
     }).filter(i => i >= 0);
     expect(bad, 'two penalties in a row on the reel').toEqual([]);
+  });
+
+  test('and none of them are bunched up', async ({ page }) => {
+    /*
+     * The reel is a visible strip rather than a hidden draw, so where the
+     * penalties sit is read as well as rolled: all of them in one half
+     * looks like a dead wheel even when the odds are right.
+     */
+    const wheel = await page.evaluate(() => window.SpinWheel);
+    const at = wheel.wedges
+      .map((v, i) => (typeof v === 'number' ? -1 : i)).filter(i => i >= 0);
+    const gaps = at.map((v, i) =>
+      (at[(i + 1) % at.length] - v + wheel.wedges.length) % wheel.wedges.length);
+    expect(Math.max(...gaps),
+      'a long stretch of the reel with no penalty on it')
+      .toBeLessThanOrEqual(Math.ceil(wheel.wedges.length * 0.4));
   });
 });
 
