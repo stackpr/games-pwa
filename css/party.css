@@ -15,6 +15,20 @@
   --bad: #a33b2b;
   --go: #2f6f5a;
   color-scheme: dark;
+
+  /* See The Android bottom-bar bug in CLAUDE.md. Every page using this
+     sheet loads js/lib/viewport.js, which publishes --measured-height; the
+     min() makes that a cap, so a measurement can only ever make the page
+     shorter, never push it off the bottom of the window. */
+  --app-height: min(var(--measured-height, 100dvh), 100dvh);
+
+  /* The clear space every screen keeps at its foot — max(), not a sum,
+     because env() IS the bar's height rather than padding to go beside it.
+     env() is the browser telling us it has laid the page out UNDER the
+     system bar, and it is the only thing that reports that; it reads 0 when
+     the bar has already been subtracted from the viewport instead. The
+     1rem floor is for when neither is quite true — see .play. */
+  --floor: max(1rem, env(safe-area-inset-bottom));
 }
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 html, body { margin: 0; padding: 0; height: 100%; }
@@ -24,7 +38,7 @@ body {
   font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   display: flex;
   flex-direction: column;
-  height: 100dvh;
+  height: var(--app-height, 100dvh);
   overflow: hidden;
   user-select: none;
   -webkit-user-select: none;
@@ -68,7 +82,7 @@ body[data-screen="setup"] .topbar-actions #setup-btn { display: none; }
   flex-direction: column;
   min-height: 0;
   overflow-y: auto;
-  padding: 0 0.75rem calc(1rem + env(safe-area-inset-bottom));
+  padding: 0 0.75rem var(--floor);
   gap: 0.9rem;
 }
 .setup-title { margin: 0.2rem 0 0; font-size: 1.5rem; }
@@ -200,7 +214,7 @@ body[data-name-mode="pick"] .name-inputs { display: none; }
   justify-content: center;
   gap: 0.5rem;
   min-height: 0;
-  padding: 0 0.9rem calc(1rem + env(safe-area-inset-bottom));
+  padding: 0 0.9rem var(--floor);
   text-align: center;
 }
 .ready-label, .over-label {
@@ -245,12 +259,25 @@ body[data-name-mode="pick"] .name-inputs { display: none; }
 .board li[data-seat="2"] .board-name { color: var(--player-2); }
 .board-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
+/*
+ * The action row lives at the foot of this, and on Android it was the row
+ * that went missing: the page fills the viewport exactly and clips, so the
+ * last thing on screen is the first thing the system navigation bar takes,
+ * and there is no scrolling to get it back.
+ *
+ * --floor is the clearance. It is deliberately more than env() alone,
+ * because env() is 0 whenever the browser believes it has already made room
+ * for the bar — and "believes" is the whole problem: the height it laid the
+ * page out against can be the pre-bar one. viewport.js corrects that a beat
+ * later, but a button sitting flush against the edge loses on any slop at
+ * all, so the row keeps a thumb's width of its own.
+ */
 .play {
   flex: 1;
   flex-direction: column;
   min-height: 0;
   gap: 0.5rem;
-  padding-bottom: calc(0.5rem + env(safe-area-inset-bottom));
+  padding-bottom: var(--floor);
 }
 .play-head {
   flex: none;

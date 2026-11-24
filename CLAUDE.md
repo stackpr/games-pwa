@@ -380,6 +380,45 @@ Three rules come with it:
   viewport shrinks for the on-screen keyboard and for pinch-zoom, neither
   of which should resize a board.
 
+### The bar has two shapes, and they need different answers
+
+`innerHeight` is not the whole fix, because there are two different things
+Android does and only one of them is a measurement problem:
+
+- **The viewport is already clear of the bar, but the height is stale.**
+  `env(safe-area-inset-bottom)` is `0` and correctly so — nothing is
+  overlapping. The page was just laid out against a taller viewport than it
+  ended up with. This is what `js/lib/viewport.js` fixes.
+- **The page is laid out *under* the bar** (edge-to-edge, which Android 15
+  made the default and which `viewport-fit=cover` opts into — every page
+  here sets it). Now `innerHeight` *includes* the strip behind the buttons,
+  so re-measuring tells you nothing. `env(safe-area-inset-bottom)` is the
+  only thing that reports it, and the page has to reserve it.
+
+So a page needs both, and neither substitutes for the other. There is no
+third API that returns the bar's height.
+
+**And neither is worth much if the layout has no slack.** A control flush
+against the bottom of a clipping page is lost to a handful of pixels of
+disagreement, whatever the detection says — which is exactly how Somewhere
+Between lost its Lock in button with the safe-area padding already in place
+and correct. The bottom row keeps a gutter of its own (`--floor` in
+`css/party.css`, `max(1rem, env(safe-area-inset-bottom))` — a `max`, not a
+sum, since `env()` is the bar's height rather than padding to sit beside
+it).
+
+**`height: 100dvh` plus `overflow: hidden` is the shape that loses
+content**, because the page can neither grow nor scroll. `min-height: 100dvh`
+is safe and needs none of this — the home page scrolls, so the bar can only
+ever cover something you can scroll to.
+
+The spec asks "does this page pin itself to the viewport height?" and then
+requires the module, **reading the stylesheets the page links and not just
+its own `<style>`**. It used to skip any page that did not already mention
+`--app-height`, so a page that had never heard of the module passed; six
+had, and the `height: 100dvh` doing the damage was in shared CSS that the
+spec never opened.
+
 ## Install-prompt strategy (js/install.js)
 
 All client-side; no server APIs:

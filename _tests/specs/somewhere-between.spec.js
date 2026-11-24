@@ -302,6 +302,59 @@ test.describe('two teams', () => {
 });
 
 test.describe('presentation', () => {
+  test('the action row stays clear of the Android navigation bar',
+    async ({ page }) => {
+      /*
+       * The bug this exists for: on Android the green Lock in button was
+       * not on screen at all. The page pins itself to the viewport height
+       * and clips, so the action row is the last thing down and the first
+       * thing the system bar takes, and there is no scrolling to get it
+       * back. It was sitting 8px off the bottom edge, which is nothing.
+       *
+       * Both halves of the fix are checked, because they cover different
+       * phones. A real bar is 40–48dp.
+       */
+      await table(page, ['Ari', 'Bo', 'Cass']);
+      await giveClue(page, 'lukewarm');
+
+      const gap = () => page.evaluate(() => {
+        const lock = document.getElementById('lock').getBoundingClientRect();
+        return Math.round(document.body.getBoundingClientRect().bottom - lock.bottom);
+      });
+
+      // Normal: a thumb's width of its own, so a few pixels of slop in the
+      // reported height cannot cost the whole button.
+      expect(await gap()).toBeGreaterThanOrEqual(12);
+
+      /*
+       * js/lib/viewport.js's half — the browser believes the viewport is
+       * taller than what is actually visible, and a late re-measure
+       * corrects it. The page has to shrink with it rather than keep its
+       * bottom row below the fold.
+       */
+      const BAR = 48;
+      const short = await page.evaluate(bar => {
+        document.documentElement.style
+          .setProperty('--measured-height', (window.innerHeight - bar) + 'px');
+        const lock = document.getElementById('lock').getBoundingClientRect();
+        return { lock: lock.bottom, usable: window.innerHeight - bar };
+      }, BAR);
+      expect(short.lock, 'the button is under the navigation bar')
+        .toBeLessThanOrEqual(short.usable);
+
+      /*
+       * The env() half — edge-to-edge, where the browser lays the page out
+       * under the bar and reports its height through the safe-area inset.
+       * env() cannot be set from script, so the token it feeds is.
+       */
+      await page.evaluate(() => {
+        document.documentElement.style.removeProperty('--measured-height');
+        document.documentElement.style.setProperty('--floor', '48px');
+      });
+      expect(await gap(), 'the inset is not reserved at the foot')
+        .toBeGreaterThanOrEqual(BAR);
+    });
+
   test('the how-to explains the sum and the no-number rule', async ({ page }) => {
     await page.locator('#rules-btn').click();
     await expect(page.locator('#rules')).toContainText('added');
