@@ -54,22 +54,46 @@ test.describe('scoring', () => {
     await page.locator('#settings-btn').click();
     await page.locator('.count[data-count="8"]').click();
     await page.setViewportSize({ width: 390, height: 844 });
-    await page.locator('#name-0').fill('Bartholomew Fitzgerald');
+    /*
+     * Twenty wide letters, not a realistic name, because the field caps at
+     * twenty characters and this is therefore the widest thing it can ever
+     * hold — the case the layout has to survive. A plausible long name only
+     * overflows in some fonts: `Bartholomew Fitzgerald` was used here, and
+     * its truncated twenty characters fit the box outright once the test
+     * container's system-ui changed, so the test was asserting on a string
+     * that was not overflowing at all.
+     */
+    await page.locator('#name-0').fill('M'.repeat(24));
 
     const m = await page.evaluate(() => {
       const input = document.getElementById('name-0');
       const seat = input.closest('.seat');
+      const style = getComputedStyle(input);
+      /*
+       * Measured rather than read off scrollWidth. An <input> gets
+       * `overflow: clip` from the UA stylesheet, and a clipped box is not a
+       * scroll container, so scrollWidth is defined to equal clientWidth —
+       * the old `input.scrollWidth > input.clientWidth` probe could never
+       * be true, in any font, however far the text overran.
+       */
+      const pen = document.createElement('canvas').getContext('2d');
+      pen.font = `${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
       return {
+        kept: input.value,
         nameWidth: input.getBoundingClientRect().width,
         seatWidth: seat.getBoundingClientRect().width,
-        clipped: input.scrollWidth > input.clientWidth,
-        ellipsis: getComputedStyle(input).textOverflow,
+        textWidth: pen.measureText(input.value).width,
+        boxWidth: input.clientWidth
+          - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight),
+        ellipsis: style.textOverflow,
         ox: document.documentElement.scrollWidth - window.innerWidth,
       };
     });
 
+    expect(m.kept, 'the field caps the name at twenty').toHaveLength(20);
     expect(m.nameWidth).toBeLessThanOrEqual(m.seatWidth + 1);
-    expect(m.clipped, 'the text really does overflow its box').toBe(true);
+    expect(m.textWidth, 'the text really does overflow its box')
+      .toBeGreaterThan(m.boxWidth);
     expect(m.ellipsis).toBe('ellipsis');
     expect(m.ox, 'and the page still does not scroll sideways').toBeLessThanOrEqual(0);
   });
@@ -453,10 +477,26 @@ test.describe('more players', () => {
 
 test.describe('history line layout', () => {
   test('stays on one line, newest right, older clipped left', async ({ page }) => {
-    for (let i = 0; i < 25; i++) {
-      await tap(page, 0, 1);
-      await page.waitForTimeout(PAST_GROUP_WINDOW);
-    }
+    /*
+     * Seeded rather than tapped. Twenty-five real taps, each waited out
+     * past the grouping window, took 27 seconds AND tuned the test to one
+     * font: twenty-five `+1, ` entries stopped overflowing the desktop box
+     * when the container's system-ui changed, and the test began asserting
+     * that something overflowed which no longer did. A hundred entries
+     * overrun any box at any plausible font, and cost nothing.
+     */
+    await page.evaluate(() => {
+      const t = Date.now() - 100 * 60000;
+      localStorage.setItem('games.scorekeeper.v2', JSON.stringify({
+        count: 2,
+        names: ['Player 1', 'Player 2'],
+        scores: [100, 0],
+        // Spaced a minute apart so none of them group into one entry.
+        events: Array.from({ length: 100 },
+          (unused, i) => ({ seat: 0, delta: 1, t: t + i * 60000 })),
+      }));
+    });
+    await page.reload();
 
     const geo = await page.evaluate(() => {
       const box = document.querySelector('.seat[data-seat="0"] .history');
