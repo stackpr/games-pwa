@@ -156,6 +156,45 @@ Two rules, both about keeping the runner and the browser in step:
   launch. Upgrading is a deliberate two-part job — bump `@playwright/test`
   and provision the matching browser together, never one alone.
 
+**When the container moves first.** The browsers are provisioned by the
+image, not by this repo, so the drift can also arrive from the other side:
+a rebuilt container ships a newer Chromium and the pinned runner goes
+looking for the revision it was built against. The symptom is unmistakable
+and nothing to do with the site —
+
+```
+browserType.launch: Executable doesn't exist at
+  /opt/pw-browsers/chromium_headless_shell-1194/chrome-linux/headless_shell
+```
+
+— and **every test in every segment fails in milliseconds**, which is the
+tell: a run where nothing passed and nothing reached a page is a launch
+failure, not a regression. It is worth saying out loud because such a run
+proves nothing, and reading it as "the suite is red" is the expensive
+mistake.
+
+The fix is to move the pin to the version that matches what is on disk,
+which is the same two-part job seen from the other end. Find it by name,
+not by guesswork: `/opt/pw-browsers` holds `chromium-<revision>`, and the
+version wanting that revision is the one whose `browsers.json` names it.
+
+```
+ls /opt/pw-browsers                       # e.g. chromium-1243
+npm pack playwright-core@<candidate>      # then read package/browsers.json
+```
+
+Match the **revision**, not the Chrome version string: Playwright resolves
+a browser by the directory name, and the image can put a newer Chrome build
+inside a directory labelled with an older revision. `chromium-1243` ran
+Chrome 158 while 1.63.0's `browsers.json` called revision 1243 Chrome 153 —
+the pin that works is the one agreeing on *1243*.
+
+Changing the pin is the one time `npm install` is right, and even then
+`npm install --package-lock-only` followed by `npm ci` keeps the install
+itself coming from the lockfile. Run the **full** suite afterwards: a pin
+bump moves the browser by many versions at once, and a segment will not
+show what that changed.
+
 A fresh checkout or a new container starts with no `node_modules`, so the
 first `npx playwright test` fails with `MODULE_NOT_FOUND` pointing at
 `playwright.config.js`. That means "run `npm ci`", nothing more.

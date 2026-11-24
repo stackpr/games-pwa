@@ -519,8 +519,17 @@ Use `npm ci`, never `npm install`, and never run `npx playwright install`.
 The `@playwright/test` version is pinned to match a browser build that is
 already provisioned; `npm ci` honours that pin and the browsers need no
 download. Upgrading means bumping the package and the browser together —
-doing either alone leaves a runner that cannot launch its browser. See
-`_tests/README.md`.
+doing either alone leaves a runner that cannot launch its browser.
+
+**The browsers come from the container image, not from this repo**, so a
+rebuilt container can break that pairing without anything here changing.
+When it does, every test in every segment fails in milliseconds with
+`browserType.launch: Executable doesn't exist at …` — **a run where
+nothing passed and nothing reached a page is a launch failure, not a red
+suite**, and it proves nothing either way about the change in hand. The fix
+is to move the pin to the revision on disk; `_tests/README.md` has how to
+find it, and why the directory name rather than the Chrome version is what
+has to match.
 
 ## Cache busting
 
