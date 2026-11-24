@@ -48,6 +48,13 @@ const GAMES = [
     path: 'games/dice/'
   },
   {
+    name: 'Rummy',
+    section: 'scoring',
+    description: 'Scoresheet for 2 to 8, with patterns to meet',
+    emoji: '\u{1F0CF}',
+    path: 'games/rummy/'
+  },
+  {
     name: 'Spades',
     section: 'scoring',
     description: 'Scoresheet for four-handed partners',

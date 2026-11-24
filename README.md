@@ -27,6 +27,7 @@ installable PWA at **https://games.payne.run**.
 | [Fishbowl](games/fishbowl/) | Everyone writes three answers; teams talk each other into them |
 | [What Am I?](games/what-am-i/) | Hold the phone up; you get the category, they give the clues |
 | [Pitch](games/pitch/) | Scoresheet for four- or five-handed Pitch, 10 or 13 point |
+| [Rummy](games/rummy/) | Scoresheet for 2 to 8 — pick a pattern sequence and a way to score |
 | [Somewhere Between](games/somewhere-between/) | Drag the marker to the hidden spot on a scale |
 | [Honeycomb: 3 Bees](games/honeycomb-3-bees/) | Drop a bee in a cell, take a cell away — the comb shrinks under you |
 | [Blackjack](games/blackjack/) | Vegas rules, any bet, a bankroll that carries over |
